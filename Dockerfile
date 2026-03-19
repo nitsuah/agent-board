@@ -4,19 +4,18 @@ FROM node:22-slim
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Install all dependencies (including dev for Vite build)
+RUN npm install
 
 # Copy application files
 COPY server.js ./
 COPY src ./src
 COPY index.html vite.config.js ./
 
-# Build frontend (if vite is in dev dependencies, we need to include it)
-# For production, we'll serve the already-built dist or build on startup
-RUN npm install -D vite @vitejs/plugin-react && npm run build
+# Build frontend with Vite
+RUN npm run build
 
 # Expose port
 EXPOSE 3000
