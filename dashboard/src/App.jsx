@@ -4,7 +4,6 @@ import './App.css';
 // Map endpoints to their actual model names (must match server LLM_CONFIG defaultModel)
 const ENDPOINT_MODELS = {
   primary: 'llama2:latest',
-  qwen_coder: 'qwen3-coder:latest',
   docker_runner: 'ai/qwen3-coder:latest',
   glm_flash: 'ai/glm-4.7-flash:latest',
 };
@@ -159,34 +158,15 @@ function App() {
     }
   };
 
-  const dockerAction = async (action, setup = 'primary') => {
-    try {
-      const res = await fetch(`/api/docker/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ setup })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setTimeout(fetchDockerStatus, 2000); // Refresh status after action
-      }
-      return data;
-    } catch (error) {
-      console.error(`Error ${action}ing Docker:`, error);
-      return { success: false, error: error.message };
-    }
-  };
-
   const activeSessionData = activeSession
     ? sessions.find(s => s.id === activeSession)
     : null;
 
   const getDockerStatusColor = () => {
     if (!dockerStatus) return 'gray';
-    if (!dockerStatus.dockerRunning) return 'red';
-    const runningContainers = Object.values(dockerStatus.containers || {}).filter(c => c.running).length;
-    if (runningContainers >= 4) return 'green';
-    if (runningContainers >= 2) return 'yellow';
+    const runningCount = Object.values(dockerStatus.containers || {}).filter(c => c.running).length;
+    if (runningCount >= 2) return 'green';
+    if (runningCount >= 1) return 'yellow';
     return 'red';
   };
   // Fetch a single session's full details (including messages)
@@ -227,7 +207,11 @@ function App() {
           <h1>🤖 Agent Board</h1>
           <div className="header-info">
             <span className={`badge docker-status ${getDockerStatusColor()}`}>
-              Docker: {dockerStatus?.dockerRunning ? 'Running' : 'Stopped'}
+              {(() => {
+                const running = Object.values(dockerStatus?.containers || {}).filter(c => c.running).length;
+                const total = Object.keys(dockerStatus?.containers || {}).length;
+                return total > 0 ? `Services: ${running}/${total}` : 'Services: ...';
+              })()}
             </span>
             <button
               className="btn-system"
@@ -251,24 +235,24 @@ function App() {
 
               <div className="system-info">
                 <div className="system-info-item">
-                  <h3>Docker Status</h3>
-                  <div className={`value ${dockerStatus?.dockerRunning ? '' : 'error'}`}>
-                    {dockerStatus?.dockerRunning ? 'Running' : 'Stopped'}
+                  <h3>Stack Status</h3>
+                  <div className={`value ${dockerStatus?.dockerRunning ? '' : 'warning'}`}>
+                    {dockerStatus?.dockerRunning ? 'Healthy' : 'Degraded'}
                   </div>
                 </div>
                 <div className="system-info-item">
-                  <h3>Active Containers</h3>
+                  <h3>Active Services</h3>
                   <div className="value">
-                    {dockerStatus?.containers ? Object.values(dockerStatus.containers).filter(c => c.running).length : 0}/5
+                    {Object.values(dockerStatus?.containers || {}).filter(c => c.running).length}/{Object.keys(dockerStatus?.containers || {}).length}
                   </div>
                 </div>
                 <div className="system-info-item">
-                  <h3>Memory Usage</h3>
-                  <div className="value">{systemInfo?.memory || 'N/A'}</div>
+                  <h3>Server Memory</h3>
+                  <div className="value">{systemInfo?.memory?.rss ? `${Math.round(systemInfo.memory.rss / 1024 / 1024)} MB` : 'N/A'}</div>
                 </div>
                 <div className="system-info-item">
-                  <h3>CPU Usage</h3>
-                  <div className="value">{systemInfo?.cpu || 'N/A'}</div>
+                  <h3>Uptime</h3>
+                  <div className="value">{systemInfo?.uptime ? `${Math.round(systemInfo.uptime / 60)} min` : 'N/A'}</div>
                 </div>
               </div>
 
@@ -279,55 +263,15 @@ function App() {
                     <div className="docker-service-info">
                       <div className="docker-service-name">{name}</div>
                       <div className={`docker-service-status ${status.running ? 'running' : 'stopped'}`}>
-                        {status.running ? 'Running' : 'Stopped'}
+                        {status.running ? 'Healthy' : status.status}
                       </div>
                       <div className="docker-service-port">{status.ports}</div>
                     </div>
-                    <div className="docker-actions">
-                      <button
-                        className="btn-docker-action start"
-                        onClick={() => dockerAction('start', name)}
-                        disabled={status.running}
-                      >
-                        Start
-                      </button>
-                      <button
-                        className="btn-docker-action stop"
-                        onClick={() => dockerAction('stop', name)}
-                        disabled={!status.running}
-                      >
-                        Stop
-                      </button>
-                      <button
-                        className="btn-docker-action restart"
-                        onClick={() => dockerAction('restart', name)}
-                      >
-                        Restart
-                      </button>
-                    </div>
                   </div>
                 ))}
-              </div>
-
-              <div className="system-actions">
-                <button
-                  className="btn-system-action primary"
-                  onClick={() => dockerAction('start', 'primary')}
-                >
-                  Start All Services
-                </button>
-                <button
-                  className="btn-system-action danger"
-                  onClick={() => dockerAction('stop', 'all')}
-                >
-                  Stop All Services
-                </button>
-                <button
-                  className="btn-system-action"
-                  onClick={() => dockerAction('restart', 'all')}
-                >
-                  Restart All Services
-                </button>
+                <p style={{fontSize:'0.8rem', color:'#666', marginTop:'0.5rem'}}>
+                  Use <code>stack-manager.ps1</code> on the host to start/stop services.
+                </p>
               </div>
             </div>
           </div>
@@ -340,10 +284,9 @@ function App() {
             <div className="endpoint-selector">
     
               {[
-                { value: 'primary', label: 'Llama2', desc: 'Small local model (3.8 GB)', model: 'llama2:latest' },
-                { value: 'qwen_coder', label: 'Qwen3-Coder', desc: 'Large coding model (18 GB)', model: 'qwen3-coder:latest' },
+                { value: 'primary', label: 'Llama2', desc: 'General purpose (3.8 GB)', model: 'llama2:latest' },
                 { value: 'docker_runner', label: 'Docker Runner', desc: 'Docker Desktop model runner', model: 'ai/qwen3-coder:latest' },
-                { value: 'glm_flash', label: 'GLM Flash', desc: 'Fast inference model', model: 'glm-4-flash:latest' },
+                { value: 'glm_flash', label: 'GLM Flash', desc: 'Fast inference (requires setup)', model: 'ai/glm-4.7-flash:latest' },
               ].map(({ value, label, desc, model }) => (
                 <label key={value} className="endpoint-option">
                   <input
@@ -424,6 +367,13 @@ function App() {
                     <p>No messages yet. Start a conversation!</p>
                   </div>
                 )}
+                {loading && (
+                  <div className="message assistant">
+                    <div className="message-content" style={{opacity: 0.6, fontStyle: 'italic'}}>
+                      <strong>AI:</strong> Thinking...
+                    </div>
+                  </div>
+                )}
                 <div ref={chatBottomRef} />
               </div>
 
@@ -447,8 +397,9 @@ function App() {
               <div className="endpoint-preview">
                 <h3>Available Endpoints:</h3>
                 <ul>
-                  <li><strong>Qwen Coder</strong> - Code generation (32B)</li>
-                  <li><strong>GLM Flash</strong> - Fast inference (4B)</li>
+                  <li><strong>Llama2</strong> - General purpose (running)</li>
+                  <li><strong>Docker Runner</strong> - Docker Desktop model runner</li>
+                  <li><strong>GLM Flash</strong> - Fast inference (requires setup)</li>
                 </ul>
               </div>
             </div>

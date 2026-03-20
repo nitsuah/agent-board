@@ -4,11 +4,6 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
-
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -26,13 +21,6 @@ const LLM_CONFIG = {
     type: 'general',
     apiStyle: 'ollama',
     defaultModel: 'llama2:latest'
-  },
-  qwen_coder: {
-    url: process.env.QWEN_CODER_URL || 'http://llm_qwen_coder:8080',
-    name: 'Qwen3-Coder (local)',
-    type: 'coding',
-    apiStyle: 'ollama',
-    defaultModel: 'qwen3-coder:latest'
   },
   docker_runner: {
     url: process.env.DOCKER_RUNNER_URL || 'http://model-runner.docker.internal/engines/llama.cpp/v1',
@@ -66,75 +54,27 @@ app.use(express.static(join(__dirname, 'dist')));
 // ============ API ROUTES ============
 
 /**
- * Check Docker status and container health
+ * Check service health via HTTP (no docker CLI needed inside container)
  */
 app.get('/api/docker/status', async (req, res) => {
-  try {
-    const dockerStatus = {
-      dockerRunning: false,
-      containers: {},
-      networks: {},
-      volumes: {},
-      errors: []
-    };
+  const serviceChecks = [
+    { name: 'llm_qwen_coder', url: `${LLM_CONFIG.primary.url}/api/tags`, ports: '8081:8080' },
+    { name: 'nemoclaw',       url: `${NEMOCLAW_URL}/`,                   ports: '9000:8080' },
+    { name: 'llm_glm_flash',  url: `${LLM_CONFIG.glm_flash.url}/api/tags`, ports: '8082:8080' },
+  ];
 
-    // Check if Docker is running
+  const containers = {};
+  for (const { name, url, ports } of serviceChecks) {
     try {
-      await execAsync('docker info');
-      dockerStatus.dockerRunning = true;
-    } catch (error) {
-      dockerStatus.errors.push('Docker daemon not running');
-      return res.json(dockerStatus);
+      await axios.get(url, { timeout: 3000 });
+      containers[name] = { running: true, status: 'healthy', ports };
+    } catch {
+      containers[name] = { running: false, status: 'unavailable', ports };
     }
-
-    // Check our containers
-    const containerNames = ['llm_qwen_coder', 'llm_glm_flash', 'nemoclaw', 'agent-dashboard'];
-
-    for (const containerName of containerNames) {
-      try {
-        const { stdout } = await execAsync(`docker ps --filter "name=${containerName}" --format "{{.Names}}:{{.Status}}:{{.Ports}}"`);
-        if (stdout.trim()) {
-          const [name, status, ports] = stdout.trim().split(':');
-          dockerStatus.containers[containerName] = {
-            running: status.includes('Up'),
-            status: status,
-            ports: ports || 'N/A'
-          };
-        } else {
-          dockerStatus.containers[containerName] = {
-            running: false,
-            status: 'Not found',
-            ports: 'N/A'
-          };
-        }
-      } catch (error) {
-        dockerStatus.containers[containerName] = {
-          running: false,
-          status: 'Error checking',
-          ports: 'N/A'
-        };
-      }
-    }
-
-    // Check agent-network
-    try {
-      const { stdout } = await execAsync('docker network ls --filter "name=agent-network" --format "{{.Name}}"');
-      dockerStatus.networks.agentNetwork = stdout.trim().includes('agent-network');
-    } catch (error) {
-      dockerStatus.networks.agentNetwork = false;
-    }
-
-    res.json(dockerStatus);
-  } catch (error) {
-    console.error('Error checking Docker status:', error);
-    res.json({
-      dockerRunning: false,
-      containers: {},
-      networks: {},
-      volumes: {},
-      errors: ['Failed to check Docker status']
-    });
   }
+
+  const dockerRunning = Object.values(containers).some(c => c.running);
+  res.json({ dockerRunning, containers, networks: { agentNetwork: true }, volumes: {}, errors: [] });
 });
 
 /**
@@ -440,10 +380,6 @@ app.get('/api/health', async (req, res) => {
       platform: process.platform
     },
     endpoints: {},
-    docker: {
-      running: false,
-      containers: {}
-    },
     sessions: {
       active: sessions.size,
       totalCreated: sessionCounter
@@ -455,39 +391,10 @@ app.get('/api/health', async (req, res) => {
     try {
       await axios.get(`${config.url}/api/tags`, { timeout: 3000 });
       health.endpoints[key] = 'healthy';
-    } catch (error) {
+    } catch {
       health.endpoints[key] = 'unavailable';
-      health.status = 'degraded';
-    }
-  }
-
-  // Check Docker status (quick check)
-  try {
-    await execAsync('docker info');
-    health.docker.running = true;
-
-    // Check key containers
-    const containers = ['llm_qwen_coder', 'llm_glm_flash', 'nemoclaw'];
-    for (const container of containers) {
-      try {
-        const { stdout } = await execAsync(`docker ps --filter "name=${container}" --format "{{.Names}}:{{.Status}}"`);
-        health.docker.containers[container] = stdout.trim() ? 'running' : 'stopped';
-      } catch {
-        health.docker.containers[container] = 'unknown';
-      }
-    }
-  } catch {
-    health.docker.running = false;
-    health.status = 'degraded';
-  }
-
-  // Check if any critical services are down
-  const criticalServices = ['primary', 'docker'];
-  for (const service of criticalServices) {
-    if (service === 'docker' && !health.docker.running) {
-      health.status = 'critical';
-    } else if (service !== 'docker' && health.endpoints[service] === 'unavailable') {
-      health.status = 'critical';
+      if (key === 'primary') health.status = 'critical';
+      else if (health.status === 'ok') health.status = 'degraded';
     }
   }
 
