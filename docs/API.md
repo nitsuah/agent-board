@@ -568,7 +568,7 @@ If primary endpoint is unavailable but others work:
 ```json
 {
   "success": false,
-  "response": "Error: connect ECONNREFUSED 127.0.0.1:8080. Make sure the LLM service is running at http://llm_qwen3:8080"
+  "response": "Error: connect ECONNREFUSED 127.0.0.1:8080. Make sure the LLM service is running at http://llm_qwen_coder:8080"
 }
 ```
 
@@ -643,7 +643,7 @@ docker ps | grep llm_
 curl http://localhost:8080/api/tags
 
 # Restart if needed
-docker-compose restart llm_qwen3
+docker-compose restart llm_qwen_coder
 ```
 
 ---

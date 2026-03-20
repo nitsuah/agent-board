@@ -16,39 +16,26 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Check docker-compose
-if (-not (Get-Command docker-compose -ErrorAction SilentlyContinue)) {
-    Write-Error "docker-compose not found."
+# Check docker compose
+if (-not (docker compose version 2>$null)) {
+    Write-Error "docker compose not found. Ensure Docker Desktop is installed and up to date."
     exit 1
 }
 
 Write-Output "[INFO] Prerequisites verified"
 
-# Navigate to code directory
-$codeDir = "C:\Users\$env:USERNAME\code"
-if (-not (Test-Path $codeDir)) {
-    Write-Error "Code directory not found: $codeDir"
+# Navigate to agent-board directory
+$projectDir = Join-Path $env:USERPROFILE 'code\agent-board'
+if (-not (Test-Path $projectDir)) {
+    Write-Error "Project directory not found: $projectDir"
     exit 1
 }
 
-Push-Location $codeDir
+Push-Location $projectDir
 
-# Build NemoClaw image locally (if not using pre-built)
-Write-Output "[INFO] Building NemoClaw Docker image..."
-if (Test-Path "nemoclaw\repo\Dockerfile.safe") {
-    Push-Location nemoclaw\repo
-    docker build -f Dockerfile.safe -t nemoclaw:latest .
-    Pop-Location
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Failed to build NemoClaw image"
-        Pop-Location
-        exit 1
-    }
-}
-
-# Start all services with docker-compose
-Write-Output "[INFO] Starting agent ecosystem with docker-compose..."
-docker-compose up -d
+# Start all services
+Write-Output "[INFO] Starting agent ecosystem..."
+docker compose up -d
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to start services"
@@ -66,7 +53,7 @@ $healthy = 0
     Write-Output "[INFO] Health check attempt $_/5..."
     
     try {
-        $llmHealth = Invoke-WebRequest -Uri "http://localhost:8080/api/tags" -ErrorAction SilentlyContinue
+        $llmHealth = Invoke-WebRequest -Uri "http://localhost:8081/api/tags" -ErrorAction SilentlyContinue
         $dashboardHealth = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -ErrorAction SilentlyContinue
         
         if ($llmHealth.StatusCode -eq 200 -and $dashboardHealth.StatusCode -eq 200) {
@@ -84,20 +71,24 @@ Write-Output ""
 Write-Output "=============================================="
 Write-Output "Agent Ecosystem Running!"
 Write-Output "=============================================="
-Write-Output "🌐 Agent Dashboard:  http://localhost:3000"
-Write-Output "🤖 Local LLM (API):  http://localhost:8080"
-Write-Output "🛡️  NemoClaw (Safe):  http://localhost:8081"
+Write-Output "  Dashboard:    http://localhost:3000"
+Write-Output "  Ollama API:   http://localhost:8081"
+Write-Output "  NemoClaw:     http://localhost:9000"
 Write-Output ""
 Write-Output "Docker Containers:"
-docker ps --filter "name=local_llm|nemoclaw|agent-dashboard" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+docker ps --filter "name=llm_qwen_coder" --filter "name=nemoclaw" --filter "name=agent-dashboard" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 Write-Output ""
 Write-Output "Next Steps:"
 Write-Output "1. Open http://localhost:3000 in your browser"
 Write-Output "2. Create a new session with your preferred model"
 Write-Output "3. Start chatting with local models!"
 Write-Output ""
-Write-Output "Pull more models:"
-Write-Output "  docker exec local_llm ollama pull llama2"
+Write-Output "List loaded models:"
+Write-Output "  docker exec llm_qwen_coder ollama list"
+Write-Output ""
+Write-Output "Pull additional models:"
+Write-Output "  docker exec llm_qwen_coder ollama pull qwen3:1.7b"
+Write-Output "  docker exec llm_qwen_coder ollama pull llama3.2:latest"
 Write-Output "  docker exec local_llm ollama pull neural-chat"
 Write-Output ""
 Write-Output "View logs:"

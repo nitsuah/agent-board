@@ -225,9 +225,9 @@ The old setup scripts (`setup-docker-stack.ps1`, `stack-manager.ps1`) still work
 
 ## 📞 Need Help?
 
-1. **Quick reference:** See [docs/QUICK_REFERENCE.md](./docs/QUICK_REFERENCE.md)
-2. **API docs:** See [docs/API.md](./docs/API.md)
-3. **Architecture:** See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+1. **Quick reference:** See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
+2. **API docs:** See [API.md](./API.md)
+3. **Architecture:** See [ARCHITECTURE.md](./ARCHITECTURE.md)
 4. **View logs:** `docker-compose logs -f`
 5. **Check health:** `curl http://localhost:3000/api/health`
 

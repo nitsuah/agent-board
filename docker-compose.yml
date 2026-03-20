@@ -10,7 +10,7 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8080"
-    command: ["serve"]
+
     environment:
       - OLLAMA_HOST=0.0.0.0:8080
     volumes:
@@ -78,7 +78,7 @@ services:
       - PORT=3000
     # healthcheck is disabled until a stable in-container HTTP client is available
     # depends_on:
-    # depends_on:
+
     #   llm_qwen3:
     #     condition: service_healthy
     #   llm_qwen_coder:
@@ -90,6 +90,7 @@ services:
 
 volumes:
   llm_qwen_coder_data:
+  # Reserved for future/optional llm_glm_flash service (currently commented out above)
   llm_glm_flash_data:
   nemoclaw_data:
 

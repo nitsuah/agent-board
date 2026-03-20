@@ -6,7 +6,7 @@ const ENDPOINT_MODELS = {
   primary: 'llama2:latest',
   qwen_coder: 'qwen3-coder:latest',
   docker_runner: 'ai/qwen3-coder:latest',
-  glm_flash: 'glm-4-flash:latest',
+  glm_flash: 'ai/glm-4.7-flash:latest',
 };
 
 function App() {

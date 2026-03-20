@@ -399,7 +399,7 @@ app.put('/api/sessions/:id/model', (req, res) => {
   }
 
   session.endpoint = endpoint;
-  session.model = model || endpoint;
+  session.model = model || LLM_CONFIG[endpoint].defaultModel;
   session.llmUrl = LLM_CONFIG[endpoint].url;
   session.updatedAt = new Date();
 
