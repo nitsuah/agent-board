@@ -13,6 +13,7 @@ RUN npm install
 COPY server.js ./
 COPY src ./src
 COPY index.html vite.config.js ./
+COPY tests ./tests
 
 # Build frontend with Vite
 RUN npm run build

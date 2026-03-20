@@ -1,0 +1,100 @@
+# Agent Board - Docker Stack
+
+services:
+  # ===== LLM SERVICES =====
+  # Primary: Docker Hub Models (faster, pre-built)
+  
+  llm_qwen_coder:
+    image: ollama/ollama:latest
+    container_name: llm_qwen_coder
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    command: ["serve"]
+    environment:
+      - OLLAMA_HOST=0.0.0.0:8080
+    volumes:
+      - llm_qwen_coder_data:/root/.ollama
+    networks:
+      - agent-network
+
+  # llm_glm_flash:
+  #   image: ai/glm-4.7-flash:latest
+  #   pull_policy: if_not_present
+  #   container_name: llm_glm_flash
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8082:8080"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/api/tags || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
+  #   networks:
+  #     - agent-network
+
+  # ===== SAFETY & SANDBOX =====
+  
+  nemoclaw:
+    image: nemoclaw:latest
+    container_name: nemoclaw
+    ports:
+      - "9000:8080"
+    volumes:
+      - nemoclaw_data:/workspace
+      - /tmp
+    environment:
+      - NEMOCLAW_HOME=/workspace
+      - LLM_API_URL=http://llm_qwen_coder:8080
+      - OPENSHELL_ENABLE=true
+    cap_drop:
+      - all
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    # healthcheck disabled because wget/curl is unavailable in this container
+    depends_on:
+      llm_qwen_coder:
+        condition: service_started
+    networks:
+      - agent-network
+
+  # ===== WEB DASHBOARD =====
+  
+  agent-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: agent-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - PRIMARY_LLM_URL=http://llm_qwen_coder:8080
+      - QWEN_CODER_URL=http://llm_qwen_coder:8080
+      - GLM_FLASH_URL=http://llm_glm_flash:8080
+      - NEMOCLAW_URL=http://nemoclaw:8080
+      - PORT=3000
+    # healthcheck is disabled until a stable in-container HTTP client is available
+    # depends_on:
+    # depends_on:
+    #   llm_qwen3:
+    #     condition: service_healthy
+    #   llm_qwen_coder:
+    #     condition: service_healthy
+    #   llm_glm_flash:
+    #     condition: service_healthy
+    networks:
+      - agent-network
+
+volumes:
+  llm_qwen_coder_data:
+  llm_glm_flash_data:
+  nemoclaw_data:
+
+networks:
+  agent-network:
+    name: agent-network
+    driver: bridge
+    external: false
