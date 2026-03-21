@@ -13,28 +13,36 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // LLM Configuration - Support multiple endpoints
-// apiStyle: 'ollama' uses /api/chat; 'openai' uses /v1/chat/completions
+// apiStyle: 'ollama' uses /api/chat + /api/tags; 'openai' uses /v1/chat/completions + /v1/models
+// backendType: used by the UI to show how the model is served
+const DOCKER_RUNNER_URL = process.env.DOCKER_RUNNER_URL || 'http://model-runner.docker.internal/engines/llama.cpp/v1';
+
 const LLM_CONFIG = {
   primary: {
-    url: process.env.PRIMARY_LLM_URL || 'http://llm_qwen_coder:8080',
-    name: 'Llama2 (local)',
+    url: process.env.PRIMARY_LLM_URL || 'http://ollama:8080',
+    name: 'Ollama (local)',
+    backendType: 'ollama-container',
     type: 'general',
     apiStyle: 'ollama',
     defaultModel: 'llama2:latest'
   },
   docker_runner: {
-    url: process.env.DOCKER_RUNNER_URL || 'http://model-runner.docker.internal/engines/llama.cpp/v1',
-    name: 'Docker Model Runner',
-    type: 'general',
+    url: DOCKER_RUNNER_URL,
+    name: 'Qwen3-Coder (Docker Runner)',
+    backendType: 'docker-runner',
+    type: 'coding',
     apiStyle: 'openai',
     defaultModel: process.env.DOCKER_RUNNER_MODEL || 'ai/qwen3-coder:latest'
   },
   glm_flash: {
-    url: process.env.GLM_FLASH_URL || 'http://llm_glm_flash:8080',
-    name: 'GLM-4.7-Flash',
+    // GLM-4.7-Flash is a docker.io/ai/* model — runs via Docker Model Runner, not a separate container.
+    // Pull with: docker model pull ai/glm-4.7-flash:latest
+    url: DOCKER_RUNNER_URL,
+    name: 'GLM-4.7-Flash (Docker Runner)',
+    backendType: 'docker-runner',
     type: 'fast',
-    apiStyle: 'ollama',
-    defaultModel: 'glm-4-flash:latest'
+    apiStyle: 'openai',
+    defaultModel: process.env.GLM_FLASH_MODEL || 'ai/glm-4.7-flash:latest'
   }
 };
 
@@ -55,26 +63,65 @@ app.use(express.static(join(__dirname, 'dist')));
 
 /**
  * Check service health via HTTP (no docker CLI needed inside container)
+ * Ollama: GET /api/tags   Docker Model Runner (OpenAI): GET /v1/models
  */
 app.get('/api/docker/status', async (req, res) => {
+  // Physical service checks (containers or Docker Desktop features)
   const serviceChecks = [
-    { name: 'llm_qwen_coder', url: `${LLM_CONFIG.primary.url}/api/tags`, ports: '8081:8080' },
-    { name: 'nemoclaw',       url: `${NEMOCLAW_URL}/`,                   ports: '9000:8080' },
-    { name: 'llm_glm_flash',  url: `${LLM_CONFIG.glm_flash.url}/api/tags`, ports: '8082:8080' },
+    {
+      name: 'ollama',
+      label: 'Ollama (local)',
+      url: `${LLM_CONFIG.primary.url}/api/tags`,
+      ports: '8081:8080',
+      backendType: 'ollama-container'
+    },
+    {
+      name: 'docker-runner',
+      label: 'Docker Model Runner',
+      // Docker Model Runner: OpenAI-compatible, /v1/models lists pulled models
+      url: `${DOCKER_RUNNER_URL}/models`,
+      ports: 'host-internal',
+      backendType: 'docker-runner'
+    },
+    {
+      name: 'nemoclaw',
+      label: 'NemoClaw (sandbox)',
+      url: `${NEMOCLAW_URL}/`,
+      ports: '9000:8080',
+      backendType: 'sandbox'
+    },
   ];
 
   const containers = {};
-  for (const { name, url, ports } of serviceChecks) {
+  for (const { name, label, url, ports, backendType } of serviceChecks) {
     try {
       await axios.get(url, { timeout: 3000 });
-      containers[name] = { running: true, status: 'healthy', ports };
+      containers[name] = { running: true, status: 'healthy', ports, backendType, label };
     } catch {
-      containers[name] = { running: false, status: 'unavailable', ports };
+      containers[name] = { running: false, status: 'unavailable', ports, backendType, label };
     }
   }
 
+  // Per-endpoint LLM status — derived from the service checks above
+  const runnerLive = containers['docker-runner']?.running ?? false;
+  const endpoints = {};
+  for (const [key, config] of Object.entries(LLM_CONFIG)) {
+    const live = config.backendType === 'ollama-container'
+      ? (containers['ollama']?.running ?? false)
+      : config.backendType === 'docker-runner'
+        ? runnerLive
+        : false;
+    endpoints[key] = {
+      name: config.name,
+      model: config.defaultModel,
+      backendType: config.backendType,
+      live,
+      fallback: !live
+    };
+  }
+
   const dockerRunning = Object.values(containers).some(c => c.running);
-  res.json({ dockerRunning, containers, networks: { agentNetwork: true }, volumes: {}, errors: [] });
+  res.json({ dockerRunning, containers, endpoints, networks: { agentNetwork: true }, volumes: {}, errors: [] });
 });
 
 /**
@@ -151,20 +198,49 @@ app.get('/api/system/info', async (req, res) => {
 app.get('/api/models', async (req, res) => {
   try {
     const models = [];
-    
+    // Track which Docker Runner models we've already fetched (shared endpoint)
+    let dockerRunnerFetched = false;
+    let dockerRunnerModels = null;
+
     for (const [key, config] of Object.entries(LLM_CONFIG)) {
       try {
-        const response = await axios.get(`${config.url}/api/tags`, { timeout: 5000 });
-        const endpointModels = response.data.models?.map(m => ({
-          id: key,
-          endpoint: config.name,
-          endpointUrl: config.url,
-          type: config.type,
-          name: m.name,
-          model: m.name.split(':')[0],
-          size: m.details?.parameter_size || 'unknown'
-        })) || [];
-        models.push(...endpointModels);
+        if (config.apiStyle === 'openai') {
+          // All docker-runner endpoints share the same host — fetch once
+          if (!dockerRunnerFetched) {
+            const response = await axios.get(`${config.url}/models`, { timeout: 5000 });
+            // OpenAI format: { data: [{ id, ... }] }
+            dockerRunnerModels = response.data.data?.map(m => ({
+              id: key,
+              endpoint: config.name,
+              endpointUrl: config.url,
+              backendType: config.backendType,
+              type: config.type,
+              name: m.id,
+              model: m.id,
+              size: 'unknown'
+            })) || [];
+            dockerRunnerFetched = true;
+          }
+          // Tag each runner model entry with this endpoint key
+          if (dockerRunnerModels) {
+            const tagged = dockerRunnerModels.map(m => ({ ...m, id: key, endpoint: config.name }));
+            models.push(...tagged);
+          }
+        } else {
+          // Ollama format: { models: [{ name, details: { parameter_size } }] }
+          const response = await axios.get(`${config.url}/api/tags`, { timeout: 5000 });
+          const endpointModels = response.data.models?.map(m => ({
+            id: key,
+            endpoint: config.name,
+            endpointUrl: config.url,
+            backendType: config.backendType,
+            type: config.type,
+            name: m.name,
+            model: m.name.split(':')[0],
+            size: m.details?.parameter_size || 'unknown'
+          })) || [];
+          models.push(...endpointModels);
+        }
       } catch (error) {
         console.warn(`[WARNING] Could not reach ${config.name} (${config.url}):`, error.message);
       }
@@ -173,14 +249,14 @@ app.get('/api/models', async (req, res) => {
     // Fallback if no models found
     if (models.length === 0) {
       for (const [key, config] of Object.entries(LLM_CONFIG)) {
-        models.push({ id: key, endpoint: config.name, endpointUrl: config.url, type: config.type, name: config.defaultModel, model: config.defaultModel, size: 'unknown' });
+        models.push({ id: key, endpoint: config.name, endpointUrl: config.url, backendType: config.backendType, type: config.type, name: config.defaultModel, model: config.defaultModel, size: 'unknown' });
       }
     }
 
     res.json({ success: true, models, endpoints: Object.keys(LLM_CONFIG) });
   } catch (error) {
     console.error('Error fetching models:', error.message);
-    const fallback = Object.entries(LLM_CONFIG).map(([key, c]) => ({ id: key, endpoint: c.name, endpointUrl: c.url, type: c.type, name: c.defaultModel, model: c.defaultModel, size: 'unknown' }));
+    const fallback = Object.entries(LLM_CONFIG).map(([key, c]) => ({ id: key, endpoint: c.name, endpointUrl: c.url, backendType: c.backendType, type: c.type, name: c.defaultModel, model: c.defaultModel, size: 'unknown' }));
     res.json({ success: true, models: fallback, endpoints: Object.keys(LLM_CONFIG) });
   }
 });
@@ -387,9 +463,18 @@ app.get('/api/health', async (req, res) => {
   };
 
   // Check LLM endpoints
+  const checkedRunnerUrl = new Set();
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
     try {
-      await axios.get(`${config.url}/api/tags`, { timeout: 3000 });
+      const healthUrl = config.apiStyle === 'openai'
+        ? `${config.url}/models`
+        : `${config.url}/api/tags`;
+      if (checkedRunnerUrl.has(healthUrl)) {
+        health.endpoints[key] = health.endpoints['docker_runner'] || 'unavailable';
+        continue;
+      }
+      checkedRunnerUrl.add(healthUrl);
+      await axios.get(healthUrl, { timeout: 3000 });
       health.endpoints[key] = 'healthy';
     } catch {
       health.endpoints[key] = 'unavailable';

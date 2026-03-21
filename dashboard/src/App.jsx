@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-// Map endpoints to their actual model names (must match server LLM_CONFIG defaultModel)
-const ENDPOINT_MODELS = {
-  primary: 'llama2:latest',
-  docker_runner: 'ai/qwen3-coder:latest',
-  glm_flash: 'ai/glm-4.7-flash:latest',
+// Map endpoints to their actual model names and metadata
+const ENDPOINT_META = {
+  primary:       { model: 'llama2:latest',          label: 'Llama2',           desc: 'Ollama container · 3.8 GB',      backendBadge: 'Ollama' },
+  docker_runner: { model: 'ai/qwen3-coder:latest',  label: 'Qwen3-Coder',      desc: 'Docker Model Runner · 16.45 GB', backendBadge: 'Docker Runner' },
+  glm_flash:     { model: 'ai/glm-4.7-flash:latest',label: 'GLM-4.7-Flash',    desc: 'Docker Model Runner · 16.31 GB', backendBadge: 'Docker Runner' },
 };
 
 function App() {
@@ -91,7 +91,7 @@ function App() {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: currentModel, endpoint: currentEndpoint })
+        body: JSON.stringify({ model: currentModel || ENDPOINT_META[currentEndpoint]?.model, endpoint: currentEndpoint })
       });
       const data = await res.json();
       if (data.success) {
@@ -257,20 +257,37 @@ function App() {
               </div>
 
               <div className="docker-status">
-                <h3>Container Status</h3>
+                <h3>Services</h3>
                 {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => (
                   <div key={name} className="docker-status-item">
                     <div className="docker-service-info">
-                      <div className="docker-service-name">{name}</div>
+                      <div className="docker-service-name">
+                        {status.label || name}
+                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({status.backendType})</span>
+                      </div>
                       <div className={`docker-service-status ${status.running ? 'running' : 'stopped'}`}>
-                        {status.running ? 'Healthy' : status.status}
+                        {status.running ? '● Live' : '● ' + status.status}
                       </div>
                       <div className="docker-service-port">{status.ports}</div>
                     </div>
                   </div>
                 ))}
+
+                <h3 style={{ marginTop: '1rem' }}>LLM Endpoints</h3>
+                {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
+                  <div key={key} className="docker-status-item">
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">{ep.name}</div>
+                      <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
+                        {ep.live ? '● Live' : '● Offline / Fallback'}
+                      </div>
+                      <div className="docker-service-port" style={{ fontSize: '0.72rem' }}>{ep.model}</div>
+                    </div>
+                  </div>
+                ))}
                 <p style={{fontSize:'0.8rem', color:'#666', marginTop:'0.5rem'}}>
-                  Use <code>stack-manager.ps1</code> on the host to start/stop services.
+                  Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br/>
+                  Manage stack: <code>stack-manager.ps1</code>
                 </p>
               </div>
             </div>
@@ -283,29 +300,35 @@ function App() {
             <h2>LLM Endpoints</h2>
             <div className="endpoint-selector">
     
-              {[
-                { value: 'primary', label: 'Llama2', desc: 'General purpose (3.8 GB)', model: 'llama2:latest' },
-                { value: 'docker_runner', label: 'Docker Runner', desc: 'Docker Desktop model runner', model: 'ai/qwen3-coder:latest' },
-                { value: 'glm_flash', label: 'GLM Flash', desc: 'Fast inference (requires setup)', model: 'ai/glm-4.7-flash:latest' },
-              ].map(({ value, label, desc, model }) => (
-                <label key={value} className="endpoint-option">
-                  <input
-                    type="radio"
-                    name="endpoint"
-                    value={value}
-                    checked={currentEndpoint === value}
-                    onChange={() => {
-                      setCurrentEndpoint(value);
-                      setCurrentModel(model);
-                      switchEndpoint(value);
-                    }}
-                  />
-                  <div className="endpoint-info">
-                    <div className="endpoint-name">{label}</div>
-                    <div className="endpoint-description">{desc}</div>
-                  </div>
-                </label>
-              ))}
+              {Object.entries(ENDPOINT_META).map(([value, { model, label, desc, backendBadge }]) => {
+                const epStatus = dockerStatus?.endpoints?.[value];
+                const isLive = epStatus?.live ?? null;
+                return (
+                  <label key={value} className="endpoint-option">
+                    <input
+                      type="radio"
+                      name="endpoint"
+                      value={value}
+                      checked={currentEndpoint === value}
+                      onChange={() => {
+                        setCurrentEndpoint(value);
+                        setCurrentModel(model);
+                        switchEndpoint(value);
+                      }}
+                    />
+                    <div className="endpoint-info">
+                      <div className="endpoint-name">
+                        {label}
+                        <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', opacity: 0.6 }}>({backendBadge})</span>
+                        {isLive === true && <span style={{ marginLeft: '0.4rem', color: '#4caf50' }}>●</span>}
+                        {isLive === false && <span style={{ marginLeft: '0.4rem', color: '#f44336' }}>●</span>}
+                      </div>
+                      <div className="endpoint-description">{desc}</div>
+                      <div style={{ fontSize: '0.7rem', opacity: 0.55 }}>{model}</div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </section>
 
@@ -397,9 +420,17 @@ function App() {
               <div className="endpoint-preview">
                 <h3>Available Endpoints:</h3>
                 <ul>
-                  <li><strong>Llama2</strong> - General purpose (running)</li>
-                  <li><strong>Docker Runner</strong> - Docker Desktop model runner</li>
-                  <li><strong>GLM Flash</strong> - Fast inference (requires setup)</li>
+                  {Object.entries(ENDPOINT_META).map(([key, { label, desc, model }]) => {
+                    const ep = dockerStatus?.endpoints?.[key];
+                    return (
+                      <li key={key}>
+                        <strong>{label}</strong> — {desc}
+                        {ep && <span style={{ marginLeft: '0.4rem', color: ep.live ? '#4caf50' : '#aaa' }}>
+                          {ep.live ? '● live' : '● offline'}
+                        </span>}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>

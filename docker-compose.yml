@@ -2,37 +2,29 @@
 
 services:
   # ===== LLM SERVICES =====
-  # Primary: Docker Hub Models (faster, pre-built)
-  
-  llm_qwen_coder:
+
+  # Local Ollama instance — runs models pulled via `docker exec ollama ollama pull <model>`
+  # Default model: llama2:latest  Port: 8081 (host) → 8080 (container)
+  ollama:
     image: ollama/ollama:latest
-    container_name: llm_qwen_coder
+    container_name: ollama
     restart: unless-stopped
     ports:
       - "8081:8080"
-
     environment:
       - OLLAMA_HOST=0.0.0.0:8080
     volumes:
-      - llm_qwen_coder_data:/root/.ollama
+      - ollama_data:/root/.ollama
     networks:
       - agent-network
 
-  # llm_glm_flash:
-  #   image: ai/glm-4.7-flash:latest
-  #   pull_policy: if_not_present
-  #   container_name: llm_glm_flash
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8082:8080"
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/api/tags || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 5
-  #     start_period: 30s
-  #   networks:
-  #     - agent-network
+  # Docker Model Runner (docker.io/ai/* models) — NOT a container.
+  # This is Docker Desktop's built-in model runner feature.
+  # Pull models on the host with:  docker model pull ai/glm-4.7-flash:latest
+  #                                 docker model pull ai/qwen3-coder:latest
+  # Endpoint (from inside containers): http://model-runner.docker.internal/engines/llama.cpp/v1
+  # API style: OpenAI-compatible (/v1/chat/completions, /v1/models)
+  # No container needed — Docker Desktop exposes this automatically.
 
   # ===== SAFETY & SANDBOX =====
   
@@ -46,7 +38,7 @@ services:
       - /tmp
     environment:
       - NEMOCLAW_HOME=/workspace
-      - LLM_API_URL=http://llm_qwen_coder:8080
+      - LLM_API_URL=http://ollama:8080
       - OPENSHELL_ENABLE=true
     cap_drop:
       - all
@@ -56,7 +48,7 @@ services:
       - no-new-privileges:true
     # healthcheck disabled because wget/curl is unavailable in this container
     depends_on:
-      llm_qwen_coder:
+      ollama:
         condition: service_started
     networks:
       - agent-network
@@ -71,9 +63,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - PRIMARY_LLM_URL=http://llm_qwen_coder:8080
-      - QWEN_CODER_URL=http://llm_qwen_coder:8080
-      - GLM_FLASH_URL=http://llm_glm_flash:8080
+      - PRIMARY_LLM_URL=http://ollama:8080
+      # Docker Model Runner: Docker Desktop exposes this host to all containers
+      - DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
+      - DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest
+      - GLM_FLASH_MODEL=ai/glm-4.7-flash:latest
       - NEMOCLAW_URL=http://nemoclaw:8080
       - PORT=3000
     # healthcheck is disabled until a stable in-container HTTP client is available
@@ -89,9 +83,7 @@ services:
       - agent-network
 
 volumes:
-  llm_qwen_coder_data:
-  # Reserved for future/optional llm_glm_flash service (currently commented out above)
-  llm_glm_flash_data:
+  ollama_data:  # Local Ollama model storage (llama2, etc.)
   nemoclaw_data:
 
 networks:
