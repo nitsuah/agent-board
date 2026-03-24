@@ -4,6 +4,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createReadStream, existsSync, readFileSync } from 'fs';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,7 @@ const LLM_CONFIG = {
 };
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
+const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 
 // Session management
 const sessions = new Map();
@@ -89,6 +91,13 @@ app.get('/api/docker/status', async (req, res) => {
       url: `${NEMOCLAW_URL}/`,
       ports: '9000:8080',
       backendType: 'sandbox'
+    },
+    {
+      name: 'bb-mcp',
+      label: 'Blackboard Learn MCP',
+      url: `${BB_MCP_URL}/health`,
+      ports: '3100:3100',
+      backendType: 'mcp'
     },
   ];
 
@@ -444,6 +453,82 @@ app.delete('/api/sessions/:id', (req, res) => {
 });
 
 /**
+ * MCP Connectors — load connector definitions from config/connectors.json
+ */
+const CONNECTORS_PATH = join(__dirname, '..', 'config', 'connectors.json');
+
+app.get('/api/connectors', (req, res) => {
+  try {
+    if (!existsSync(CONNECTORS_PATH)) {
+      return res.json({ success: true, connectors: [] });
+    }
+    const raw = readFileSync(CONNECTORS_PATH, 'utf-8');
+    const { connectors } = JSON.parse(raw);
+    res.json({ success: true, connectors });
+  } catch (err) {
+    console.error('Error reading connectors config:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to load connectors' });
+  }
+});
+
+/**
+ * MCP Proxy — forward requests to a named MCP connector's server.
+ * POST /api/mcp/:connectorId/proxy  → proxies to <mcp_server>/mcp
+ * GET  /api/mcp/:connectorId/health → proxies to <mcp_server>/health
+ * GET  /api/mcp/:connectorId/metrics → proxies to <mcp_server>/metrics
+ *
+ * This keeps credentials (BB_MCP_URL) server-side and avoids CORS issues.
+ */
+function resolveConnectorUrl(connectorId) {
+  if (connectorId === 'blackboard-learn') return BB_MCP_URL;
+  // Extend here for additional MCP connectors
+  return null;
+}
+
+app.use('/api/mcp/:connectorId', async (req, res) => {
+  const { connectorId } = req.params;
+  const baseUrl = resolveConnectorUrl(connectorId);
+
+  if (!baseUrl) {
+    return res.status(404).json({ success: false, error: `Unknown connector: ${connectorId}` });
+  }
+
+  // Map sub-path: /api/mcp/blackboard-learn/proxy → /mcp
+  //               /api/mcp/blackboard-learn/health → /health
+  //               /api/mcp/blackboard-learn/metrics → /metrics
+  const subPath = req.path === '/proxy' ? '/mcp' : req.path;
+  const target = `${baseUrl}${subPath}`;
+
+  try {
+    const proxyRes = await axios({
+      method: req.method,
+      url: target,
+      headers: {
+        ...req.headers,
+        host: new URL(baseUrl).host,
+      },
+      data: ['POST', 'PUT', 'PATCH'].includes(req.method) ? req.body : undefined,
+      params: req.query,
+      timeout: 30000,
+      responseType: 'json',
+      validateStatus: () => true, // pass all status codes through
+    });
+
+    res.status(proxyRes.status);
+    Object.entries(proxyRes.headers).forEach(([k, v]) => {
+      // skip hop-by-hop headers
+      if (!['transfer-encoding', 'connection'].includes(k.toLowerCase())) {
+        res.setHeader(k, v);
+      }
+    });
+    res.json(proxyRes.data);
+  } catch (err) {
+    console.error(`[MCP Proxy] ${connectorId} → ${target}:`, err.message);
+    res.status(502).json({ success: false, error: `MCP connector unreachable: ${err.message}` });
+  }
+});
+
+/**
  * Health check - Comprehensive system status
  */
 app.get('/api/health', async (req, res) => {
@@ -502,5 +587,7 @@ app.listen(PORT, () => {
     console.log(`   • ${config.name} (${key}): ${config.url}`);
   }
   console.log(`\n🛡️  Safe Mode URL: ${NEMOCLAW_URL}`);
+  console.log(`\n🔌 MCP Connectors:`);
+  console.log(`   • Blackboard Learn: ${BB_MCP_URL}`);
   console.log(`\nPress Ctrl+C to stop\n`);
 });
