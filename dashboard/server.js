@@ -136,6 +136,11 @@ app.get('/api/docker/status', async (req, res) => {
 /**
  * Start/stop Docker containers
  */
+// NOTE: Docker management from inside this container is not supported by default.
+// The dashboard image does not install the Docker CLI or mount the Docker socket,
+// so attempting to run `docker compose` here will fail in the default deployment.
+// Control Docker from the host instead, or explicitly add in-container Docker support
+// (install CLI, mount /var/run/docker.sock) with appropriate security review.
 app.post('/api/docker/:action', async (req, res) => {
   const { action } = req.params;
 
@@ -143,30 +148,14 @@ app.post('/api/docker/:action', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid action' });
   }
 
-  try {
-    let command;
-    if (action === 'start') {
-      command = 'docker compose up -d';
-    } else if (action === 'stop') {
-      command = 'docker compose down';
-    } else if (action === 'restart') {
-      command = 'docker compose restart';
-    }
-
-    const { stdout, stderr } = await execAsync(command);
-    res.json({
-      success: true,
-      action,
-      output: stdout || stderr
-    });
-  } catch (error) {
-    console.error(`Error ${action}ing Docker:`, error);
-    res.json({
-      success: false,
-      action,
-      error: error.message
-    });
-  }
+  // Always return a warning unless Docker CLI is explicitly enabled in the container
+  return res.status(501).json({
+    success: false,
+    action,
+    error:
+      'Docker management endpoints are disabled in this deployment. ' +
+      'Please control Docker from the host or explicitly enable in-container Docker support.'
+  });
 });
 
 /**

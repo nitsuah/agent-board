@@ -7,7 +7,7 @@
 - Moved all dashboard files (server.js, src/, index.html, etc.) into `dashboard/`
 - Moved management scripts to `scripts/`
 - Moved integration tests to `dashboard/tests/`
-- Consolidated to a single Ollama container (`llm_qwen_coder`) instead of separate LLM containers
+- Consolidated to a single Ollama container (`ollama`) instead of separate LLM containers
 - Added Docker Model Runner support (`docker_runner` endpoint)
 - Fixed all chat bugs: model names, stream mode, field names, message display
 - Removed legacy/ folder and docker-compose.legacy.yml
@@ -60,9 +60,7 @@ agent-board/
 #### Primary Setup (`docker-compose.yml`)
 ```yaml
 services:
-  llm_qwen3:8080         - Qwen 3.5 (general conversation)
-  llm_qwen_coder:8081    - Qwen Coder (programming)
-  llm_glm_flash:8082     - GLM Flash (fast, lightweight)
+  ollama:8081            - Ollama (general conversation, programming)
   nemoclaw:9000          - Safety/sandbox
   agent-dashboard:3000   - Web UI
 ```
@@ -98,7 +96,7 @@ LOCAL_LLM_URL = 'http://localhost:8080'
 // After: Multiple endpoints
 LLM_CONFIG = {
   primary: { url, name, type },
-  qwen_coder: { url, name, type },
+  docker_runner: { url, name, type },
   glm_flash: { url, name, type }
 }
 ```
@@ -185,9 +183,8 @@ Start-Process "http://localhost:3000"
 
 # View endpoints
 # - Dashboard: http://localhost:3000
-# - Qwen 3.5: http://localhost:8080
-# - Qwen Coder: http://localhost:8081
-# - GLM Flash: http://localhost:8082
+# - Ollama: http://localhost:8081
+# - NemoClaw: http://localhost:9000
 # - NemoClaw: http://localhost:9000
 ```
 
@@ -195,7 +192,7 @@ Start-Process "http://localhost:3000"
 
 ✅ **Backward Compatible:** If you have code calling the old API, it still works with legacy setup:
 ```powershell
-docker-compose -f docker-compose.legacy.yml up -d
+docker compose -f docker-compose.legacy.yml up -d
 ```
 
 ⚠️ **Minor API Changes:** New endpoints return additional information (endpoint ID, type, etc.)
@@ -238,8 +235,8 @@ Original files kept in place:
    
 2. **Test** the setup:
    ```powershell
-   docker-compose up -d
-   curl http://localhost:3000/api/models
+  docker compose up -d
+  curl http://localhost:3000/api/models
    ```
 
 3. **Update** any code using the API:
@@ -247,7 +244,7 @@ Original files kept in place:
    - Review `docs/API.md` for new endpoints
 
 4. **Keep** the legacy setup available:
-   - Run `docker-compose -f docker-compose.legacy.yml up -d` if needed
+  - Run `docker compose -f docker-compose.legacy.yml up -d` if needed
    - No files were deleted
 
 ## ✨ Summary

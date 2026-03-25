@@ -140,18 +140,20 @@ To reduce API costs and context usage:
 2. **Pre-pull Images**:
    ```bash
    # Already set up:
-   docker pull ollama/ollama:latest
-   docker pull nemoclaw:latest
+  docker pull ollama/ollama:latest
+  docker pull nemoclaw:latest
    
-   # Other useful images:
-   docker pull ghcr.io/modelcontextprotocol/server-docker:latest
+  # Other useful images:
+  docker pull ghcr.io/modelcontextprotocol/server-docker:latest
    ```
 
 3. **Docker Compose with Hub**:
    ```yaml
    services:
-     local_llm:
+     ollama:
        image: ollama/ollama:latest  # From Docker Hub
+     nemoclaw:
+       image: nemoclaw:latest
      agent-dashboard:
        image: your-username/agent-dashboard:latest  # Push to Hub when ready
    ```
@@ -175,7 +177,7 @@ Once installed, test in Claude:
 User: "List all Docker containers"
 Claude: Uses docker MCP to show running containers
 
-User: "Create a new file in agent-dashboard/src"
+User: "Create a new file in dashboard/src"
 Claude: Uses filesystem MCP to write the file
 
 User: "Commit my changes with message 'feat: add feature'"

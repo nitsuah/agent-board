@@ -36,14 +36,14 @@ agent-board/
 | `stack-manager.ps1` at root | `scripts/stack-manager.ps1` |
 | `setup-docker-stack.ps1` at root | `scripts/setup-docker-stack.ps1` |
 | `test-chat.js` at root | `dashboard/tests/test-chat.js` |
-| Multiple LLM containers | Single Ollama container (`llm_qwen_coder`) |
+| Multiple LLM containers | Single Ollama container (`ollama`) |
 | Session endpoint: `PUT .../endpoint` | `PUT .../model` |
 | `useNemoClaw` field | `useSafeMode` field |
 
 ## API Changes
 
 ### Endpoints available
-`primary`, `qwen_coder`, `docker_runner`, `glm_flash`
+`primary`, `docker_runner`, `glm_flash`
 
 ### Switch model
 ```
@@ -220,10 +220,11 @@ NEMOCLAW_URL=http://localhost:8081
 
 **New variables (docker-compose.yml):**
 ```env
-PRIMARY_LLM_URL=http://llm_qwen3:8080
-QWEN_CODER_URL=http://llm_qwen_coder:8080
-GLM_FLASH_URL=http://llm_glm_flash:8080
-NEMOCLAW_URL=http://nemoclaw:9000
+PRIMARY_LLM_URL=http://ollama:8080
+DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
+DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest
+GLM_FLASH_MODEL=ai/glm-4.7-flash:latest
+NEMOCLAW_URL=http://nemoclaw:8080
 ```
 
 ### 5. Database/Persistence
@@ -250,10 +251,8 @@ GET http://nemoclaw:8081/health
 
 **New (primary setup):**
 ```
-GET http://llm_qwen3:8080/api/tags
-GET http://llm_qwen_coder:8080/api/tags
-GET http://llm_glm_flash:8080/api/tags
-GET http://nemoclaw:9000/health
+GET http://ollama:8080/api/tags
+GET http://nemoclaw:8080/health
 ```
 
 **Dashboard aggregated health:**
@@ -309,7 +308,7 @@ docker port <container>
 
 **Free up ports:**
 ```powershell
-docker-compose down
+docker compose down
 docker container prune
 ```
 
@@ -342,13 +341,13 @@ A: Fall back to legacy: `docker-compose -f docker-compose.legacy.yml up -d`
 A:
 ```powershell
 # Stop current
-docker-compose down
+docker compose down
 
 # Start different setup
-docker-compose -f docker-compose.legacy.yml up -d
+docker compose -f docker-compose.legacy.yml up -d
 
 # Or back to primary
-docker-compose up -d
+docker compose up -d
 ```
 
 **Q: Are sessions compatible between setups?**

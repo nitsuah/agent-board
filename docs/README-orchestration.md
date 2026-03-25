@@ -1,13 +1,13 @@
 # Agent Ecosystem - Local Development Stack
 
-Local AI agent dashboard backed by Ollama, with NemoClaw safety sandbox and optional Docker Model Runner support.
+Local AI agent dashboard backed by Ollama (container: ollama), with NemoClaw safety sandbox (container: nemoclaw), and optional Docker Model Runner support (not a container).
 
 ## Overview
 
-- **Ollama** (`llm_qwen_coder`) - Local LLM runtime, models pulled on demand
-- **NemoClaw** - Policy-enforced safe execution sandbox
-- **Agent Dashboard** - React/Express web UI for session management
-- **Docker Model Runner** (optional) - Docker Desktop's built-in OpenAI-compatible model API
+- **Ollama** (`ollama`) - Local LLM runtime, models pulled on demand (port 8081)
+- **NemoClaw** (`nemoclaw`) - Policy-enforced safe execution sandbox (port 9000)
+- **Agent Dashboard** (`agent-dashboard`) - React/Express web UI for session management (port 3000)
+- **Docker Model Runner** (optional) - Docker Desktop's built-in OpenAI-compatible model API (not a container)
 
 ## Architecture
 
@@ -20,12 +20,12 @@ Local AI agent dashboard backed by Ollama, with NemoClaw safety sandbox and opti
      ┌────────┴────────┐
      ▼                 ▼
 ┌──────────────┐  ┌──────────────────┐
-│  llm_qwen_coder  │  │  nemoclaw          │
+│  ollama      │  │  nemoclaw        │
 │  (Ollama)    │  │  (Safe Runtime)  │
 │  Port 8081   │  │  Port 9000       │
-│              │  │  • OpenShell     │
-│ llama2:latest│  │  • Policy Guards │
-│ qwen3-coder  │  │  • Sandbox       │
+│ llama2:latest│  │  • OpenShell     │
+│ qwen3-coder  │  │  • Policy Guards │
+│ ...          │  │  • Sandbox       │
 └──────────────┘  └──────────────────┘
 ```
 
@@ -39,16 +39,16 @@ Start-Process "http://localhost:3000"
 
 ## Container Reference
 
-### llm_qwen_coder (Ollama)
+### ollama (Ollama)
 ```powershell
 # List loaded models
-docker exec llm_qwen_coder ollama list
+docker exec ollama ollama list
 
 # Pull a model
-docker exec llm_qwen_coder ollama pull llama3.2:latest
+docker exec ollama ollama pull llama3.2:latest
 
 # View logs
-docker logs -f llm_qwen_coder
+docker logs -f ollama
 ```
 
 ### nemoclaw (Safety Layer)
@@ -148,10 +148,10 @@ docker-compose logs --tail=50
 ### Models not loading
 ```powershell
 # Check Ollama is responding
-Invoke-WebRequest http://localhost:8080/api/tags
+Invoke-WebRequest http://localhost:8081/api/tags
 
 # Verify models are pulled
-docker exec local_llm ollama list
+docker exec ollama ollama list
 ```
 
 ### Dashboard won't connect
@@ -191,13 +191,13 @@ Development workflow:
 ### Currently Available
 - **Mistral** (4.4 GB) - Fast, good for most tasks
 - **Qwen** (2.3 GB) - Smaller, efficient
-- Add more via: `docker exec local_llm ollama pull <model>`
+- Add more via: `docker exec ollama ollama pull <model>`
 
 ### Recommended Additions
 ```bash
-docker exec local_llm ollama pull llama2          # Meta's LLaMA 2
-docker exec local_llm ollama pull neural-chat    # Intel's chat model
-docker exec local_llm ollama pull dolphin-mixtral # Mixture of experts
+docker exec ollama ollama pull llama2          # Meta's LLaMA 2
+docker exec ollama ollama pull neural-chat    # Intel's chat model
+docker exec ollama ollama pull dolphin-mixtral # Mixture of experts
 ```
 
 ## 🎯 Next Steps
