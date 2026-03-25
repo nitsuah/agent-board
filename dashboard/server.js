@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createReadStream, existsSync, readFileSync } from 'fs';
 import { randomUUID } from 'crypto';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,6 +15,7 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const execAsync = promisify(exec);
 
 // LLM Configuration - Support multiple endpoints
 // apiStyle: 'ollama' uses /api/chat + /api/tags; 'openai' uses /v1/chat/completions + /v1/models
@@ -54,6 +57,28 @@ const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 // Session management
 const sessions = new Map();
 let sessionCounter = 0;
+const SAFETY_RANK = { research: 0, standard: 1, strict: 2 };
+
+function logStructured(level, eventType, data = {}) {
+  const payload = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level,
+    eventType,
+    ...data
+  });
+
+  if (level === 'error') {
+    console.error(payload);
+    return;
+  }
+
+  if (level === 'warn') {
+    console.warn(payload);
+    return;
+  }
+
+  console.log(payload);
+}
 
 // ============ EVENT BUS ============
 // Lightweight in-memory pub/sub — events fire-and-forget so they never block the UX.
@@ -162,6 +187,56 @@ const EXPERIENCE_CONFIGS = {
   }
 };
 
+function isKnownExperience(experience) {
+  return Object.prototype.hasOwnProperty.call(EXPERIENCE_CONFIGS, experience);
+}
+
+function isKnownSafetyMode(safetyMode) {
+  return Object.prototype.hasOwnProperty.call(SAFETY_CONFIGS, safetyMode);
+}
+
+function getExperienceConfig(experience) {
+  return EXPERIENCE_CONFIGS[experience] || EXPERIENCE_CONFIGS.developer;
+}
+
+function getAllowedEndpoints(experience) {
+  return getExperienceConfig(experience).availableEndpoints || ['primary'];
+}
+
+function isEndpointAllowed(experience, endpoint) {
+  return getAllowedEndpoints(experience).includes(endpoint);
+}
+
+function resolveSessionEndpoint(experience, requestedEndpoint) {
+  if (isEndpointAllowed(experience, requestedEndpoint)) {
+    return requestedEndpoint;
+  }
+
+  return getAllowedEndpoints(experience)[0] || 'primary';
+}
+
+function resolveConfiguredSafetyMode(experience, requestedSafetyMode) {
+  const baseSafetyMode = getExperienceConfig(experience).safetyMode || 'standard';
+
+  if (!requestedSafetyMode) {
+    return baseSafetyMode;
+  }
+
+  return SAFETY_RANK[requestedSafetyMode] >= SAFETY_RANK[baseSafetyMode]
+    ? requestedSafetyMode
+    : baseSafetyMode;
+}
+
+function resolveEffectiveSafetyMode(session, useSafeMode = false) {
+  const configuredSafetyMode = session.safetyMode || getExperienceConfig(session.experience).safetyMode || 'standard';
+
+  if (configuredSafetyMode === 'strict' || useSafeMode) {
+    return 'strict';
+  }
+
+  return configuredSafetyMode;
+}
+
 // ============ INPUT CLASSIFICATION ============
 
 function classifyInput(text) {
@@ -250,9 +325,85 @@ function filterResponse(text, safetyMode = 'standard') {
   return { flags, flagged: flags.length > 0 };
 }
 
+function redactSensitiveText(text) {
+  return text
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[redacted email]')
+    .replace(/(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[redacted phone]')
+    .replace(/\b\d{3}-?\d{2}-?\d{4}\b/g, '[redacted ssn]')
+    .replace(/\b(?:\d{4}[-\s]?){3}\d{4}\b/g, '[redacted credit card]');
+}
+
+function sanitizeResponse(text, safetyMode = 'standard') {
+  const filterResult = filterResponse(text, safetyMode);
+
+  if (!filterResult.flagged) {
+    return { ...filterResult, content: text, blocked: false, redacted: false };
+  }
+
+  const hasHarmfulContent = filterResult.flags.some((flag) => flag.type === 'harmful_content');
+  if (hasHarmfulContent) {
+    return {
+      ...filterResult,
+      content: "I can't provide that response. If you'd like, I can still help with a safer alternative.",
+      blocked: true,
+      redacted: false
+    };
+  }
+
+  const redactedContent = redactSensitiveText(text);
+  return {
+    ...filterResult,
+    content: redactedContent,
+    blocked: false,
+    redacted: redactedContent !== text
+  };
+}
+
+function calculateAverageMessagesPerSession(allEvents, activeSessions) {
+  const sessionMessageCounts = new Map();
+
+  allEvents
+    .filter((event) => event.event_type === 'session_start')
+    .forEach((event) => {
+      sessionMessageCounts.set(event.session_id, 0);
+    });
+
+  allEvents
+    .filter((event) => event.event_type === 'session_end')
+    .forEach((event) => {
+      sessionMessageCounts.set(event.session_id, event.metadata?.messageCount || 0);
+    });
+
+  activeSessions.forEach((session) => {
+    sessionMessageCounts.set(session.id, session.messages.length);
+  });
+
+  if (sessionMessageCounts.size === 0) {
+    return 0;
+  }
+
+  const totalMessages = Array.from(sessionMessageCounts.values()).reduce((sum, count) => sum + count, 0);
+  return Number((totalMessages / sessionMessageCounts.size).toFixed(1));
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    logStructured('info', 'api_request', {
+      method: req.method,
+      path: req.originalUrl,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - start,
+      sessionId: req.params?.id || req.body?.sessionId || req.body?.session_id || null
+    });
+  });
+
+  next();
+});
 
 // Static files
 app.use(express.static(join(__dirname, 'dist')));
@@ -381,7 +532,7 @@ app.get('/api/system/info', async (req, res) => {
 
     res.json({ success: true, system: systemInfo });
   } catch (error) {
-    console.error('Error getting system info:', error);
+    logStructured('error', 'system_info_failed', { error: error.message });
     res.json({ success: false, error: 'Failed to get system info' });
   }
 });
@@ -436,7 +587,11 @@ app.get('/api/models', async (req, res) => {
           models.push(...endpointModels);
         }
       } catch (error) {
-        console.warn(`[WARNING] Could not reach ${config.name} (${config.url}):`, error.message);
+          logStructured('warn', 'model_endpoint_unreachable', {
+            endpoint: key,
+            endpointName: config.name,
+            error: error.message
+          });
       }
     }
 
@@ -449,7 +604,7 @@ app.get('/api/models', async (req, res) => {
 
     res.json({ success: true, models, endpoints: Object.keys(LLM_CONFIG) });
   } catch (error) {
-    console.error('Error fetching models:', error.message);
+    logStructured('error', 'models_fetch_failed', { error: error.message });
     const fallback = Object.entries(LLM_CONFIG).map(([key, c]) => ({ id: key, endpoint: c.name, endpointUrl: c.url, backendType: c.backendType, type: c.type, name: c.defaultModel, model: c.defaultModel, size: 'unknown' }));
     res.json({ success: true, models: fallback, endpoints: Object.keys(LLM_CONFIG) });
   }
@@ -460,17 +615,28 @@ app.get('/api/models', async (req, res) => {
  */
 app.post('/api/sessions', (req, res) => {
   const {
-    endpoint = 'primary',
+    endpoint: requestedEndpoint = 'primary',
     name = `session-${++sessionCounter}`,
     userId,
     userRole,
     experience = 'developer',
     safetyMode
   } = req.body;
-  const model = req.body.model || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
 
-  const exp = EXPERIENCE_CONFIGS[experience] || EXPERIENCE_CONFIGS.developer;
-  const resolvedSafetyMode = safetyMode || exp.safetyMode || 'standard';
+  if (!isKnownExperience(experience)) {
+    return res.status(400).json({ success: false, error: 'Invalid experience' });
+  }
+
+  if (safetyMode && !isKnownSafetyMode(safetyMode)) {
+    return res.status(400).json({ success: false, error: 'Invalid safety mode' });
+  }
+
+  const endpoint = resolveSessionEndpoint(experience, requestedEndpoint);
+  const endpointWasAdjusted = endpoint !== requestedEndpoint;
+  const model = endpointWasAdjusted
+    ? LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest'
+    : req.body.model || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
+  const resolvedSafetyMode = resolveConfiguredSafetyMode(experience, safetyMode);
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const session = {
@@ -485,7 +651,8 @@ app.post('/api/sessions', (req, res) => {
     userId: userId || 'anonymous',
     userRole: userRole || null,
     experience,
-    safetyMode: resolvedSafetyMode
+    safetyMode: resolvedSafetyMode,
+    useSafeModeEnabled: false
   };
 
   sessions.set(sessionId, session);
@@ -496,7 +663,11 @@ app.post('/api/sessions', (req, res) => {
     model,
     endpoint,
     experience,
-    metadata: { safetyMode: resolvedSafetyMode, userRole: session.userRole }
+    metadata: {
+      safetyMode: resolvedSafetyMode,
+      userRole: session.userRole,
+      endpointAdjusted: endpointWasAdjusted
+    }
   });
 
   res.json({
@@ -508,6 +679,7 @@ app.post('/api/sessions', (req, res) => {
       endpoint,
       experience,
       safetyMode: resolvedSafetyMode,
+      endpointAdjusted: endpointWasAdjusted,
       createdAt: session.createdAt
     }
   });
@@ -552,7 +724,12 @@ app.get('/api/sessions/:id', (req, res) => {
       endpoint: session.endpoint,
       llmUrl: session.llmUrl,
       messages: session.messages,
-      createdAt: session.createdAt
+      createdAt: session.createdAt,
+      userId: session.userId,
+      userRole: session.userRole,
+      experience: session.experience,
+      safetyMode: session.safetyMode,
+      useSafeModeEnabled: session.useSafeModeEnabled
     }
   });
 });
@@ -573,8 +750,23 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Message is required' });
   }
 
-  const safetyMode = useSafeMode ? 'strict' : (session.safetyMode || 'standard');
-  const safety = SAFETY_CONFIGS[safetyMode] || SAFETY_CONFIGS.standard;
+  if (typeof useSafeMode !== 'boolean') {
+    return res.status(400).json({ success: false, error: 'useSafeMode must be a boolean' });
+  }
+
+  if (session.useSafeModeEnabled !== useSafeMode) {
+    session.useSafeModeEnabled = useSafeMode;
+    eventBus.emit('safe_mode_toggled', {
+      session_id: session.id,
+      user_id: session.userId,
+      model: session.model,
+      endpoint: session.endpoint,
+      experience: session.experience,
+      metadata: { enabled: useSafeMode }
+    });
+  }
+
+  const safetyMode = resolveEffectiveSafetyMode(session, useSafeMode);
 
   // ── Input Classification ──────────────────────────────────────────────────
   const classification = classifyInput(message);
@@ -655,19 +847,30 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     const latencyMs = Date.now() - msgStart;
 
     // ── Response Filter ───────────────────────────────────────────────────────
-    const filterResult = filterResponse(assistantMessage, safetyMode);
-    if (filterResult.flagged) {
+    const sanitizedResponse = sanitizeResponse(assistantMessage, safetyMode);
+    if (sanitizedResponse.flagged) {
       eventBus.emit('output_filtered', {
         session_id: session.id,
         user_id: session.userId,
         model: session.model,
         endpoint: session.endpoint,
         experience: session.experience,
-        metadata: { flags: filterResult.flags }
+        metadata: {
+          flags: sanitizedResponse.flags,
+          blocked: sanitizedResponse.blocked,
+          redacted: sanitizedResponse.redacted
+        }
       });
     }
 
-    session.messages.push({ role: 'assistant', content: assistantMessage, timestamp: new Date(), filterFlags: filterResult.flags });
+    session.messages.push({
+      role: 'assistant',
+      content: sanitizedResponse.content,
+      timestamp: new Date(),
+      filterFlags: sanitizedResponse.flags,
+      blocked: sanitizedResponse.blocked,
+      redacted: sanitizedResponse.redacted
+    });
     session.updatedAt = new Date();
 
     eventBus.emit('message_received', {
@@ -676,20 +879,31 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       model: session.model,
       endpoint: session.endpoint,
       experience: session.experience,
-      metadata: { latencyMs, responseLength: assistantMessage.length, filterFlags: filterResult.flags }
+      metadata: {
+        latencyMs,
+        responseLength: sanitizedResponse.content.length,
+        filterFlags: sanitizedResponse.flags,
+        blocked: sanitizedResponse.blocked,
+        redacted: sanitizedResponse.redacted
+      }
     });
 
     res.json({
       success: true,
-      response: assistantMessage,
+      response: sanitizedResponse.content,
       classification,
-      filterFlags: filterResult.flags,
+      filterFlags: sanitizedResponse.flags,
       endpoint: useSafeMode ? 'NemoClaw (Safe)' : session.endpoint,
       messageCount: session.messages.length
     });
   } catch (error) {
-    console.error('Error calling LLM:', error.message);
-    const errorMsg = `[Error] Could not reach LLM at ${session.llmUrl}: ${error.message}`;
+    logStructured('error', 'llm_call_failed', {
+      sessionId: session.id,
+      endpoint: session.endpoint,
+      model: session.model,
+      error: error.message
+    });
+    const errorMsg = `[Error] Could not reach the configured model service for ${session.endpoint}: ${error.message}`;
     session.messages.push({ role: 'assistant', content: errorMsg, timestamp: new Date() });
     session.updatedAt = new Date();
 
@@ -725,6 +939,10 @@ app.put('/api/sessions/:id/model', (req, res) => {
 
   if (!endpoint || !LLM_CONFIG[endpoint]) {
     return res.status(400).json({ success: false, error: 'Invalid endpoint' });
+  }
+
+  if (!isEndpointAllowed(session.experience, endpoint)) {
+    return res.status(403).json({ success: false, error: 'Endpoint is not allowed for this experience' });
   }
 
   const prevEndpoint = session.endpoint;
@@ -791,6 +1009,18 @@ app.post('/api/sessions/:id/feedback', (req, res) => {
     return res.status(400).json({ success: false, error: 'positive (boolean) is required' });
   }
 
+  if (!Number.isInteger(messageIndex)) {
+    return res.status(400).json({ success: false, error: 'messageIndex must be an integer' });
+  }
+
+  if (messageIndex < 0 || messageIndex >= session.messages.length) {
+    return res.status(400).json({ success: false, error: 'messageIndex is out of range' });
+  }
+
+  if (session.messages[messageIndex]?.role !== 'assistant') {
+    return res.status(400).json({ success: false, error: 'Feedback can only be recorded for assistant messages' });
+  }
+
   const eventType = positive ? 'feedback_positive' : 'feedback_negative';
   eventBus.emit(eventType, {
     session_id: session.id,
@@ -831,17 +1061,15 @@ app.get('/api/metrics/summary', (req, res) => {
 
   // Avg messages per session (from active sessions)
   const sessionList = Array.from(sessions.values());
-  const avgMessages = sessionList.length
-    ? (sessionList.reduce((sum, s) => sum + s.messages.length, 0) / sessionList.length).toFixed(1)
-    : 0;
+  const avgMessages = calculateAverageMessagesPerSession(allEvents, sessionList);
 
   res.json({
     success: true,
     summary: {
-      totalSessions: sessionStarts.length,
+      totalSessions: new Set(sessionStarts.map((event) => event.session_id)).size,
       activeSessions: sessions.size,
       totalMessages: messagesSent.length,
-      avgMessagesPerSession: Number(avgMessages),
+      avgMessagesPerSession: avgMessages,
       modelDistribution: modelDist,
       experienceDistribution: expDist
     }
@@ -994,7 +1222,7 @@ app.get('/api/connectors', (req, res) => {
     const { connectors } = JSON.parse(raw);
     res.json({ success: true, connectors });
   } catch (err) {
-    console.error('Error reading connectors config:', err.message);
+    logStructured('error', 'connectors_read_failed', { error: err.message });
     res.status(500).json({ success: false, error: 'Failed to load connectors' });
   }
 });
@@ -1051,7 +1279,11 @@ app.use('/api/mcp/:connectorId', async (req, res) => {
     });
     res.json(proxyRes.data);
   } catch (err) {
-    console.error(`[MCP Proxy] ${connectorId} → ${target}:`, err.message);
+    logStructured('error', 'mcp_proxy_failed', {
+      connectorId,
+      target,
+      error: err.message
+    });
     res.status(502).json({ success: false, error: `MCP connector unreachable: ${err.message}` });
   }
 });
@@ -1117,18 +1349,28 @@ app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n╔════════════════════════════════════════╗`);
-  console.log(`║  Agent Dashboard Server Started        ║`);
-  console.log(`╠════════════════════════════════════════╣`);
-  console.log(`║  🌐 Dashboard: http://localhost:${PORT}       ║`);
-  console.log(`╚════════════════════════════════════════╝`);
-  console.log(`\n📍 LLM Endpoints:`);
-  for (const [key, config] of Object.entries(LLM_CONFIG)) {
-    console.log(`   • ${config.name} (${key}): ${config.url}`);
-  }
-  console.log(`\n🛡️  Safe Mode URL: ${NEMOCLAW_URL}`);
-  console.log(`\n🔌 MCP Connectors:`);
-  console.log(`   • Blackboard Learn: ${BB_MCP_URL}`);
-  console.log(`\nPress Ctrl+C to stop\n`);
-});
+export {
+  app,
+  calculateAverageMessagesPerSession,
+  classifyInput,
+  detectPII,
+  filterResponse,
+  getAllowedEndpoints,
+  isEndpointAllowed,
+  redactSensitiveText,
+  resolveConfiguredSafetyMode,
+  resolveEffectiveSafetyMode,
+  resolveSessionEndpoint,
+  sanitizeResponse
+};
+
+if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
+  app.listen(PORT, () => {
+    logStructured('info', 'server_started', {
+      port: PORT,
+      endpoints: Object.fromEntries(Object.entries(LLM_CONFIG).map(([key, config]) => [key, config.url])),
+      nemoClawUrl: NEMOCLAW_URL,
+      bbMcpUrl: BB_MCP_URL
+    });
+  });
+}

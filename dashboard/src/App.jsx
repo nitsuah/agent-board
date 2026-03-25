@@ -34,6 +34,12 @@ const EXPERIENCE_META = {
   safechat:  { icon: '🛡️', name: 'Safe Chat',            description: 'Strict safety. Simple UI for any user.' },
 };
 
+const EXPERIENCE_ENDPOINTS = {
+  developer: ['primary', 'docker_runner', 'glm_flash'],
+  research: ['primary', 'docker_runner', 'glm_flash'],
+  safechat: ['primary']
+};
+
 // ── Safety mode badge colours ──────────────────────────────────────────────
 const SAFETY_COLORS = { strict: '#f44336', standard: '#ff9800', research: '#4caf50' };
 
@@ -67,6 +73,10 @@ function App() {
   const [metricsErrors, setMetricsErrors] = useState(null);
 
   const chatBottomRef = useRef(null);
+
+  const getAvailableEndpoints = useCallback((experienceKey) => {
+    return EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
+  }, []);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -141,13 +151,18 @@ function App() {
   // ── Session helpers ────────────────────────────────────────────────────────
   const createSession = async () => {
     try {
-      const exp = EXPERIENCE_META[selectedExperience];
+      const availableEndpoints = getAvailableEndpoints(selectedExperience);
+      const endpoint = availableEndpoints.includes(currentEndpoint)
+        ? currentEndpoint
+        : availableEndpoints[0];
+      const model = ENDPOINT_META[endpoint]?.model || currentModel;
+
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: currentModel || ENDPOINT_META[currentEndpoint]?.model,
-          endpoint: currentEndpoint,
+          model,
+          endpoint,
           userId: userId.current,
           userRole: getUserRole(),
           experience: selectedExperience
@@ -155,6 +170,8 @@ function App() {
       });
       const data = await res.json();
       if (data.success) {
+        setCurrentEndpoint(data.session.endpoint);
+        setCurrentModel(data.session.model);
         setActiveSession(data.session.id);
         fetchSessions();
       }
@@ -167,8 +184,17 @@ function App() {
       const data = await res.json();
       if (data.success && data.session) {
         setActiveSessionMessages(data.session.messages || []);
+        setCurrentEndpoint(data.session.endpoint);
+        setCurrentModel(data.session.model);
         setSessions(prev => prev.map(s => s.id === id
-          ? { ...s, messageCount: (data.session.messages || []).length, endpoint: data.session.endpoint, model: data.session.model }
+          ? {
+              ...s,
+              messageCount: (data.session.messages || []).length,
+              endpoint: data.session.endpoint,
+              model: data.session.model,
+              experience: data.session.experience,
+              safetyMode: data.session.safetyMode
+            }
           : s
         ));
       }
@@ -203,15 +229,23 @@ function App() {
     }
   };
 
-  const switchEndpoint = async (endpoint) => {
+  const switchEndpoint = async (endpoint, model) => {
     if (!activeSession) return;
     try {
-      await fetch(`/api/sessions/${activeSession}/model`, {
+      const res = await fetch(`/api/sessions/${activeSession}/model`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint, model: currentModel })
+        body: JSON.stringify({ endpoint, model })
       });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error switching endpoint:', data.error || data.message || 'Unknown error');
+        return;
+      }
+
       setCurrentEndpoint(endpoint);
+      setCurrentModel(model);
+      fetchSessions();
     } catch (error) { console.error('Error switching endpoint:', error); }
   };
 
@@ -253,6 +287,17 @@ function App() {
     setActiveSessionMessages([]);
     if (activeSession) fetchSessionDetails(activeSession);
   }, [activeSession]);
+
+  useEffect(() => {
+    const availableEndpoints = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
+    if (!availableEndpoints.includes(currentEndpoint)) {
+      const nextEndpoint = availableEndpoints[0];
+      setCurrentEndpoint(nextEndpoint);
+      setCurrentModel(ENDPOINT_META[nextEndpoint]?.model || 'llama2:latest');
+    }
+  }, [activeSessionData, currentEndpoint, getAvailableEndpoints, selectedExperience]);
+
+  const visibleEndpointKeys = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
 
   // ── Metrics helpers ────────────────────────────────────────────────────────
   const renderBar = (value, max, color = '#4caf50') => {
@@ -536,7 +581,9 @@ function App() {
               <section className="section">
                 <h2>LLM Endpoints</h2>
                 <div className="endpoint-selector">
-                  {Object.entries(ENDPOINT_META).map(([value, { model, label, desc, backendBadge }]) => {
+                  {Object.entries(ENDPOINT_META)
+                    .filter(([value]) => visibleEndpointKeys.includes(value))
+                    .map(([value, { model, label, desc, backendBadge }]) => {
                     const epStatus = dockerStatus?.endpoints?.[value];
                     const isLive = epStatus?.live ?? null;
                     return (
@@ -549,7 +596,7 @@ function App() {
                           onChange={() => {
                             setCurrentEndpoint(value);
                             setCurrentModel(model);
-                            switchEndpoint(value);
+                            switchEndpoint(value, model);
                           }}
                         />
                         <div className="endpoint-info">
@@ -716,7 +763,9 @@ function App() {
                   <div className="endpoint-preview">
                     <h3>Available Endpoints:</h3>
                     <ul>
-                      {Object.entries(ENDPOINT_META).map(([key, { label, desc, model }]) => {
+                      {Object.entries(ENDPOINT_META)
+                        .filter(([key]) => visibleEndpointKeys.includes(key))
+                        .map(([key, { label, desc, model }]) => {
                         const ep = dockerStatus?.endpoints?.[key];
                         return (
                           <li key={key}>

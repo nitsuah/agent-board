@@ -1,12 +1,15 @@
 # Agent Board - Local AI Agent Ecosystem
 
-Local AI agent dashboard with multi-model support, session management, and NemoClaw safety sandbox.
+Local-first AI dashboard for running multiple model experiences with session identity, safety controls, and observability built around the agent layer.
 
 ## Features
 
 - **Multi-Model Support** - Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
 - **Agent Sessions** - Persistent session management with full message history
 - **Safety Sandbox** - NemoClaw integration for policy-enforced safe mode
+- **Experience Modes** - Developer Assistant, Research Mode, and Safe Chat with server-enforced endpoint and safety rules
+- **Safety Layer** - Input classification, prompt wrapping, blocked-input handling, and output sanitization for harmful or PII-bearing responses
+- **Metrics Dashboard** - Summary, safety, feedback, and error telemetry with in-memory event collection
 - **Web Dashboard** - React UI with live Docker status monitoring
 - **Local-First** - Everything runs on your machine, no external APIs required
 - **Instant Model Switching** - Switch endpoints mid-conversation per session
@@ -62,14 +65,22 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 ## API
 
 ### Sessions
-- `POST /api/sessions` — Create session (`{ endpoint, model, name }`)
+- `POST /api/sessions` — Create session (`{ endpoint, model, name, userId, userRole, experience, safetyMode }`)
 - `GET /api/sessions` — List all sessions
 - `GET /api/sessions/:id` — Get session with messages
 - `DELETE /api/sessions/:id` — Delete session
 - `PUT /api/sessions/:id/model` — Switch model/endpoint (`{ endpoint, model }`)
+- `POST /api/sessions/:id/feedback` — Record thumbs up/down on an assistant message (`{ messageIndex, positive }`)
 
 ### Messages
 - `POST /api/sessions/:id/message` — Send message (`{ message, useSafeMode }`)
+
+### Product Surface
+- `GET /api/experiences` — List available experience configs
+- `GET /api/metrics/summary` — Session/message totals, model distribution, experience distribution
+- `GET /api/metrics/safety` — Input classifications, blocked prompts, filtered outputs
+- `GET /api/metrics/feedback` — Positive/negative feedback by model and experience
+- `GET /api/metrics/errors` — Error rate and recent failures
 
 ### System
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
@@ -123,6 +134,8 @@ dashboard/
 - NemoClaw sandboxes agent execution with `--cap-drop=all`
 - Capability allowlist: `NET_BIND_SERVICE` only
 - `no-new-privileges` enforced on sandbox container
+- Safe Chat sessions are server-restricted to the primary endpoint and strict safety mode
+- Output filtering redacts detected PII and replaces blocked harmful responses before they reach the UI
 
 ## License
 
