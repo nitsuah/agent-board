@@ -50,6 +50,9 @@ const LLM_CONFIG = {
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 
+// Detect Docker once at startup — this never changes at runtime
+const IN_DOCKER = existsSync('/.dockerenv');
+
 // Session management
 const sessions = new Map();
 let sessionCounter = 0;
@@ -175,13 +178,8 @@ app.get('/api/system/info', async (req, res) => {
       }
     };
 
-    // Check if we're running in Docker
-    try {
-      await execAsync('cat /proc/1/cgroup | head -1');
-      systemInfo.inDocker = true;
-    } catch {
-      systemInfo.inDocker = false;
-    }
+    // Check if we're running in Docker (/.dockerenv is created by Docker daemon)
+    systemInfo.inDocker = existsSync('/.dockerenv');
 
     res.json({ success: true, system: systemInfo });
   } catch (error) {
@@ -393,6 +391,109 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       endpoint: session.endpoint,
       messageCount: session.messages.length
     });
+  }
+});
+
+/**
+ * Stream message response via Server-Sent Events (SSE)
+ * POST /api/sessions/:id/stream  body: { message, useSafeMode }
+ * Client receives token-by-token events:
+ *   data: {"type":"token","content":"..."}
+ *   data: {"type":"done","messageCount":N}
+ *   data: {"type":"error","message":"..."}
+ */
+app.post('/api/sessions/:id/stream', async (req, res) => {
+  const session = sessions.get(req.params.id);
+
+  if (!session) {
+    return res.status(404).json({ success: false, error: 'Session not found' });
+  }
+
+  const { message, useSafeMode = false } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ success: false, error: 'Message is required' });
+  }
+
+  // SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+  // Add user message to history
+  session.messages.push({ role: 'user', content: message, timestamp: new Date() });
+
+  const llmUrl = useSafeMode ? NEMOCLAW_URL : session.llmUrl;
+  const apiStyle = useSafeMode ? 'ollama' : (LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama');
+  const msgs = session.messages.map(m => ({ role: m.role, content: m.content }));
+
+  let fullContent = '';
+
+  try {
+    const streamResponse = await axios.post(
+      apiStyle === 'openai' ? `${llmUrl}/chat/completions` : `${llmUrl}/api/chat`,
+      { model: session.model, messages: msgs, stream: true },
+      { responseType: 'stream', timeout: 120000 }
+    );
+
+    streamResponse.data.on('data', (chunk) => {
+      const lines = chunk.toString().split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        // OpenAI SSE format: "data: {...}" or "data: [DONE]"
+        const text = line.startsWith('data: ') ? line.slice(6) : line;
+        if (text === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(text);
+          // OpenAI format: choices[0].delta.content
+          // Ollama format: message.content (with done flag)
+          const token = parsed.choices?.[0]?.delta?.content ?? parsed.message?.content ?? '';
+          if (token) {
+            fullContent += token;
+            send({ type: 'token', content: token });
+          }
+          // Ollama signals end with done:true
+          if (parsed.done === true && !parsed.message) {
+            // final stats object from Ollama — ignore
+          }
+        } catch {
+          // not valid JSON, skip
+        }
+      }
+    });
+
+    streamResponse.data.on('end', () => {
+      if (!fullContent) fullContent = 'No response received';
+      session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
+      session.updatedAt = new Date();
+      send({ type: 'done', messageCount: session.messages.length });
+      res.end();
+    });
+
+    streamResponse.data.on('error', (err) => {
+      console.error('[Stream] LLM stream error:', err.message);
+      const errMsg = `[Error] Stream failed: ${err.message}`;
+      if (!fullContent) {
+        session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
+        session.updatedAt = new Date();
+      }
+      send({ type: 'error', message: errMsg });
+      res.end();
+    });
+
+    req.on('close', () => {
+      streamResponse.data.destroy();
+    });
+  } catch (error) {
+    console.error('[Stream] Error starting LLM stream:', error.message);
+    const errMsg = `[Error] Could not reach LLM at ${llmUrl}: ${error.message}`;
+    session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
+    session.updatedAt = new Date();
+    send({ type: 'error', message: errMsg });
+    res.end();
   }
 });
 

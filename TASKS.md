@@ -13,13 +13,13 @@
 
 ## In Progress
 
-- [ ] Implement WebSocket connection for real-time agent log streaming (P1, L)
-- [ ] Design and build agent status card component (P2, S)
-
 ## Done
 
 - [x] Initialize project with basic Express server and React frontend (P1, M)
 - [x] Define basic project directory structure and linting rules (P1, S)
+- [x] Implement SSE streaming for real-time LLM response token streaming (P1, L)
+- [x] Design and build agent status card component (P2, S)
+- [x] Fix undefined execAsync reference in /api/system/info endpoint (P1, S)
 
 <!--
 AGENT INSTRUCTIONS:

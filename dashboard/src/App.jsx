@@ -8,6 +8,52 @@ const ENDPOINT_META = {
   glm_flash:     { model: 'ai/glm-4.7-flash:latest',label: 'GLM-4.7-Flash',    desc: 'Docker Model Runner · 16.31 GB', backendBadge: 'Docker Runner' },
 };
 
+/**
+ * AgentStatusCard — compact card showing a single session's live status.
+ */
+function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete }) {
+  const ago = (date) => {
+    const secs = Math.floor((Date.now() - new Date(date)) / 1000);
+    if (secs < 60) return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    return `${Math.floor(secs / 3600)}h ago`;
+  };
+
+  const statusLabel = isStreaming ? 'streaming' : session.messageCount > 0 ? 'idle' : 'new';
+  const statusClass = isStreaming ? 'streaming' : session.messageCount > 0 ? 'idle' : 'new';
+
+  return (
+    <div
+      className={`agent-card ${isActive ? 'active' : ''}`}
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+    >
+      <div className="agent-card-header">
+        <span className={`agent-status-dot ${statusClass}`} title={statusLabel} />
+        <span className="agent-card-name">{session.name}</span>
+        <button
+          className="btn-delete"
+          title="Delete session"
+          onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+        >✕</button>
+      </div>
+      <div className="agent-card-meta">
+        <span className="agent-card-endpoint">{ENDPOINT_META[session.endpoint]?.label || session.endpoint}</span>
+        <span className="agent-card-msgs">{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
+        <span className="agent-card-time">{ago(session.updatedAt || session.createdAt)}</span>
+      </div>
+      {isStreaming && (
+        <div className="agent-card-streaming">
+          <span className="streaming-indicator">⟳ receiving response…</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function App() {
   const [sessions, setSessions] = useState([]);
   const [models, setModels] = useState([]);
@@ -17,10 +63,12 @@ function App() {
   const [messageInput, setMessageInput] = useState('');
   const [useNemoClaw, setUseNemoClaw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const chatBottomRef = useRef(null);
+  const activeStreamRef = useRef(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -107,30 +155,95 @@ function App() {
     e.preventDefault();
     if (!activeSession || !messageInput.trim()) return;
 
+    // Cancel any active stream
+    if (activeStreamRef.current) {
+      activeStreamRef.current.abort();
+      activeStreamRef.current = null;
+    }
+
     const optimisticMsg = { role: 'user', content: messageInput.trim(), timestamp: new Date() };
     setActiveSessionMessages(prev => [...prev, optimisticMsg]);
     const sentMessage = messageInput;
     setMessageInput('');
     setLoading(true);
+    setStreamingContent('');
+
+    const controller = new AbortController();
+    activeStreamRef.current = controller;
+
     try {
-      const res = await fetch(`/api/sessions/${activeSession}/message`, {
+      const res = await fetch(`/api/sessions/${activeSession}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw })
+        body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw }),
+        signal: controller.signal
       });
-      const data = await res.json();
-      // Always refresh to get the actual server state (including AI reply or error text)
-      fetchSessions();
-      fetchSessionDetails(activeSession);
-      if (!data.success) {
-        console.error('LLM error:', data.response);
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream request failed: ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete last line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const json = line.slice(6).trim();
+          if (!json) continue;
+          try {
+            const event = JSON.parse(json);
+            if (event.type === 'token') {
+              accumulated += event.content;
+              setStreamingContent(accumulated);
+            } else if (event.type === 'done') {
+              setStreamingContent('');
+              fetchSessions();
+              fetchSessionDetails(activeSession);
+            } else if (event.type === 'error') {
+              console.error('LLM stream error:', event.message);
+              setStreamingContent('');
+              fetchSessions();
+              fetchSessionDetails(activeSession);
+            }
+          } catch {
+            // skip malformed SSE line
+          }
+        }
       }
     } catch (error) {
-      console.error('Error sending message:', error);
-      setMessageInput(sentMessage); // restore on network failure
-      setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
+      if (error.name !== 'AbortError') {
+        console.error('Error sending message via stream, falling back:', error);
+        // Fallback to non-streaming endpoint
+        try {
+          const res = await fetch(`/api/sessions/${activeSession}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw })
+          });
+          const data = await res.json();
+          fetchSessions();
+          fetchSessionDetails(activeSession);
+          if (!data.success) console.error('LLM error:', data.response);
+        } catch (fbErr) {
+          console.error('Fallback also failed:', fbErr);
+          setMessageInput(sentMessage);
+          setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
+        }
+      }
     } finally {
+      activeStreamRef.current = null;
       setLoading(false);
+      setStreamingContent('');
     }
   };
 
@@ -338,29 +451,19 @@ function App() {
               + New Session
             </button>
             <div className="sessions-list">
-              {sessions.map(session => (
-                <div
-                  key={session.id}
-                  className={`session-item ${activeSession === session.id ? 'active' : ''}`}
-                  onClick={() => setActiveSession(session.id)}
-                >
-                  <div className="session-info">
-                    <div className="session-name">{session.name}</div>
-                    <div className="session-meta">
-                      {session.endpoint} • {session.messageCount} msgs
-                    </div>
-                  </div>
-                  <button
-                    className="btn-delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(session.id);
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+              {sessions.map(session => {
+                const isActive = activeSession === session.id;
+                return (
+                  <AgentStatusCard
+                    key={session.id}
+                    session={session}
+                    isActive={isActive}
+                    isStreaming={isActive && loading}
+                    onClick={() => setActiveSession(session.id)}
+                    onDelete={deleteSession}
+                  />
+                );
+              })}
             </div>
           </section>
         </aside>
@@ -373,6 +476,7 @@ function App() {
                 <h2>{activeSessionData.name}</h2>
                 <div className="chat-meta">
                   {activeSessionData.endpoint} • {activeSessionData.messageCount} messages
+                  {loading && <span className="streaming-badge"> ⟳ streaming</span>}
                 </div>
               </div>
 
@@ -390,10 +494,17 @@ function App() {
                     <p>No messages yet. Start a conversation!</p>
                   </div>
                 )}
-                {loading && (
+                {loading && streamingContent && (
+                  <div className="message assistant streaming">
+                    <div className="message-content">
+                      <strong>AI:</strong> {streamingContent}<span className="cursor-blink">▍</span>
+                    </div>
+                  </div>
+                )}
+                {loading && !streamingContent && (
                   <div className="message assistant">
                     <div className="message-content" style={{opacity: 0.6, fontStyle: 'italic'}}>
-                      <strong>AI:</strong> Thinking...
+                      <strong>AI:</strong> Thinking<span className="dot-pulse">...</span>
                     </div>
                   </div>
                 )}
