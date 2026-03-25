@@ -706,3 +706,105 @@ body {
     width: 100%;
   }
 }
+
+/* ── Experience selector ─────────────────────────────────────────────────── */
+.btn-experience {
+  background: rgba(156, 39, 176, 0.2);
+  border: 1px solid rgba(156, 39, 176, 0.5);
+  color: #ce93d8;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.btn-experience:hover {
+  background: rgba(156, 39, 176, 0.35);
+}
+
+.experience-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  margin-bottom: 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.experience-option:hover {
+  border-color: #9c27b0;
+  background: rgba(156, 39, 176, 0.08);
+}
+.experience-option.selected {
+  border-color: #9c27b0;
+  background: rgba(156, 39, 176, 0.15);
+}
+
+/* ── Tab switcher ────────────────────────────────────────────────────────── */
+.btn-tab {
+  background: transparent;
+  border: 1px solid #444;
+  color: #aaa;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.btn-tab:hover { border-color: #888; color: #eee; }
+.btn-tab.active { border-color: #4caf50; color: #4caf50; background: rgba(76,175,80,0.1); }
+
+/* ── Metrics dashboard ───────────────────────────────────────────────────── */
+.metric-card {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #4caf50;
+}
+.metric-label {
+  font-size: 0.78rem;
+  color: #888;
+  margin-top: 0.3rem;
+}
+
+.metric-panel {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.metric-panel h3 {
+  font-size: 0.9rem;
+  color: #ccc;
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+/* ── Message feedback buttons ────────────────────────────────────────────── */
+.message-feedback {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.message:hover .message-feedback { opacity: 1; }
+
+.btn-feedback {
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.btn-feedback:hover { border-color: #888; color: #eee; }
