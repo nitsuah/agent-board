@@ -1,175 +1,128 @@
-# Agent Dashboard
+# Agent Board - Local AI Agent Ecosystem
 
-A lightweight local web-based dashboard for interacting with multiple LLM models and managing agent sessions. Build, test, and run Claude agents with full control over model selection and safety features.
+Local AI agent dashboard with multi-model support, session management, and NemoClaw safety sandbox.
 
 ## Features
 
-- 🤖 **Multi-Model Support** - Switch between Mistral, Qwen, and other Ollama models
-- 💬 **Agent Sessions** - TMux-like session management for long-running conversations
-- 🛡️ **Safety Controls** - Optional NemoClaw integration for privacy and security
-- 🌐 **Web-Based UI** - Simple, responsive interface
-- ⚡ **Local-First** - Everything runs locally on your machine
-- 🔄 **Model Switching** - Change models mid-conversation within a session
+- **Multi-Model Support** - Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
+- **Agent Sessions** - Persistent session management with full message history
+- **Safety Sandbox** - NemoClaw integration for policy-enforced safe mode
+- **Web Dashboard** - React UI with live Docker status monitoring
+- **Local-First** - Everything runs on your machine, no external APIs required
+- **Instant Model Switching** - Switch endpoints mid-conversation per session
 
-## Prerequisites
+## Directory Structure
 
-- Docker Desktop running
-- `local_llm` container running on port 8080 (Ollama with Mistral)
-- `nemoclaw` container running on port 8081 (optional, for safety features)
-- Node.js 18+
+```
+dashboard/                    # Web UI & API server (React + Express)
+  src/                        # React frontend
+  tests/                      # Integration tests
+  Dockerfile
+config/                       # Configuration (future)
+llm/                          # Model configs / Modelfiles (future)
+services/                     # Additional microservices (future)
+scripts/                      # Setup & management scripts
+docker-compose.yml            # Stack definition
+```
 
 ## Quick Start
 
-### 1. Install Dependencies
-
-```bash
-cd agent-dashboard
-npm install
+```powershell
+cd C:\Users\$env:USERNAME\code\agent-board
+docker compose up -d
 ```
 
-### 2. Configuration
+**Endpoints:**
+- Dashboard: http://localhost:3000
+- Ollama API: http://localhost:8081
+- NemoClaw: http://localhost:9000
 
-Edit `.env.local` if your services are on different ports:
+## Models
 
-```env
-LOCAL_LLM_URL=http://localhost:8080
-NEMOCLAW_URL=http://localhost:8081
-PORT=3000
+Models are pulled into the `llm_qwen_coder` Ollama container. Currently available:
+
+| Model | Size | Use |
+|---|---|---|
+| `llama2:latest` | 3.8 GB | Default — general chat, fits in RAM |
+| `qwen3-coder:latest` | 18 GB | Code generation (requires ~18 GB free RAM) |
+| `qwen3:latest` | 5.2 GB | General (MoE, loads as 17.7 GB at runtime) |
+
+Pull additional models:
+```powershell
+docker exec llm_qwen_coder ollama pull llama3.2:latest   # 2 GB, good general model
+docker exec llm_qwen_coder ollama pull qwen3:1.7b        # 1.4 GB, small but capable
 ```
 
-### 3. Add Models to Ollama
+### Docker Model Runner (optional)
 
-Pull additional models into your local_llm container:
+Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_runner`). To enable it:
+1. Docker Desktop → Settings → Features in development → **Enable Docker Model Runner** + **Host-side TCP support**
+2. Select "Docker Runner" in the dashboard sidebar
 
-```bash
-# Already have Mistral
-docker exec local_llm ollama pull mistral
-
-# Add Qwen
-docker exec local_llm ollama pull qwen
-
-# Other options
-docker exec local_llm ollama pull neural-chat
-docker exec local_llm ollama pull llama2
-```
-
-### 4. Start the Dashboard
-
-```bash
-# Development mode
-npm run dev
-
-# Open http://localhost:3000 in your browser
-```
-
-### 5. Build for Production
-
-```bash
-npm run build
-npm run preview
-```
-
-## Usage
-
-### Creating a Session
-
-1. Select a model from the left sidebar
-2. Click "New Session"
-3. Start typing messages
-
-### Switching Models
-
-- Select a different model in the sidebar
-- Current model will switch for the active session
-- Conversation history remains intact
-
-### Safe Mode (NemoClaw)
-
-- Check "Use NemoClaw (Safe Mode)" before sending messages
-- Messages route through NemoClaw's OpenShell security layer
-- Ensures privacy and policy-based guardrails
-
-## API Endpoints
-
-### Models
-- `GET /api/models` - List available models
-- `GET /api/health` - Health check
+## API
 
 ### Sessions
-- `GET /api/sessions` - List all sessions
-- `POST /api/sessions` - Create new session
-- `GET /api/sessions/:id` - Get session details
-- `DELETE /api/sessions/:id` - Delete session
+- `POST /api/sessions` — Create session (`{ endpoint, model, name }`)
+- `GET /api/sessions` — List all sessions
+- `GET /api/sessions/:id` — Get session with messages
+- `DELETE /api/sessions/:id` — Delete session
+- `PUT /api/sessions/:id/model` — Switch model/endpoint (`{ endpoint, model }`)
 
 ### Messages
-- `POST /api/sessions/:id/message` - Send message and get response
+- `POST /api/sessions/:id/message` — Send message (`{ message, useSafeMode }`)
 
-### Model Control
-- `PUT /api/sessions/:id/model` - Switch model in session
+### System
+- `GET /api/health` — Health check (LLM endpoints + Docker status)
+- `GET /api/models` — Available models from all endpoints
+- `GET /api/docker/status` — Container status
 
 ## Architecture
 
 ```
-agent-dashboard/
-├── server.js              # Express backend
+dashboard/
+├── server.js         # Express API — session mgmt, LLM proxy, Docker status
 ├── src/
-│   ├── App.jsx           # Main React component
-│   ├── App.css           # Styling
-│   └── main.jsx          # Entry point
-├── index.html            # HTML template
-├── vite.config.js        # Vite configuration
-├── package.json          # Dependencies
-└── dist/                 # Built frontend (after build)
+│   ├── App.jsx       # React frontend
+│   ├── App.css       # Styles
+│   └── main.jsx      # Entry point
+├── tests/
+│   ├── test-chat.js  # Integration test (session → message → delete)
+│   └── e2e-chat.js
+└── Dockerfile
 ```
 
-## Development with Worktrees
+## Management Scripts
 
-For safe changes with git worktrees:
-
-```bash
-# Create a feature branch
-git worktree add ../agent-dashboard-feature feature/new-feature
-
-# Make your changes in the worktree
-cd ../agent-dashboard-feature
-npm install
-npm run dev
-
-# Commit and push
-git add .
-git commit -m "Add new feature"
-git push origin feature/new-feature
-
-# Clean up worktree
-cd ..
-git worktree remove agent-dashboard-feature
+```powershell
+.\scripts\stack-manager.ps1 -Action start    # Start all containers
+.\scripts\stack-manager.ps1 -Action stop     # Stop all
+.\scripts\stack-manager.ps1 -Action restart  # Restart all
+.\scripts\stack-manager.ps1 -Action status   # Show status
+.\scripts\stack-manager.ps1 -Action logs     # Tail logs
 ```
 
 ## Troubleshooting
 
-### Models not loading
-- Check `http://localhost:8080/api/tags` to verify Ollama is running
-- Ensure models are pulled: `docker exec local_llm ollama list`
+**Chat returns error / LLM not responding**
+- Check Ollama has models: `docker exec llm_qwen_coder ollama list`
+- Check memory — large models (qwen3-coder 18 GB) need enough free RAM
+- Default model is `llama2:latest` which is safe for ~8 GB+ systems
 
-### Connection errors
-- Verify Docker containers: `docker ps`
-- Check port availability: `netstat -an | grep 3000`
+**Container unhealthy**
+- `docker logs agent-dashboard` — server errors
+- `docker logs llm_qwen_coder` — Ollama errors (OOM will show here)
 
-### NemoClaw not working
-- Verify container: `docker logs nemoclaw`
-- Check it's running: `docker ps | grep nemoclaw`
+**Port conflicts**
+- Ollama: `8081` (host) → `8080` (container)
+- NemoClaw: `9000` → `8080`
+- Dashboard: `3000` → `3000`
 
 ## Safety & Security
 
-- All communication is local (no external APIs unless configured)
-- NemoClaw provides OpenShell security layer when enabled
-- Sandbox isolation for agent execution
-- Capability restrictions (--cap-drop=all)
-- Read-only filesystem options available
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md)
+- All traffic is local — no external API calls
+- NemoClaw sandboxes agent execution with `--cap-drop=all`
+- Capability allowlist: `NET_BIND_SERVICE` only
+- `no-new-privileges` enforced on sandbox container
 
 ## License
 

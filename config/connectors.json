@@ -1,0 +1,25 @@
+{
+  "connectors": [
+    {
+      "id": "blackboard-learn",
+      "name": "Blackboard Learn",
+      "mcp_server": "http://bb-mcp:3100",
+      "mcp_server_local": "http://localhost:3100",
+      "system_prompt": "You are a helpful study assistant with access to Blackboard Learn. You can look up courses, assignments, grades, announcements, and course materials. Always be encouraging and concise. Never fabricate grades or deadlines — if you don't know, say so and offer to look it up.",
+      "safety_config": "strict",
+      "guided_prompts": [
+        "What do I have due this week?",
+        "How am I doing in my courses?",
+        "Summarize what I missed",
+        "Show me announcements for my courses",
+        "What's in the course materials for [course name]?"
+      ],
+      "identity_requirements": {
+        "required_fields": ["userId", "role"],
+        "valid_roles": ["student", "instructor", "admin"],
+        "ferpa_gate": true,
+        "ferpa_tools": ["get_at_risk_students", "get_grade_distribution", "get_submission_status"]
+      }
+    }
+  ]
+}

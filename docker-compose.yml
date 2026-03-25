@@ -1,0 +1,118 @@
+# Agent Board - Docker Stack
+
+services:
+  # ===== LLM SERVICES =====
+
+  # Local Ollama instance — runs models pulled via `docker exec ollama ollama pull <model>`
+  # Default model: llama2:latest  Port: 8081 (host) → 8080 (container)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:8080
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - agent-network
+
+  # Docker Model Runner (docker.io/ai/* models) — NOT a container.
+  # This is Docker Desktop's built-in model runner feature.
+  # Pull models on the host with:  docker model pull ai/glm-4.7-flash:latest
+  #                                 docker model pull ai/qwen3-coder:latest
+  # Endpoint (from inside containers): http://model-runner.docker.internal/engines/llama.cpp/v1
+  # API style: OpenAI-compatible (/v1/chat/completions, /v1/models)
+  # No container needed — Docker Desktop exposes this automatically.
+
+  # ===== SAFETY & SANDBOX =====
+  
+  nemoclaw:
+    image: nemoclaw:latest
+    container_name: nemoclaw
+    ports:
+      - "9000:8080"
+    volumes:
+      - nemoclaw_data:/workspace
+      - /tmp
+    environment:
+      - NEMOCLAW_HOME=/workspace
+      - LLM_API_URL=http://ollama:8080
+      - OPENSHELL_ENABLE=true
+    cap_drop:
+      - all
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    # healthcheck disabled because wget/curl is unavailable in this container
+    depends_on:
+      ollama:
+        condition: service_started
+    networks:
+      - agent-network
+
+  # ===== MCP SERVERS =====
+
+  bb-mcp:
+    build:
+      context: ../bb-mcp
+      dockerfile: Dockerfile
+    container_name: bb-mcp
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    env_file:
+      - ../bb-mcp/.env
+    environment:
+      - PORT=3100
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3100/health',(r)=>{r.resume();r.on('end',()=>process.exit(r.statusCode===200?0:1))}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - agent-network
+
+  # ===== WEB DASHBOARD =====
+  
+  agent-dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: agent-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - PRIMARY_LLM_URL=http://ollama:8080
+      # Docker Model Runner: Docker Desktop exposes this host to all containers
+      - DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
+      - DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest
+      - GLM_FLASH_MODEL=ai/glm-4.7-flash:latest
+      - NEMOCLAW_URL=http://nemoclaw:8080
+      - BB_MCP_URL=http://bb-mcp:3100
+      - PORT=3000
+    # healthcheck is disabled until a stable in-container HTTP client is available
+    # depends_on:
+
+    #   llm_qwen3:
+    #     condition: service_healthy
+    #   llm_qwen_coder:
+    #     condition: service_healthy
+    #   llm_glm_flash:
+    #     condition: service_healthy
+    networks:
+      - agent-network
+
+volumes:
+  ollama_data:  # Local Ollama model storage (llama2, etc.)
+  nemoclaw_data:
+
+networks:
+  agent-network:
+    name: agent-network
+    driver: bridge
+    external: false

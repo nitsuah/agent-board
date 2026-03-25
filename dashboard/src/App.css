@@ -370,6 +370,304 @@ body {
   background: #555;
 }
 
+/* Docker Status Styles */
+.docker-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.docker-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.docker-status-item:hover {
+  background: #333;
+  border-color: #00d4ff;
+}
+
+.docker-service-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.docker-service-name {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.docker-service-status {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.docker-service-status.running {
+  background: rgba(0, 255, 0, 0.1);
+  color: #00ff00;
+  border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.docker-service-status.stopped {
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.docker-service-status.starting {
+  background: rgba(255, 165, 0, 0.1);
+  color: #ffa500;
+  border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.docker-service-port {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.docker-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-docker-action {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.btn-docker-action.start {
+  background: rgba(0, 255, 0, 0.1);
+  color: #00ff00;
+  border: 1px solid rgba(0, 255, 0, 0.3);
+}
+
+.btn-docker-action.start:hover {
+  background: rgba(0, 255, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-docker-action.stop {
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.btn-docker-action.stop:hover {
+  background: rgba(255, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-docker-action.restart {
+  background: rgba(255, 165, 0, 0.1);
+  color: #ffa500;
+  border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.btn-docker-action.restart:hover {
+  background: rgba(255, 165, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+/* System Panel Styles */
+.system-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.system-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.system-info-item {
+  padding: 1rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.system-info-item h3 {
+  font-size: 0.9rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.system-info-item .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #00d4ff;
+}
+
+.system-info-item .value.error {
+  color: #ff6b6b;
+}
+
+.system-info-item .value.warning {
+  color: #ffa500;
+}
+
+.system-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-system-action {
+  padding: 0.6rem 1rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.btn-system-action:hover {
+  background: #333;
+  border-color: #00d4ff;
+  transform: translateY(-1px);
+}
+
+.btn-system-action.primary {
+  background: linear-gradient(90deg, #00d4ff, #0099cc);
+  color: #000;
+  border: none;
+}
+
+.btn-system-action.primary:hover {
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+}
+
+.btn-system-action.danger {
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.btn-system-action.danger:hover {
+  background: rgba(255, 0, 0, 0.2);
+}
+
+/* Endpoint Selector Styles */
+.endpoint-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.endpoint-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.endpoint-option:hover {
+  background: #333;
+  border-color: #00d4ff;
+}
+
+.endpoint-option.selected {
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.15), transparent);
+  border-color: #00d4ff;
+}
+
+.endpoint-option input[type="radio"] {
+  margin: 0;
+}
+
+.endpoint-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.endpoint-name {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.endpoint-description {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+/* Loading and Error States */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  color: #888;
+}
+
+.loading::after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border: 2px solid #333;
+  border-top: 2px solid #00d4ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 0.5rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-message {
+  background: rgba(255, 0, 0, 0.1);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  color: #ff6b6b;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  color: #00ff00;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .container {
@@ -393,5 +691,18 @@ body {
 
   .header h1 {
     font-size: 1.4rem;
+  }
+
+  .system-info {
+    grid-template-columns: 1fr;
+  }
+
+  .docker-actions {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .btn-docker-action {
+    width: 100%;
   }
 }
