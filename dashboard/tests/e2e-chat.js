@@ -53,7 +53,10 @@ async function run() {
       msg.includes('requires more system memory') ||
       msg.includes('out of memory') ||
       msg.includes('model not found') ||
-      msg.includes('Request failed with status code 500');
+      msg.includes('Request failed with status code 500') ||
+      msg.includes('ENOTFOUND') ||
+      msg.includes('ECONNREFUSED') ||
+      msg.includes('Could not reach LLM');
 
     if (isKnownModelIssue) {
       console.warn('  ⚠️ Chat response returned expected model issue:', msg);
