@@ -2,7 +2,6 @@
 
 ## Todo
 
-- [ ] Add unit tests for PromptWrapper, input classifier, and ResponseFilter (P2, M)
 - [ ] Consider OpenTelemetry traces on the critical path (P3, L)
 - [ ] Deploy publicly — not just localhost (P3, L)
 - [ ] Add dark mode support to the dashboard UI (P3, S)
@@ -33,6 +32,7 @@
 - [x] Add GET /api/metrics/feedback endpoint (P1, S)
 - [x] Add GET /api/metrics/errors endpoint (P1, S)
 - [x] Add unit tests for EventBus and metrics API endpoints (P2, M)
+- [x] Add unit tests for PromptWrapper, input classifier, and ResponseFilter (P2, M)
 - [x] Write a proper onboarding flow for first-time users (P2, M)
 - [x] Add public demo mode — no auth required, limited to Safe Chat experience (P2, M)
 - [x] Implement WebSocket connection for real-time agent log streaming (P2, L)
