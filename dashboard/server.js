@@ -17,6 +17,13 @@ import {
   persistEvent,
   upsertSessionContext,
 } from './persistence.js';
+import {
+  getStatus as getTracingStatus,
+  initTracing,
+  withSpan,
+  recordEvent,
+  shutdown as shutdownTracing,
+} from './tracing.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -268,6 +275,7 @@ const eventBus = {
   }
 };
 
+await initTracing(logStructured);
 await initPersistence(logStructured);
 
 let wsEventServerAttached = false;
@@ -831,7 +839,8 @@ app.get('/api/system/info', async (req, res) => {
         port: PORT,
         llmEndpoints: Object.keys(LLM_CONFIG),
         nemoClawUrl: NEMOCLAW_URL,
-        persistence: getPersistenceStatus()
+        persistence: getPersistenceStatus(),
+        tracing: getTracingStatus()
       }
     };
 
@@ -958,6 +967,10 @@ app.get('/api/demo-mode', (req, res) => {
 
 app.get('/api/persistence/status', (req, res) => {
   res.json({ success: true, persistence: getPersistenceStatus() });
+});
+
+app.get('/api/tracing/status', (req, res) => {
+  res.json({ success: true, tracing: getTracingStatus() });
 });
 
 /**
@@ -1854,4 +1867,14 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
   });
 
   attachEventWebSocketServer(server);
+
+  // Graceful shutdown: flush OTel spans before exit
+  process.on('SIGTERM', async () => {
+    await shutdownTracing();
+    server.close(() => process.exit(0));
+  });
+  process.on('SIGINT', async () => {
+    await shutdownTracing();
+    server.close(() => process.exit(0));
+  });
 }
