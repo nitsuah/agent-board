@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
+import { WebSocketServer } from 'ws';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -218,6 +219,7 @@ async function fetchDockerRunnerModels(baseUrl, timeoutMs = 4000) {
 // Swap the `_store` array for a DB write in persist() when Postgres is available.
 const _eventStore = [];
 const MAX_EVENTS = 10000;
+const _eventSubscribers = new Set();
 
 const eventBus = {
   emit(type, data = {}) {
@@ -234,6 +236,15 @@ const eventBus = {
     };
     _eventStore.push(event);
     if (_eventStore.length > MAX_EVENTS) _eventStore.shift();
+
+    for (const listener of _eventSubscribers) {
+      try {
+        listener(event);
+      } catch (error) {
+        logStructured('warn', 'event_subscriber_failed', { error: error.message });
+      }
+    }
+
     return event;
   },
   getAll() { return _eventStore; },
@@ -241,8 +252,54 @@ const eventBus = {
   getSince(iso) {
     const since = new Date(iso).getTime();
     return _eventStore.filter(e => new Date(e.timestamp).getTime() >= since);
+  },
+  subscribe(listener) {
+    _eventSubscribers.add(listener);
+    return () => _eventSubscribers.delete(listener);
   }
 };
+
+let wsEventServerAttached = false;
+
+function attachEventWebSocketServer(server) {
+  if (!server || wsEventServerAttached) {
+    return;
+  }
+
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (request, socket, head) => {
+    if (!request.url?.startsWith('/ws/events')) {
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (client) => {
+      wss.emit('connection', client, request);
+    });
+  });
+
+  wss.on('connection', (client) => {
+    client.send(JSON.stringify({ type: 'hello', timestamp: new Date().toISOString() }));
+  });
+
+  const unsubscribe = eventBus.subscribe((event) => {
+    const payload = JSON.stringify({ type: 'event', event });
+    wss.clients.forEach((client) => {
+      if (client.readyState === client.OPEN) {
+        client.send(payload);
+      }
+    });
+  });
+
+  server.on('close', () => {
+    unsubscribe();
+    wss.close();
+    wsEventServerAttached = false;
+  });
+
+  wsEventServerAttached = true;
+}
 
 // ============ SAFETY & EXPERIENCES ============
 
@@ -882,7 +939,8 @@ app.get('/api/demo-mode', (req, res) => {
     success: true,
     enabled: PUBLIC_DEMO_MODE,
     enforcedExperience: PUBLIC_DEMO_MODE ? DEMO_EXPERIENCE : null,
-    allowedEndpoints: PUBLIC_DEMO_MODE ? ['primary'] : Object.keys(LLM_CONFIG)
+    allowedEndpoints: PUBLIC_DEMO_MODE ? ['primary'] : Object.keys(LLM_CONFIG),
+    websocketPath: '/ws/events'
   });
 });
 
@@ -1736,6 +1794,7 @@ app.get('/', (req, res) => {
 });
 
 export {
+  attachEventWebSocketServer,
   applyOutputControls,
   app,
   calculateAverageMessagesPerSession,
@@ -1757,12 +1816,15 @@ export {
 };
 
 if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     logStructured('info', 'server_started', {
       port: PORT,
       endpoints: Object.fromEntries(Object.entries(LLM_CONFIG).map(([key, config]) => [key, config.url])),
       nemoClawUrl: NEMOCLAW_URL,
-      bbMcpUrl: BB_MCP_URL
+      bbMcpUrl: BB_MCP_URL,
+      websocketPath: '/ws/events'
     });
   });
+
+  attachEventWebSocketServer(server);
 }

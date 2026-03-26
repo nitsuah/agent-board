@@ -104,6 +104,18 @@ body {
   background: rgba(255, 124, 129, 0.18);
 }
 
+.ws-badge.connected {
+  color: #b7ffd9;
+  border-color: rgba(60, 227, 207, 0.44);
+  background: rgba(60, 227, 207, 0.16);
+}
+
+.ws-badge.disconnected {
+  color: #ffd4d7;
+  border-color: rgba(255, 124, 129, 0.42);
+  background: rgba(255, 124, 129, 0.16);
+}
+
 .onboarding-strip {
   margin: 0.85rem 2rem 0;
   border: 1px solid rgba(110, 232, 255, 0.26);
@@ -975,6 +987,39 @@ body {
   color: #ccc;
   margin: 0 0 0.75rem;
   font-weight: 600;
+}
+
+.live-event-panel {
+  min-height: 280px;
+}
+
+.live-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.live-event-item {
+  border: 1px solid rgba(110, 232, 255, 0.15);
+  background: rgba(20, 34, 52, 0.55);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+}
+
+.live-event-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+  color: #9cb6d5;
+}
+
+.live-event-detail {
+  font-size: 0.72rem;
+  color: #7fa6cc;
+  margin-top: 0.2rem;
 }
 
 /* ── Message feedback buttons ────────────────────────────────────────────── */

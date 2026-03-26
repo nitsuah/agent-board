@@ -63,6 +63,8 @@ function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
+  const [liveEvents, setLiveEvents] = useState([]);
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Experience selector
   const [selectedExperience, setSelectedExperience] = useState('developer');
@@ -172,6 +174,29 @@ function App() {
       setCurrentModel(ENDPOINT_META.primary.model);
     }
   }, [demoMode.enabled]);
+
+  useEffect(() => {
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
+
+    socket.onopen = () => setWsConnected(true);
+    socket.onclose = () => setWsConnected(false);
+    socket.onerror = () => setWsConnected(false);
+    socket.onmessage = (msg) => {
+      try {
+        const payload = JSON.parse(msg.data);
+        if (payload.type !== 'event' || !payload.event) {
+          return;
+        }
+
+        setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
+      } catch {
+        // Ignore malformed payloads.
+      }
+    };
+
+    return () => socket.close();
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'metrics') {
@@ -442,6 +467,9 @@ function App() {
             </span>
 
             {demoMode.enabled && <span className="badge demo-badge">Public Demo Mode</span>}
+            <span className={`badge ws-badge ${wsConnected ? 'connected' : 'disconnected'}`}>
+              {wsConnected ? 'Live Feed: Connected' : 'Live Feed: Offline'}
+            </span>
 
             {/* Tab switcher */}
             <button
@@ -660,6 +688,25 @@ function App() {
                   </div>
                 ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No data yet.</p>}
               </div>
+
+              <div className="metric-panel live-event-panel">
+                <h3>Live Event Stream</h3>
+                {liveEvents.length > 0 ? (
+                  <div className="live-events-list">
+                    {liveEvents.slice(0, 12).map((event) => (
+                      <div key={event.event_id} className="live-event-item">
+                        <div className="live-event-meta">
+                          <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                          <strong>{event.event_type}</strong>
+                        </div>
+                        <div className="live-event-detail">
+                          {event.experience || 'unknown'} • {event.endpoint || 'n/a'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No live events yet.</p>}
+              </div>
             </div>
 
             <button className="btn-primary" style={{ alignSelf: 'flex-start' }} onClick={fetchMetrics}>
@@ -822,7 +869,9 @@ function App() {
                   <p>Choose an experience and create a session to get started.</p>
 
                   <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-                    {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+                    {Object.entries(EXPERIENCE_META)
+                      .filter(([key]) => !demoMode.enabled || key === 'safechat')
+                      .map(([key, exp]) => (
                       <div
                         key={key}
                         className={`experience-option ${selectedExperience === key ? 'selected' : ''}`}
