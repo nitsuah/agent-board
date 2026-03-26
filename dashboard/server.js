@@ -57,6 +57,20 @@ const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
 const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
 
+function isTruthyEnv(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
+
+const PUBLIC_DEMO_MODE = isTruthyEnv(process.env.PUBLIC_DEMO_MODE);
+const DEMO_EXPERIENCE = 'safechat';
+
+function resolveRequestedExperience(requestedExperience) {
+  if (PUBLIC_DEMO_MODE) {
+    return DEMO_EXPERIENCE;
+  }
+  return requestedExperience;
+}
+
 // Session management
 const sessions = new Map();
 let sessionCounter = 0;
@@ -320,6 +334,14 @@ function getExperienceConfig(experience) {
 
 function getAllowedEndpoints(experience) {
   return getExperienceConfig(experience).availableEndpoints || ['primary'];
+}
+
+function getPublicExperienceConfigs() {
+  if (!PUBLIC_DEMO_MODE) {
+    return EXPERIENCE_CONFIGS;
+  }
+
+  return { safechat: EXPERIENCE_CONFIGS.safechat };
 }
 
 function isEndpointAllowed(experience, endpoint) {
@@ -824,12 +846,44 @@ app.get('/api/models', async (req, res) => {
       }
     }
 
-    res.json({ success: true, models, endpoints: Object.keys(LLM_CONFIG) });
+    const filteredModels = PUBLIC_DEMO_MODE
+      ? models.filter((m) => m.id === 'primary')
+      : models;
+
+    const fallbackModels = filteredModels.length > 0
+      ? filteredModels
+      : [{
+          id: 'primary',
+          endpoint: LLM_CONFIG.primary.name,
+          endpointUrl: LLM_CONFIG.primary.url,
+          backendType: LLM_CONFIG.primary.backendType,
+          type: LLM_CONFIG.primary.type,
+          name: LLM_CONFIG.primary.defaultModel,
+          model: LLM_CONFIG.primary.defaultModel,
+          size: 'unknown'
+        }];
+
+    res.json({
+      success: true,
+      models: fallbackModels,
+      endpoints: PUBLIC_DEMO_MODE ? ['primary'] : Object.keys(LLM_CONFIG),
+      demoMode: PUBLIC_DEMO_MODE
+    });
   } catch (error) {
     logStructured('error', 'models_fetch_failed', { error: error.message });
     const fallback = Object.entries(LLM_CONFIG).map(([key, c]) => ({ id: key, endpoint: c.name, endpointUrl: c.url, backendType: c.backendType, type: c.type, name: c.defaultModel, model: c.defaultModel, size: 'unknown' }));
-    res.json({ success: true, models: fallback, endpoints: Object.keys(LLM_CONFIG) });
+    const filteredFallback = PUBLIC_DEMO_MODE ? fallback.filter((m) => m.id === 'primary') : fallback;
+    res.json({ success: true, models: filteredFallback, endpoints: PUBLIC_DEMO_MODE ? ['primary'] : Object.keys(LLM_CONFIG), demoMode: PUBLIC_DEMO_MODE });
   }
+});
+
+app.get('/api/demo-mode', (req, res) => {
+  res.json({
+    success: true,
+    enabled: PUBLIC_DEMO_MODE,
+    enforcedExperience: PUBLIC_DEMO_MODE ? DEMO_EXPERIENCE : null,
+    allowedEndpoints: PUBLIC_DEMO_MODE ? ['primary'] : Object.keys(LLM_CONFIG)
+  });
 });
 
 /**
@@ -841,9 +895,11 @@ app.post('/api/sessions', (req, res) => {
     name = `session-${++sessionCounter}`,
     userId,
     userRole,
-    experience = 'developer',
+    experience: requestedExperience = 'developer',
     safetyMode
   } = req.body;
+
+  const experience = resolveRequestedExperience(requestedExperience);
 
   if (!isKnownExperience(experience)) {
     return res.status(400).json({ success: false, error: 'Invalid experience' });
@@ -888,7 +944,10 @@ app.post('/api/sessions', (req, res) => {
     metadata: {
       safetyMode: resolvedSafetyMode,
       userRole: session.userRole,
-      endpointAdjusted: endpointWasAdjusted
+      endpointAdjusted: endpointWasAdjusted,
+      publicDemoMode: PUBLIC_DEMO_MODE,
+      requestedExperience: requestedExperience || null,
+      resolvedExperience: experience
     }
   });
 
@@ -1250,6 +1309,10 @@ app.put('/api/sessions/:id/model', (req, res) => {
     return res.status(403).json({ success: false, error: 'Endpoint is not allowed for this experience' });
   }
 
+  if (PUBLIC_DEMO_MODE && endpoint !== 'primary') {
+    return res.status(403).json({ success: false, error: 'Public demo mode only allows the primary endpoint' });
+  }
+
   const prevEndpoint = session.endpoint;
   session.endpoint = endpoint;
   session.model = coerceModelForEndpoint(endpoint, model) || LLM_CONFIG[endpoint].defaultModel;
@@ -1518,7 +1581,14 @@ app.get('/api/metrics/errors', (req, res) => {
  * Return available experience configs for the UI
  */
 app.get('/api/experiences', (req, res) => {
-  res.json({ success: true, experiences: EXPERIENCE_CONFIGS });
+  res.json({
+    success: true,
+    experiences: getPublicExperienceConfigs(),
+    demoMode: {
+      enabled: PUBLIC_DEMO_MODE,
+      enforcedExperience: PUBLIC_DEMO_MODE ? DEMO_EXPERIENCE : null
+    }
+  });
 });
 
 /**

@@ -4,7 +4,6 @@
 
 - [ ] Persist EventBus events to Postgres — events table with full schema (P1, L)
 - [ ] Store session context in Postgres — user_id, session_id, created_at, model, endpoint (P1, M)
-- [ ] Add public demo mode — no auth required, limited to Safe Chat experience (P2, M)
 - [ ] Add unit tests for PromptWrapper, input classifier, and ResponseFilter (P2, M)
 - [ ] Implement WebSocket connection for real-time agent log streaming (P2, L)
 - [ ] Consider OpenTelemetry traces on the critical path (P3, L)
@@ -36,6 +35,7 @@
 - [x] Add GET /api/metrics/errors endpoint (P1, S)
 - [x] Add unit tests for EventBus and metrics API endpoints (P2, M)
 - [x] Write a proper onboarding flow for first-time users (P2, M)
+- [x] Add public demo mode — no auth required, limited to Safe Chat experience (P2, M)
 - [x] Add Metrics tab to React dashboard (P1, M)
 - [x] Build ExperienceConfig — developer, research, safe-chat (P2, M)
 - [x] Add experience selector to dashboard landing page (P2, M)

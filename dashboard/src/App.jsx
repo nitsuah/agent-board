@@ -62,6 +62,7 @@ function App() {
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
+  const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
 
   // Experience selector
   const [selectedExperience, setSelectedExperience] = useState('developer');
@@ -79,8 +80,11 @@ function App() {
   const chatBottomRef = useRef(null);
 
   const getAvailableEndpoints = useCallback((experienceKey) => {
+    if (demoMode.enabled) {
+      return ['primary'];
+    }
     return EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
-  }, []);
+  }, [demoMode.enabled]);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -88,6 +92,7 @@ function App() {
     fetchSessions();
     fetchDockerStatus();
     fetchSystemInfo();
+    fetchDemoMode();
 
     const sessionInterval = setInterval(fetchSessions, 5000);
     const dockerInterval = setInterval(fetchDockerStatus, 10000);
@@ -129,6 +134,22 @@ function App() {
     } catch (error) { console.error('Error fetching system info:', error); }
   };
 
+  const fetchDemoMode = async () => {
+    try {
+      const res = await fetch('/api/demo-mode');
+      const data = await res.json();
+      if (data.success) {
+        setDemoMode({
+          enabled: !!data.enabled,
+          enforcedExperience: data.enforcedExperience || null,
+          allowedEndpoints: data.allowedEndpoints || []
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching demo mode:', error);
+    }
+  };
+
   const fetchMetrics = useCallback(async () => {
     try {
       const [summary, safety, feedback, errors] = await Promise.all([
@@ -143,6 +164,14 @@ function App() {
       if (errors.success) setMetricsErrors(errors.errors);
     } catch (error) { console.error('Error fetching metrics:', error); }
   }, []);
+
+  useEffect(() => {
+    if (demoMode.enabled) {
+      setSelectedExperience('safechat');
+      setCurrentEndpoint('primary');
+      setCurrentModel(ENDPOINT_META.primary.model);
+    }
+  }, [demoMode.enabled]);
 
   useEffect(() => {
     if (activeTab === 'metrics') {
@@ -374,8 +403,11 @@ function App() {
               value={selectedExperience}
               onChange={e => setSelectedExperience(e.target.value)}
               title="Switch experience mode"
+              disabled={demoMode.enabled}
             >
-              {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+              {Object.entries(EXPERIENCE_META)
+                .filter(([key]) => !demoMode.enabled || key === 'safechat')
+                .map(([key, exp]) => (
                 <option key={key} value={key}>{exp.icon} {exp.name}</option>
               ))}
             </select>
@@ -386,7 +418,7 @@ function App() {
               value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
               onChange={e => handleEndpointSelection(e.target.value)}
               title="Choose model endpoint"
-              disabled={selectableEndpointKeys.length === 0}
+              disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
             >
               {selectableEndpointKeys.length === 0 ? (
                 <option value="">No models online</option>
@@ -408,6 +440,8 @@ function App() {
             <span className="badge experience-badge">
               {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
             </span>
+
+            {demoMode.enabled && <span className="badge demo-badge">Public Demo Mode</span>}
 
             {/* Tab switcher */}
             <button
@@ -433,6 +467,7 @@ function App() {
             <span>
               Start in <strong>{EXPERIENCE_META[selectedExperience]?.name}</strong>, then create a session and send a prompt.
               {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}
+              {demoMode.enabled && ' Demo mode is locked to Safe Chat and the primary model endpoint.'}
             </span>
           </div>
           <div className="onboarding-actions">
@@ -758,7 +793,7 @@ function App() {
                       value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
                       onChange={e => handleEndpointSelection(e.target.value)}
                       title="Choose model endpoint"
-                      disabled={loading || selectableEndpointKeys.length === 0}
+                      disabled={loading || selectableEndpointKeys.length === 0 || demoMode.enabled}
                     >
                       {selectableEndpointKeys.length === 0 ? (
                         <option value="">No models online</option>
