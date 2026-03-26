@@ -10,6 +10,13 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
 import { WebSocketServer } from 'ws';
+import {
+  getStatus as getPersistenceStatus,
+  initPersistence,
+  markSessionEnded,
+  persistEvent,
+  upsertSessionContext,
+} from './persistence.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -245,6 +252,8 @@ const eventBus = {
       }
     }
 
+    persistEvent(event, logStructured);
+
     return event;
   },
   getAll() { return _eventStore; },
@@ -258,6 +267,8 @@ const eventBus = {
     return () => _eventSubscribers.delete(listener);
   }
 };
+
+await initPersistence(logStructured);
 
 let wsEventServerAttached = false;
 
@@ -819,7 +830,8 @@ app.get('/api/system/info', async (req, res) => {
       environment: {
         port: PORT,
         llmEndpoints: Object.keys(LLM_CONFIG),
-        nemoClawUrl: NEMOCLAW_URL
+        nemoClawUrl: NEMOCLAW_URL,
+        persistence: getPersistenceStatus()
       }
     };
 
@@ -944,6 +956,10 @@ app.get('/api/demo-mode', (req, res) => {
   });
 });
 
+app.get('/api/persistence/status', (req, res) => {
+  res.json({ success: true, persistence: getPersistenceStatus() });
+});
+
 /**
  * Create a new agent session
  */
@@ -992,6 +1008,7 @@ app.post('/api/sessions', (req, res) => {
   };
 
   sessions.set(sessionId, session);
+  upsertSessionContext(session, logStructured);
 
   eventBus.emit('session_start', {
     session_id: sessionId,
@@ -1112,6 +1129,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     session.messages.push({ role: 'user', content: normalizePromptText(message), timestamp: new Date() });
     session.messages.push({ role: 'assistant', content: handlerResult.response, timestamp: new Date(), blocked: handlerResult.blocked });
     session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
 
     eventBus.emit('prompt_handler_invoked', {
       session_id: session.id,
@@ -1163,6 +1181,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     session.messages.push({ role: 'user', content: normalizedMessage, timestamp: new Date() });
     session.messages.push({ role: 'assistant', content: refusal, timestamp: new Date(), blocked: true });
     session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
 
     return res.json({
       success: true,
@@ -1176,6 +1195,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
 
   // Add user message to history
   session.messages.push({ role: 'user', content: normalizedMessage, timestamp: new Date() });
+  upsertSessionContext(session, logStructured);
 
   eventBus.emit('message_sent', {
     session_id: session.id,
@@ -1283,6 +1303,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       feedback: null
     });
     session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
 
     if (outputControlled.truncated) {
       eventBus.emit('output_control_applied', {
@@ -1328,6 +1349,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     const errorMsg = `[Error] Could not reach the configured model service for ${session.endpoint}: ${error.message}`;
     session.messages.push({ role: 'assistant', content: errorMsg, timestamp: new Date() });
     session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
 
     eventBus.emit('error', {
       session_id: session.id,
@@ -1376,6 +1398,7 @@ app.put('/api/sessions/:id/model', (req, res) => {
   session.model = coerceModelForEndpoint(endpoint, model) || LLM_CONFIG[endpoint].defaultModel;
   session.llmUrl = LLM_CONFIG[endpoint].url;
   session.updatedAt = new Date();
+  upsertSessionContext(session, logStructured);
 
   eventBus.emit('model_switched', {
     session_id: session.id,
@@ -1405,6 +1428,7 @@ app.delete('/api/sessions/:id', (req, res) => {
 
   if (exists) {
     const session = sessions.get(req.params.id);
+    session.endedAt = new Date();
     eventBus.emit('session_end', {
       session_id: req.params.id,
       user_id: session?.userId,
@@ -1413,6 +1437,8 @@ app.delete('/api/sessions/:id', (req, res) => {
       experience: session?.experience,
       metadata: { messageCount: session?.messages.length }
     });
+    upsertSessionContext(session, logStructured);
+    markSessionEnded(req.params.id, session.endedAt, logStructured);
     sessions.delete(req.params.id);
   }
 
@@ -1454,6 +1480,7 @@ app.post('/api/sessions/:id/feedback', (req, res) => {
   session.messages[messageIndex].feedback = positive ? 'up' : 'down';
   session.messages[messageIndex].feedbackAt = new Date();
   session.updatedAt = new Date();
+  upsertSessionContext(session, logStructured);
 
   const eventType = positive ? 'feedback_positive' : 'feedback_negative';
   eventBus.emit(eventType, {

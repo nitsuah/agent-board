@@ -2,8 +2,6 @@
 
 ## Todo
 
-- [ ] Persist EventBus events to Postgres — events table with full schema (P1, L)
-- [ ] Store session context in Postgres — user_id, session_id, created_at, model, endpoint (P1, M)
 - [ ] Add unit tests for PromptWrapper, input classifier, and ResponseFilter (P2, M)
 - [ ] Consider OpenTelemetry traces on the critical path (P3, L)
 - [ ] Deploy publicly — not just localhost (P3, L)
@@ -17,6 +15,8 @@
 
 - [x] Initialize project with basic Express server and React frontend (P1, M)
 - [x] Define basic project directory structure and linting rules (P1, S)
+- [x] Persist EventBus events to Postgres — events table with full schema (P1, L)
+- [x] Store session context in Postgres — user_id, session_id, created_at, model, endpoint (P1, M)
 - [x] Add session identity — anonymous UUID on first visit via localStorage (P1, S)
 - [x] Pass user context as metadata on every request (P1, S)
 - [x] Build PromptWrapper middleware — system prompt prepended per experience/safety mode (P2, M)

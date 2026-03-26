@@ -1,6 +1,28 @@
 # Agent Board - Docker Stack
 
 services:
+  # ===== PERSISTENCE =====
+
+  agent-db:
+    image: postgres:16-alpine
+    container_name: agent-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=agent_board
+      - POSTGRES_USER=agent
+      - POSTGRES_PASSWORD=agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - agent_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent_board"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
   # ===== LLM SERVICES =====
 
   # Local Ollama instance — runs models pulled via `docker exec ollama ollama pull <model>`
@@ -101,6 +123,7 @@ services:
       - NEMOCLAW_URL=http://nemoclaw:8080
       - BB_MCP_URL=http://bb-mcp:3100
       - PORT=3000
+      - DATABASE_URL=postgresql://agent:agent@agent-db:5432/agent_board
     # healthcheck is disabled until a stable in-container HTTP client is available
     # depends_on:
 
@@ -110,10 +133,14 @@ services:
     #     condition: service_healthy
     #   llm_glm_flash:
     #     condition: service_healthy
+    depends_on:
+      agent-db:
+        condition: service_healthy
     networks:
       - agent-network
 
 volumes:
+  agent_db_data:
   ollama_data:  # Local Ollama model storage (llama2, etc.)
   nemoclaw_data:
 

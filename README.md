@@ -86,6 +86,7 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
 - `GET /api/docker/status` — Container status
+- `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
 
 ## Architecture
 
