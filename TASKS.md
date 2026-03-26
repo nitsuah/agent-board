@@ -3,7 +3,6 @@
 ## Todo
 
 - [ ] Deploy publicly — not just localhost (P3, L)
-- [ ] Update README with product framing not just technical setup (P3, S)
 - [ ] Record a 2-minute demo video (P3, S)
 
 ## In Progress
@@ -33,6 +32,7 @@
 - [x] Add unit tests for PromptWrapper, input classifier, and ResponseFilter (P2, M)
 - [x] Consider OpenTelemetry traces on the critical path (P3, L)
 - [x] Add dark mode support to the dashboard UI (P3, S)
+- [x] Update README with product framing not just technical setup (P3, S)
 - [x] Write a proper onboarding flow for first-time users (P2, M)
 - [x] Add public demo mode — no auth required, limited to Safe Chat experience (P2, M)
 - [x] Implement WebSocket connection for real-time agent log streaming (P2, L)

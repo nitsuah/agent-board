@@ -1,18 +1,54 @@
-# Agent Board - Local AI Agent Ecosystem
+# Agent Board - Local AI Ops Cockpit
 
-Local-first AI dashboard for running multiple model experiences with session identity, safety controls, and observability built around the agent layer.
+Agent Board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
+
+## Why Agent Board
+
+- **Ship safer prompts faster**: built-in input classification, prompt-injection checks, blocked-input handling, and output sanitization.
+- **Run multiple experiences**: switch between Developer Assistant, Research Mode, and Safe Chat with server-enforced routing and safety policies.
+- **Observe everything live**: metrics dashboards, WebSocket event streaming, and OpenTelemetry traces to Jaeger.
+- **Stay local-first**: designed to run on your own machine with Docker.
+
+## Product Highlights
+
+- **Experience-aware sessions**: persistent sessions with user context, role metadata, and full message history.
+- **Safety layer**: PII detection/redaction, harmful content filtering, and strict-mode handling for sensitive workflows.
+- **Model routing**: primary Ollama endpoint, Docker Model Runner endpoints, and server-side endpoint restrictions.
+- **Operations UI**: dark and light themes, system panel controls, live container status, and endpoint health visibility.
+- **Observability stack**: metrics APIs, event bus, persistence status, tracing status, and Jaeger integration.
+
+## Quick Start
+
+```powershell
+cd C:\Users\$env:USERNAME\code\agent-board
+docker compose up -d
+```
+
+Open these endpoints:
+
+- Dashboard: http://localhost:3000
+- Jaeger UI: http://localhost:16686
+- Ollama API: http://localhost:8081
+- NemoClaw: http://localhost:9000
+
+## What You Can Do In 2 Minutes
+
+1. Open the dashboard and create a new session.
+2. Pick an experience (Developer, Research, or Safe Chat).
+3. Send a normal prompt, then a deliberately unsafe one to see safety interception.
+4. Open the Metrics tab to inspect safety and feedback telemetry.
+5. Check Jaeger to view request traces on the critical path.
 
 ## Features
 
-- **Multi-Model Support** - Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
-- **Agent Sessions** - Persistent session management with full message history
-- **Safety Sandbox** - NemoClaw integration for policy-enforced safe mode
-- **Experience Modes** - Developer Assistant, Research Mode, and Safe Chat with server-enforced endpoint and safety rules
-- **Safety Layer** - Input classification, prompt wrapping, blocked-input handling, and output sanitization for harmful or PII-bearing responses
-- **Metrics Dashboard** - Summary, safety, feedback, and error telemetry with in-memory event collection
-- **Web Dashboard** - React UI with live Docker status monitoring
-- **Local-First** - Everything runs on your machine, no external APIs required
-- **Instant Model Switching** - Switch endpoints mid-conversation per session
+- **Multi-model support**: Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
+- **Agent sessions**: persistent session management with full message history
+- **Safety sandbox**: NemoClaw integration for policy-enforced safe mode
+- **Experience modes**: server-enforced endpoint and safety rules per experience
+- **Metrics dashboard**: summary, safety, feedback, and error telemetry
+- **Web dashboard**: React UI with live Docker status monitoring
+- **OpenTelemetry tracing**: OTLP/HTTP export to Jaeger with graceful fallback
+- **Instant model switching**: switch endpoints mid-conversation per session
 
 ## Directory Structure
 
@@ -27,18 +63,6 @@ services/                     # Additional microservices (future)
 scripts/                      # Setup & management scripts
 docker-compose.yml            # Stack definition
 ```
-
-## Quick Start
-
-```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
-docker compose up -d
-```
-
-**Endpoints:**
-- Dashboard: http://localhost:3000
-- Ollama API: http://localhost:8081
-- NemoClaw: http://localhost:9000
 
 ## Models
 
@@ -87,6 +111,7 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 - `GET /api/models` — Available models from all endpoints
 - `GET /api/docker/status` — Container status
 - `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
+- `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
 
 ## Architecture
 
