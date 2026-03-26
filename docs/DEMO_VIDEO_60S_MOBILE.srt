@@ -1,0 +1,61 @@
+1
+00:00:00,000 --> 00:00:02,500
+Agent Board.
+
+2
+00:00:02,500 --> 00:00:07,000
+Local AI ops cockpit.
+Built-in safety and observability.
+
+3
+00:00:07,000 --> 00:00:11,500
+Switch modes:
+Developer, Research, Safe Chat.
+
+4
+00:00:11,500 --> 00:00:16,000
+Each mode uses
+server-enforced policy.
+
+5
+00:00:16,000 --> 00:00:22,000
+Create a session.
+Send a normal prompt.
+
+6
+00:00:22,000 --> 00:00:28,000
+Sessions persist
+with user context.
+
+7
+00:00:28,000 --> 00:00:33,000
+Now send a risky prompt.
+
+8
+00:00:33,000 --> 00:00:39,000
+Blocked before model execution.
+Controlled refusal returned.
+
+9
+00:00:39,000 --> 00:00:44,000
+Open Metrics.
+Safety events are tracked live.
+
+10
+00:00:44,000 --> 00:00:49,000
+Usage, feedback,
+and error trends in one view.
+
+11
+00:00:49,000 --> 00:00:53,000
+Open Jaeger.
+
+12
+00:00:53,000 --> 00:00:57,000
+Trace requests end-to-end.
+Find latency fast.
+
+13
+00:00:57,000 --> 00:01:00,000
+Agent Board:
+local-first AI operations.
