@@ -19,6 +19,10 @@ function getUserRole() {
   return localStorage.getItem('agent_board_user_role') || null;
 }
 
+function shouldShowOnboarding() {
+  return localStorage.getItem('agent_board_onboarding_dismissed') !== '1';
+}
+
 // Max characters to show for error messages in the metrics UI
 const ERROR_DISPLAY_MAX_LEN = 80;
 const ENDPOINT_META = {
@@ -64,6 +68,7 @@ function App() {
 
   // Active tab: 'chat' | 'metrics'
   const [activeTab, setActiveTab] = useState('chat');
+  const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding);
 
   // Metrics data
   const [metricsSummary, setMetricsSummary] = useState(null);
@@ -335,6 +340,13 @@ function App() {
     const endpointStatus = dockerStatus?.endpoints?.[key];
     return endpointStatus ? endpointStatus.live === true : true;
   });
+  const runningServices = Object.values(dockerStatus?.containers || {}).filter(c => c.running).length;
+  const totalServices = Object.keys(dockerStatus?.containers || {}).length;
+
+  const dismissOnboarding = () => {
+    localStorage.setItem('agent_board_onboarding_dismissed', '1');
+    setShowOnboarding(false);
+  };
 
   // ── Metrics helpers ────────────────────────────────────────────────────────
   const renderBar = (value, max, color = '#4caf50') => {
@@ -351,7 +363,10 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <h1>🤖 Agent Board</h1>
+          <div className="brand-block">
+            <h1>🤖 Agent Board</h1>
+            <p className="brand-subtitle">Local AI operations cockpit for safe multi-model workflows</p>
+          </div>
           <div className="header-info">
             {/* Experience picker */}
             <select
@@ -390,6 +405,10 @@ function App() {
               })()}
             </span>
 
+            <span className="badge experience-badge">
+              {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
+            </span>
+
             {/* Tab switcher */}
             <button
               className={`btn-tab ${activeTab === 'chat' ? 'active' : ''}`}
@@ -406,6 +425,22 @@ function App() {
           </div>
         </div>
       </header>
+
+      {showOnboarding && (
+        <div className="onboarding-strip">
+          <div className="onboarding-copy">
+            <strong>Welcome to Agent Board.</strong>
+            <span>
+              Start in <strong>{EXPERIENCE_META[selectedExperience]?.name}</strong>, then create a session and send a prompt.
+              {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}
+            </span>
+          </div>
+          <div className="onboarding-actions">
+            <button className="btn-system-action primary" onClick={createSession}>Create Session</button>
+            <button className="btn-system-action" onClick={dismissOnboarding}>Dismiss</button>
+          </div>
+        </div>
+      )}
 
       <div className="container">
         {/* System Panel */}
@@ -714,8 +749,10 @@ function App() {
                       value={messageInput}
                       onChange={e => setMessageInput(e.target.value)}
                       placeholder="Type your message..."
+                      maxLength={4000}
                       disabled={loading}
                     />
+                    <span className="input-counter">{messageInput.length}/4000</span>
                     <select
                       className="model-select-inline"
                       value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
