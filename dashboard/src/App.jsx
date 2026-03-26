@@ -66,6 +66,23 @@ function App() {
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
 
+  // Theme toggle (dark default)
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('agent_board_theme');
+    const isDark = saved !== 'light';
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    return isDark;
+  });
+
+  const toggleTheme = () => {
+    setDarkMode(prev => {
+      const next = !prev;
+      document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+      localStorage.setItem('agent_board_theme', next ? 'dark' : 'light');
+      return next;
+    });
+  };
+
   // Experience selector
   const [selectedExperience, setSelectedExperience] = useState('developer');
 
@@ -492,6 +509,13 @@ function App() {
 
             <button className={`btn-system ${showSystemPanel ? 'active' : ''}`} onClick={() => setShowSystemPanel(!showSystemPanel)}>
               ⚙️ System
+            </button>
+            <button
+              className="btn-theme-toggle"
+              onClick={toggleTheme}
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {darkMode ? '☀️' : '🌙'}
             </button>
           </div>
         </div>
