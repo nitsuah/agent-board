@@ -61,7 +61,6 @@ function App() {
 
   // Experience selector
   const [selectedExperience, setSelectedExperience] = useState('developer');
-  const [showExperienceSelector, setShowExperienceSelector] = useState(false);
 
   // Active tab: 'chat' | 'metrics'
   const [activeTab, setActiveTab] = useState('chat');
@@ -152,9 +151,14 @@ function App() {
   const createSession = async () => {
     try {
       const availableEndpoints = getAvailableEndpoints(selectedExperience);
-      const endpoint = availableEndpoints.includes(currentEndpoint)
+      const onlineEndpoints = availableEndpoints.filter((key) => {
+        const endpointStatus = dockerStatus?.endpoints?.[key];
+        return endpointStatus ? endpointStatus.live === true : true;
+      });
+      const endpointPool = onlineEndpoints.length ? onlineEndpoints : availableEndpoints;
+      const endpoint = endpointPool.includes(currentEndpoint)
         ? currentEndpoint
-        : availableEndpoints[0];
+        : endpointPool[0];
       const model = ENDPOINT_META[endpoint]?.model || currentModel;
 
       const res = await fetch('/api/sessions', {
@@ -249,6 +253,13 @@ function App() {
     } catch (error) { console.error('Error switching endpoint:', error); }
   };
 
+  const handleEndpointSelection = (endpoint) => {
+    const model = ENDPOINT_META[endpoint]?.model || 'llama2:latest';
+    setCurrentEndpoint(endpoint);
+    setCurrentModel(model);
+    switchEndpoint(endpoint, model);
+  };
+
   const deleteSession = async (id) => {
     try {
       await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
@@ -259,12 +270,28 @@ function App() {
 
   const sendFeedback = async (messageIndex, positive) => {
     if (!activeSession) return;
+    const targetMessage = activeSessionMessages[messageIndex];
+    if (!targetMessage || targetMessage.role !== 'assistant' || targetMessage.feedback) {
+      return;
+    }
+
     try {
-      await fetch(`/api/sessions/${activeSession}/feedback`, {
+      const res = await fetch(`/api/sessions/${activeSession}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageIndex, positive })
       });
+
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error sending feedback:', data.error || 'Unknown error');
+        return;
+      }
+
+      const feedbackValue = positive ? 'up' : 'down';
+      setActiveSessionMessages((prev) => prev.map((msg, idx) => (
+        idx === messageIndex ? { ...msg, feedback: feedbackValue } : msg
+      )));
     } catch (error) { console.error('Error sending feedback:', error); }
   };
 
@@ -290,14 +317,24 @@ function App() {
 
   useEffect(() => {
     const availableEndpoints = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
-    if (!availableEndpoints.includes(currentEndpoint)) {
-      const nextEndpoint = availableEndpoints[0];
+    const onlineEndpoints = availableEndpoints.filter((key) => {
+      const endpointStatus = dockerStatus?.endpoints?.[key];
+      return endpointStatus ? endpointStatus.live === true : true;
+    });
+    const endpointPool = onlineEndpoints.length ? onlineEndpoints : availableEndpoints;
+
+    if (!endpointPool.includes(currentEndpoint)) {
+      const nextEndpoint = endpointPool[0];
       setCurrentEndpoint(nextEndpoint);
       setCurrentModel(ENDPOINT_META[nextEndpoint]?.model || 'llama2:latest');
     }
-  }, [activeSessionData, currentEndpoint, getAvailableEndpoints, selectedExperience]);
+  }, [activeSessionData, currentEndpoint, dockerStatus, getAvailableEndpoints, selectedExperience]);
 
   const visibleEndpointKeys = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
+  const selectableEndpointKeys = visibleEndpointKeys.filter((key) => {
+    const endpointStatus = dockerStatus?.endpoints?.[key];
+    return endpointStatus ? endpointStatus.live === true : true;
+  });
 
   // ── Metrics helpers ────────────────────────────────────────────────────────
   const renderBar = (value, max, color = '#4caf50') => {
@@ -316,14 +353,34 @@ function App() {
         <div className="header-content">
           <h1>🤖 Agent Board</h1>
           <div className="header-info">
-            {/* Experience badge */}
-            <button
-              className="btn-experience"
-              onClick={() => setShowExperienceSelector(!showExperienceSelector)}
+            {/* Experience picker */}
+            <select
+              className="experience-select"
+              value={selectedExperience}
+              onChange={e => setSelectedExperience(e.target.value)}
               title="Switch experience mode"
             >
-              {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-            </button>
+              {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+                <option key={key} value={key}>{exp.icon} {exp.name}</option>
+              ))}
+            </select>
+
+            {/* Top model picker */}
+            <select
+              className="model-select-top"
+              value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
+              onChange={e => handleEndpointSelection(e.target.value)}
+              title="Choose model endpoint"
+              disabled={selectableEndpointKeys.length === 0}
+            >
+              {selectableEndpointKeys.length === 0 ? (
+                <option value="">No models online</option>
+              ) : (
+                selectableEndpointKeys.map((key) => (
+                  <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
+                ))
+              )}
+            </select>
 
             <span className={`badge docker-status ${getDockerStatusColor()}`}>
               {(() => {
@@ -343,44 +400,12 @@ function App() {
               onClick={() => setActiveTab('metrics')}
             >📊 Metrics</button>
 
-            <button className="btn-system" onClick={() => setShowSystemPanel(!showSystemPanel)}>
+            <button className={`btn-system ${showSystemPanel ? 'active' : ''}`} onClick={() => setShowSystemPanel(!showSystemPanel)}>
               ⚙️ System
             </button>
           </div>
         </div>
       </header>
-
-      {/* Experience Selector Overlay */}
-      {showExperienceSelector && (
-        <div className="system-panel-overlay" onClick={() => setShowExperienceSelector(false)}>
-          <div className="system-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="system-panel-header">
-              <h2>Choose Your Experience</h2>
-              <button onClick={() => setShowExperienceSelector(false)}>✕</button>
-            </div>
-            <p style={{ color: '#aaa', fontSize: '0.85rem', margin: '0 0 1rem' }}>
-              Each experience sets a safety profile and system prompt. New sessions will use your selection.
-            </p>
-            {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
-              <div
-                key={key}
-                className={`experience-option ${selectedExperience === key ? 'selected' : ''}`}
-                onClick={() => { setSelectedExperience(key); setShowExperienceSelector(false); }}
-              >
-                <span style={{ fontSize: '1.5rem' }}>{exp.icon}</span>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{exp.name}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#aaa' }}>{exp.description}</div>
-                </div>
-                {selectedExperience === key && <span style={{ marginLeft: 'auto', color: '#4caf50' }}>✓</span>}
-              </div>
-            ))}
-            <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.75rem' }}>
-              User ID: <code style={{ fontSize: '0.7rem' }}>{userId.current}</code>
-            </p>
-          </div>
-        </div>
-      )}
 
       <div className="container">
         {/* System Panel */}
@@ -579,43 +604,6 @@ function App() {
             {/* Sidebar */}
             <aside className="sidebar">
               <section className="section">
-                <h2>LLM Endpoints</h2>
-                <div className="endpoint-selector">
-                  {Object.entries(ENDPOINT_META)
-                    .filter(([value]) => visibleEndpointKeys.includes(value))
-                    .map(([value, { model, label, desc, backendBadge }]) => {
-                    const epStatus = dockerStatus?.endpoints?.[value];
-                    const isLive = epStatus?.live ?? null;
-                    return (
-                      <label key={value} className="endpoint-option">
-                        <input
-                          type="radio"
-                          name="endpoint"
-                          value={value}
-                          checked={currentEndpoint === value}
-                          onChange={() => {
-                            setCurrentEndpoint(value);
-                            setCurrentModel(model);
-                            switchEndpoint(value, model);
-                          }}
-                        />
-                        <div className="endpoint-info">
-                          <div className="endpoint-name">
-                            {label}
-                            <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', opacity: 0.6 }}>({backendBadge})</span>
-                            {isLive === true && <span style={{ marginLeft: '0.4rem', color: '#4caf50' }}>●</span>}
-                            {isLive === false && <span style={{ marginLeft: '0.4rem', color: '#f44336' }}>●</span>}
-                          </div>
-                          <div className="endpoint-description">{desc}</div>
-                          <div style={{ fontSize: '0.7rem', opacity: 0.55 }}>{model}</div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="section">
                 <h2>Sessions</h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <button className="btn-primary" style={{ flex: 1 }} onClick={createSession}>
@@ -683,16 +671,24 @@ function App() {
                           </div>
                           {msg.role === 'assistant' && (
                             <div className="message-feedback">
-                              <button
-                                className="btn-feedback"
-                                onClick={() => sendFeedback(index, true)}
-                                title="This was helpful"
-                              >👍</button>
-                              <button
-                                className="btn-feedback"
-                                onClick={() => sendFeedback(index, false)}
-                                title="This wasn't helpful"
-                              >👎</button>
+                              {msg.feedback ? (
+                                <span style={{ fontSize: '0.78rem', color: '#9ad', border: '1px solid #446', borderRadius: 4, padding: '0.1rem 0.4rem' }}>
+                                  Feedback saved: {msg.feedback === 'up' ? '👍' : '👎'}
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    className="btn-feedback"
+                                    onClick={() => sendFeedback(index, true)}
+                                    title="This was helpful"
+                                  >👍</button>
+                                  <button
+                                    className="btn-feedback"
+                                    onClick={() => sendFeedback(index, false)}
+                                    title="This wasn't helpful"
+                                  >👎</button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -720,6 +716,21 @@ function App() {
                       placeholder="Type your message..."
                       disabled={loading}
                     />
+                    <select
+                      className="model-select-inline"
+                      value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
+                      onChange={e => handleEndpointSelection(e.target.value)}
+                      title="Choose model endpoint"
+                      disabled={loading || selectableEndpointKeys.length === 0}
+                    >
+                      {selectableEndpointKeys.length === 0 ? (
+                        <option value="">No models online</option>
+                      ) : (
+                        selectableEndpointKeys.map((key) => (
+                          <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
+                        ))
+                      )}
+                    </select>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#aaa', whiteSpace: 'nowrap' }}>
                       <input
                         type="checkbox"
@@ -764,7 +775,7 @@ function App() {
                     <h3>Available Endpoints:</h3>
                     <ul>
                       {Object.entries(ENDPOINT_META)
-                        .filter(([key]) => visibleEndpointKeys.includes(key))
+                        .filter(([key]) => selectableEndpointKeys.includes(key))
                         .map(([key, { label, desc, model }]) => {
                         const ep = dockerStatus?.endpoints?.[key];
                         return (

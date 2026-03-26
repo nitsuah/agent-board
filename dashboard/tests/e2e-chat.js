@@ -113,6 +113,112 @@ async function run() {
   }
   console.log('  ✅ Message history length =', sessionData.session.messages.length);
 
+  console.log('9) Verifying safe mode routes to the session endpoint (not NemoClaw)...');
+  const safeSend = await request(`/api/sessions/${session.session.id}/message`, {
+    method: 'POST',
+    data: { message: 'Hello safe mode test', useSafeMode: true }
+  });
+  // Safe mode must not produce an error like "Could not reach NemoClaw" — it should
+  // behave exactly like a normal send (safety enforced by system prompts, not URL routing).
+  if (!safeSend.success) {
+    const msg = safeSend.response || '';
+    const isExpectedModelIssue =
+      msg.includes('requires more system memory') ||
+      msg.includes('out of memory') ||
+      msg.includes('model not found') ||
+      msg.includes('ENOTFOUND') ||
+      msg.includes('ECONNREFUSED') ||
+      msg.includes('Request failed with status code 500');
+    if (!isExpectedModelIssue) {
+      throw new Error('safe mode chat failed unexpectedly: ' + msg);
+    }
+    console.warn('  ⚠️ safe mode chat hit expected model issue (acceptable):', msg.slice(0, 100));
+  } else {
+    // The endpoint label in the response must include " (safe)" and NOT the old "NemoClaw (Safe)"
+    const epLabel = safeSend.endpoint || '';
+    if (epLabel.includes('NemoClaw')) {
+      throw new Error(`safe mode response still shows NemoClaw routing: "${epLabel}"`);
+    }
+    if (!epLabel.includes('(safe)')) {
+      throw new Error(`safe mode response endpoint label should include "(safe)", got: "${epLabel}"`);
+    }
+    console.log(`  ✅ safe mode routed correctly (endpoint label: "${epLabel}")`);
+  }
+
+  console.log('10) Verifying /api/docker/status includes modelLoaded for Docker Runner endpoints...');
+  const dockerStatus = await request('/api/docker/status');
+  for (const key of ['docker_runner', 'glm_flash']) {
+    const ep = dockerStatus?.endpoints?.[key];
+    if (!ep) throw new Error(`/api/docker/status missing endpoint '${key}'`);
+    if (typeof ep.modelLoaded !== 'boolean') {
+      throw new Error(`endpoints.${key}.modelLoaded should be boolean, got ${typeof ep.modelLoaded}`);
+    }
+    if (typeof ep.runnerLive !== 'boolean') {
+      throw new Error(`endpoints.${key}.runnerLive should be boolean, got ${typeof ep.runnerLive}`);
+    }
+    const expectedLive = ep.runnerLive && ep.modelLoaded;
+    if (ep.live !== expectedLive) {
+      throw new Error(`endpoints.${key}.live (${ep.live}) should equal runnerLive(${ep.runnerLive}) && modelLoaded(${ep.modelLoaded})`);
+    }
+    console.log(`  ✅ ${key}: runnerLive=${ep.runnerLive}  modelLoaded=${ep.modelLoaded}  live=${ep.live}`);
+  }
+
+  console.log('11) Verifying assistant feedback can only be submitted once...');
+  const sessionAfterChat = await request(`/api/sessions/${session.session.id}`);
+  const msgs = sessionAfterChat.session?.messages || [];
+  const assistantIndexes = msgs
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => m.role === 'assistant')
+    .map(({ i }) => i);
+  if (assistantIndexes.length === 0) {
+    throw new Error('no assistant messages found for feedback test');
+  }
+  const targetAssistantIndex = assistantIndexes[assistantIndexes.length - 1];
+
+  const firstFeedback = await request(`/api/sessions/${session.session.id}/feedback`, {
+    method: 'POST',
+    data: { messageIndex: targetAssistantIndex, positive: true }
+  });
+  if (!firstFeedback.success) {
+    throw new Error('first feedback submit should succeed');
+  }
+
+  const secondFeedback = await request(`/api/sessions/${session.session.id}/feedback`, {
+    method: 'POST',
+    data: { messageIndex: targetAssistantIndex, positive: false }
+  });
+  if (secondFeedback.success) {
+    throw new Error('second feedback submit should fail');
+  }
+  if (!(secondFeedback.response || '').toLowerCase().includes('already submitted')) {
+    throw new Error(`expected duplicate feedback error, got: ${secondFeedback.response}`);
+  }
+  console.log('  ✅ duplicate feedback is blocked');
+
+  console.log('12) Verifying prompt handlers for connector/sandbox checks...');
+  const bbHealthCmd = await request(`/api/sessions/${session.session.id}/message`, {
+    method: 'POST',
+    data: { message: '/bb-health', useSafeMode: false }
+  });
+  if (!bbHealthCmd.success) {
+    throw new Error(`'/bb-health' prompt handler failed: ${bbHealthCmd.response}`);
+  }
+  if (!(bbHealthCmd.response || '').toLowerCase().includes('blackboard mcp')) {
+    throw new Error(`unexpected '/bb-health' response: ${bbHealthCmd.response}`);
+  }
+
+  const nemoHealthCmd = await request(`/api/sessions/${session.session.id}/message`, {
+    method: 'POST',
+    data: { message: '/nemoclaw-health', useSafeMode: false }
+  });
+  if (!nemoHealthCmd.success) {
+    throw new Error(`'/nemoclaw-health' prompt handler failed: ${nemoHealthCmd.response}`);
+  }
+  if (!(nemoHealthCmd.response || '').toLowerCase().includes('nemoclaw')) {
+    throw new Error(`unexpected '/nemoclaw-health' response: ${nemoHealthCmd.response}`);
+  }
+  console.log('  ✅ prompt handlers returned local connectivity checks');
+
   console.log('E2E test completed successfully.');
 }
 

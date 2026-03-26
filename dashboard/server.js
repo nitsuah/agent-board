@@ -8,6 +8,7 @@ import { createReadStream, existsSync, readFileSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import net from 'net';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,6 +54,8 @@ const LLM_CONFIG = {
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
+const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
+const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
 
 // Session management
 const sessions = new Map();
@@ -78,6 +81,122 @@ function logStructured(level, eventType, data = {}) {
   }
 
   console.log(payload);
+}
+
+async function checkHttpService(url, timeoutMs = 3000) {
+  await axios.get(url, { timeout: timeoutMs });
+}
+
+async function checkTcpService(url, timeoutMs = 3000) {
+  const parsed = new URL(url);
+  const host = parsed.hostname;
+  const port = parsed.port
+    ? Number(parsed.port)
+    : parsed.protocol === 'https:'
+      ? 443
+      : 80;
+
+  await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host, port });
+    let settled = false;
+
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      if (error) reject(error);
+      else resolve();
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.on('connect', () => finish());
+    socket.on('timeout', () => finish(new Error('timeout')));
+    socket.on('error', (error) => finish(error));
+  });
+}
+
+function normalizeOllamaModelName(modelName = '') {
+  return String(modelName).trim().replace(/:latest$/i, '');
+}
+
+async function getOllamaModelNames(baseUrl) {
+  const response = await axios.get(`${baseUrl}/api/tags`, { timeout: 5000 });
+  return response.data.models?.map((model) => model.name).filter(Boolean) || [];
+}
+
+async function ensureRunnableModelForSession(session) {
+  const endpointConfig = LLM_CONFIG[session.endpoint] || LLM_CONFIG.primary;
+  if (endpointConfig.apiStyle !== 'ollama') {
+    return { adjusted: false, reason: 'non_ollama_endpoint' };
+  }
+
+  const availableModels = await getOllamaModelNames(session.llmUrl);
+  if (!availableModels.length) {
+    return { adjusted: false, reason: 'no_models' };
+  }
+
+  const normalizedCurrent = normalizeOllamaModelName(session.model);
+  const matchingModel = availableModels.find(
+    (available) => normalizeOllamaModelName(available) === normalizedCurrent
+  );
+
+  if (matchingModel) {
+    if (session.model !== matchingModel) {
+      session.model = matchingModel;
+      return { adjusted: true, reason: 'normalized_match', model: matchingModel };
+    }
+    return { adjusted: false };
+  }
+
+  const fallbackModel = availableModels.includes(endpointConfig.defaultModel)
+    ? endpointConfig.defaultModel
+    : availableModels[0];
+
+  if (session.model !== fallbackModel) {
+    session.model = fallbackModel;
+    return { adjusted: true, reason: 'fallback_available', model: fallbackModel };
+  }
+
+  return { adjusted: false };
+}
+
+function coerceModelForEndpoint(endpoint, requestedModel) {
+  const endpointConfig = LLM_CONFIG[endpoint] || LLM_CONFIG.primary;
+  if (!requestedModel) {
+    return endpointConfig.defaultModel;
+  }
+
+  if (
+    endpointConfig.apiStyle === 'ollama' &&
+    (requestedModel.startsWith('docker.io/') || requestedModel.startsWith('ai/'))
+  ) {
+    return endpointConfig.defaultModel;
+  }
+
+  return requestedModel;
+}
+
+function getAvailabilityFallbackEndpoint() {
+  const candidate = Object.entries(LLM_CONFIG).find(([, config]) => config.apiStyle === 'openai');
+  return candidate?.[0] || null;
+}
+
+/**
+ * Pure helper — checks whether a specific model ID exists in the Docker Model Runner
+ * models-list response (OpenAI /v1/models format: { data: [{ id, ... }] }).
+ * Strips :latest suffix for comparison so both 'ai/foo:latest' and 'ai/foo' match.
+ */
+function checkModelInRunnerList(modelsList, modelId) {
+  if (!Array.isArray(modelsList) || !modelId) return false;
+  const normalise = (s) => String(s).replace(/:latest$/i, '').toLowerCase();
+  const target = normalise(modelId);
+  return modelsList.some((m) => normalise(m.id ?? m.name ?? '') === target);
+}
+
+/** Fetches the Docker Model Runner /v1/models list and returns the data array. */
+async function fetchDockerRunnerModels(baseUrl, timeoutMs = 4000) {
+  const response = await axios.get(`${baseUrl}/models`, { timeout: timeoutMs });
+  return response.data?.data || [];
 }
 
 // ============ EVENT BUS ============
@@ -359,6 +478,97 @@ function sanitizeResponse(text, safetyMode = 'standard') {
   };
 }
 
+function normalizePromptText(text = '') {
+  return String(text)
+    .replace(/\r\n/g, '\n')
+    .replace(/\u0000/g, '')
+    .trim();
+}
+
+async function runPromptHandlers(rawMessage, session, safetyMode) {
+  const normalized = normalizePromptText(rawMessage);
+
+  if (!normalized) {
+    return {
+      handled: true,
+      blocked: true,
+      classification: { category: 'blocked', reason: 'empty_message' },
+      response: 'Please enter a message before sending.'
+    };
+  }
+
+  if (normalized.length > MAX_INPUT_CHARS) {
+    return {
+      handled: true,
+      blocked: true,
+      classification: { category: 'blocked', reason: 'message_too_long' },
+      response: `Your message is too long (${normalized.length} chars). Please keep it under ${MAX_INPUT_CHARS} characters.`
+    };
+  }
+
+  if (normalized === '/safety') {
+    return {
+      handled: true,
+      blocked: false,
+      classification: { category: 'safe', reason: 'handler_safety' },
+      response: `Safety mode: ${safetyMode}. Endpoint: ${session.endpoint}. Model: ${session.model}`
+    };
+  }
+
+  if (normalized === '/bb-health') {
+    try {
+      const resp = await axios.get(`${BB_MCP_URL}/health`, { timeout: 4000 });
+      const status = resp.data?.status || 'unknown';
+      const name = resp.data?.name || 'bb-mcp';
+      return {
+        handled: true,
+        blocked: false,
+        classification: { category: 'safe', reason: 'handler_bb_health' },
+        response: `Blackboard MCP is reachable. Service: ${name}. Status: ${status}.`
+      };
+    } catch (error) {
+      return {
+        handled: true,
+        blocked: false,
+        classification: { category: 'safe', reason: 'handler_bb_health' },
+        response: `Blackboard MCP check failed: ${error.message}`
+      };
+    }
+  }
+
+  if (normalized === '/nemoclaw-health') {
+    try {
+      await axios.get(`${NEMOCLAW_URL}/`, { timeout: 4000 });
+      return {
+        handled: true,
+        blocked: false,
+        classification: { category: 'safe', reason: 'handler_nemoclaw_health' },
+        response: 'NemoClaw gateway is reachable.'
+      };
+    } catch (error) {
+      return {
+        handled: true,
+        blocked: false,
+        classification: { category: 'safe', reason: 'handler_nemoclaw_health' },
+        response: `NemoClaw check failed: ${error.message}`
+      };
+    }
+  }
+
+  return { handled: false, blocked: false, message: normalized };
+}
+
+function applyOutputControls(text = '', safetyMode = 'standard') {
+  const clean = String(text).replace(/\r\n/g, '\n').trim();
+  const maxChars = safetyMode === 'strict' ? Math.min(MAX_OUTPUT_CHARS, 3500) : MAX_OUTPUT_CHARS;
+  const truncated = clean.length > maxChars;
+  const content = truncated
+    ? `${clean.slice(0, maxChars)}\n\n[response truncated to ${maxChars} chars]`
+    : clean;
+
+  return { content, truncated, maxChars };
+}
+
 function calculateAverageMessagesPerSession(allEvents, activeSessions) {
   const sessionMessageCounts = new Map();
 
@@ -422,7 +632,8 @@ app.get('/api/docker/status', async (req, res) => {
       label: 'Ollama (local)',
       url: `${LLM_CONFIG.primary.url}/api/tags`,
       ports: '8081:8080',
-      backendType: 'ollama-container'
+      backendType: 'ollama-container',
+      checkType: 'http'
     },
     {
       name: 'docker-runner',
@@ -430,28 +641,35 @@ app.get('/api/docker/status', async (req, res) => {
       // Docker Model Runner: OpenAI-compatible, /v1/models lists pulled models
       url: `${DOCKER_RUNNER_URL}/models`,
       ports: 'host-internal',
-      backendType: 'docker-runner'
+      backendType: 'docker-runner',
+      checkType: 'http'
     },
     {
       name: 'nemoclaw',
       label: 'NemoClaw (sandbox)',
       url: `${NEMOCLAW_URL}/`,
       ports: '9000:8080',
-      backendType: 'sandbox'
+      backendType: 'sandbox',
+      checkType: 'tcp'
     },
     {
       name: 'bb-mcp',
       label: 'Blackboard Learn MCP',
       url: `${BB_MCP_URL}/health`,
       ports: '3100:3100',
-      backendType: 'mcp'
+      backendType: 'mcp',
+      checkType: 'http'
     },
   ];
 
   const containers = {};
-  for (const { name, label, url, ports, backendType } of serviceChecks) {
+  for (const { name, label, url, ports, backendType, checkType } of serviceChecks) {
     try {
-      await axios.get(url, { timeout: 3000 });
+      if (checkType === 'tcp') {
+        await checkTcpService(url, 3000);
+      } else {
+        await checkHttpService(url, 3000);
+      }
       containers[name] = { running: true, status: 'healthy', ports, backendType, label };
     } catch {
       containers[name] = { running: false, status: 'unavailable', ports, backendType, label };
@@ -460,20 +678,24 @@ app.get('/api/docker/status', async (req, res) => {
 
   // Per-endpoint LLM status — derived from the service checks above
   const runnerLive = containers['docker-runner']?.running ?? false;
+
+  // When runner is up, check each docker-runner endpoint's model is actually pulled.
+  let runnerModels = [];
+  if (runnerLive) {
+    try { runnerModels = await fetchDockerRunnerModels(DOCKER_RUNNER_URL); } catch { /* runner up but models list unavailable */ }
+  }
+
   const endpoints = {};
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
-    const live = config.backendType === 'ollama-container'
-      ? (containers['ollama']?.running ?? false)
-      : config.backendType === 'docker-runner'
-        ? runnerLive
-        : false;
-    endpoints[key] = {
-      name: config.name,
-      model: config.defaultModel,
-      backendType: config.backendType,
-      live,
-      fallback: !live
-    };
+    if (config.backendType === 'ollama-container') {
+      const ollamaUp = containers['ollama']?.running ?? false;
+      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: ollamaUp, fallback: !ollamaUp };
+    } else if (config.backendType === 'docker-runner') {
+      const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
+      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+    } else {
+      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: false, fallback: true };
+    }
   }
 
   const dockerRunning = Object.values(containers).some(c => c.running);
@@ -635,7 +857,7 @@ app.post('/api/sessions', (req, res) => {
   const endpointWasAdjusted = endpoint !== requestedEndpoint;
   const model = endpointWasAdjusted
     ? LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest'
-    : req.body.model || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
+    : coerceModelForEndpoint(endpoint, req.body.model) || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
   const resolvedSafetyMode = resolveConfiguredSafetyMode(experience, safetyMode);
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -768,8 +990,38 @@ app.post('/api/sessions/:id/message', async (req, res) => {
 
   const safetyMode = resolveEffectiveSafetyMode(session, useSafeMode);
 
+  const handlerResult = await runPromptHandlers(message, session, safetyMode);
+  if (handlerResult.handled) {
+    session.messages.push({ role: 'user', content: normalizePromptText(message), timestamp: new Date() });
+    session.messages.push({ role: 'assistant', content: handlerResult.response, timestamp: new Date(), blocked: handlerResult.blocked });
+    session.updatedAt = new Date();
+
+    eventBus.emit('prompt_handler_invoked', {
+      session_id: session.id,
+      user_id: session.userId,
+      model: session.model,
+      endpoint: session.endpoint,
+      experience: session.experience,
+      metadata: {
+        reason: handlerResult.classification?.reason || null,
+        blocked: handlerResult.blocked
+      }
+    });
+
+    return res.json({
+      success: true,
+      response: handlerResult.response,
+      classification: handlerResult.classification || { category: 'safe', reason: null },
+      blocked: handlerResult.blocked,
+      endpoint: useSafeMode ? `${session.endpoint} (safe)` : session.endpoint,
+      messageCount: session.messages.length
+    });
+  }
+
+  const normalizedMessage = handlerResult.message || normalizePromptText(message);
+
   // ── Input Classification ──────────────────────────────────────────────────
-  const classification = classifyInput(message);
+  const classification = classifyInput(normalizedMessage);
 
   eventBus.emit('input_classified', {
     session_id: session.id,
@@ -791,7 +1043,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     });
 
     const refusal = "I'm not able to help with that. If you have a genuine question, please rephrase it and I'll do my best to assist.";
-    session.messages.push({ role: 'user', content: message, timestamp: new Date() });
+    session.messages.push({ role: 'user', content: normalizedMessage, timestamp: new Date() });
     session.messages.push({ role: 'assistant', content: refusal, timestamp: new Date(), blocked: true });
     session.updatedAt = new Date();
 
@@ -806,7 +1058,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   }
 
   // Add user message to history
-  session.messages.push({ role: 'user', content: message, timestamp: new Date() });
+  session.messages.push({ role: 'user', content: normalizedMessage, timestamp: new Date() });
 
   eventBus.emit('message_sent', {
     session_id: session.id,
@@ -814,14 +1066,54 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     model: session.model,
     endpoint: session.endpoint,
     experience: session.experience,
-    metadata: { classification: classification.category, messageLength: message.length }
+    metadata: { classification: classification.category, messageLength: normalizedMessage.length }
   });
 
   const msgStart = Date.now();
 
   try {
-    const llmUrl = useSafeMode ? NEMOCLAW_URL : session.llmUrl;
-    const apiStyle = useSafeMode ? 'ollama' : (LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama');
+    let llmUrl = session.llmUrl;
+    let apiStyle = LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama';
+
+    const modelResolution = await ensureRunnableModelForSession(session);
+    if (modelResolution.reason === 'no_models') {
+      const fallbackEndpoint = getAvailabilityFallbackEndpoint();
+      if (fallbackEndpoint && fallbackEndpoint !== session.endpoint) {
+        const previousEndpoint = session.endpoint;
+        session.endpoint = fallbackEndpoint;
+        session.llmUrl = LLM_CONFIG[fallbackEndpoint].url;
+        session.model = LLM_CONFIG[fallbackEndpoint].defaultModel;
+        session.updatedAt = new Date();
+        llmUrl = session.llmUrl;
+        apiStyle = LLM_CONFIG[fallbackEndpoint].apiStyle;
+
+        eventBus.emit('endpoint_auto_fallback', {
+          session_id: session.id,
+          user_id: session.userId,
+          model: session.model,
+          endpoint: session.endpoint,
+          experience: session.experience,
+          metadata: {
+            from: previousEndpoint,
+            to: fallbackEndpoint,
+            reason: 'ollama_no_models'
+          }
+        });
+      }
+    } else if (modelResolution.adjusted) {
+      session.updatedAt = new Date();
+      eventBus.emit('model_auto_corrected', {
+        session_id: session.id,
+        user_id: session.userId,
+        model: session.model,
+        endpoint: session.endpoint,
+        experience: session.experience,
+        metadata: {
+          reason: modelResolution.reason,
+          resolvedModel: modelResolution.model
+        }
+      });
+    }
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
@@ -848,6 +1140,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
 
     // ── Response Filter ───────────────────────────────────────────────────────
     const sanitizedResponse = sanitizeResponse(assistantMessage, safetyMode);
+    const outputControlled = applyOutputControls(sanitizedResponse.content, safetyMode);
     if (sanitizedResponse.flagged) {
       eventBus.emit('output_filtered', {
         session_id: session.id,
@@ -865,13 +1158,25 @@ app.post('/api/sessions/:id/message', async (req, res) => {
 
     session.messages.push({
       role: 'assistant',
-      content: sanitizedResponse.content,
+      content: outputControlled.content,
       timestamp: new Date(),
       filterFlags: sanitizedResponse.flags,
       blocked: sanitizedResponse.blocked,
-      redacted: sanitizedResponse.redacted
+      redacted: sanitizedResponse.redacted,
+      feedback: null
     });
     session.updatedAt = new Date();
+
+    if (outputControlled.truncated) {
+      eventBus.emit('output_control_applied', {
+        session_id: session.id,
+        user_id: session.userId,
+        model: session.model,
+        endpoint: session.endpoint,
+        experience: session.experience,
+        metadata: { type: 'truncate', maxChars: outputControlled.maxChars }
+      });
+    }
 
     eventBus.emit('message_received', {
       session_id: session.id,
@@ -881,7 +1186,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       experience: session.experience,
       metadata: {
         latencyMs,
-        responseLength: sanitizedResponse.content.length,
+        responseLength: outputControlled.content.length,
         filterFlags: sanitizedResponse.flags,
         blocked: sanitizedResponse.blocked,
         redacted: sanitizedResponse.redacted
@@ -890,10 +1195,10 @@ app.post('/api/sessions/:id/message', async (req, res) => {
 
     res.json({
       success: true,
-      response: sanitizedResponse.content,
+      response: outputControlled.content,
       classification,
       filterFlags: sanitizedResponse.flags,
-      endpoint: useSafeMode ? 'NemoClaw (Safe)' : session.endpoint,
+      endpoint: useSafeMode ? `${session.endpoint} (safe)` : session.endpoint,
       messageCount: session.messages.length
     });
   } catch (error) {
@@ -947,7 +1252,7 @@ app.put('/api/sessions/:id/model', (req, res) => {
 
   const prevEndpoint = session.endpoint;
   session.endpoint = endpoint;
-  session.model = model || LLM_CONFIG[endpoint].defaultModel;
+  session.model = coerceModelForEndpoint(endpoint, model) || LLM_CONFIG[endpoint].defaultModel;
   session.llmUrl = LLM_CONFIG[endpoint].url;
   session.updatedAt = new Date();
 
@@ -1020,6 +1325,14 @@ app.post('/api/sessions/:id/feedback', (req, res) => {
   if (session.messages[messageIndex]?.role !== 'assistant') {
     return res.status(400).json({ success: false, error: 'Feedback can only be recorded for assistant messages' });
   }
+
+  if (session.messages[messageIndex]?.feedback) {
+    return res.status(409).json({ success: false, error: 'Feedback already submitted for this message' });
+  }
+
+  session.messages[messageIndex].feedback = positive ? 'up' : 'down';
+  session.messages[messageIndex].feedbackAt = new Date();
+  session.updatedAt = new Date();
 
   const eventType = positive ? 'feedback_positive' : 'feedback_negative';
   eventBus.emit(eventType, {
@@ -1320,20 +1633,23 @@ app.get('/api/health', async (req, res) => {
     }
   };
 
-  // Check LLM endpoints
-  const checkedRunnerUrl = new Set();
+  // Check LLM endpoints — for Docker Runner endpoints verify the specific model is pulled,
+  // not just that the runner process is reachable.
+  let cachedRunnerModels = null;
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
     try {
-      const healthUrl = config.apiStyle === 'openai'
-        ? `${config.url}/models`
-        : `${config.url}/api/tags`;
-      if (checkedRunnerUrl.has(healthUrl)) {
-        health.endpoints[key] = health.endpoints['docker_runner'] || 'unavailable';
-        continue;
+      if (config.apiStyle === 'openai') {
+        if (cachedRunnerModels === null) {
+          const r = await axios.get(`${config.url}/models`, { timeout: 3000 });
+          cachedRunnerModels = r.data?.data || [];
+        }
+        const modelLoaded = checkModelInRunnerList(cachedRunnerModels, config.defaultModel);
+        health.endpoints[key] = modelLoaded ? 'healthy' : 'runner_up_model_not_loaded';
+        if (!modelLoaded && health.status === 'ok') health.status = 'degraded';
+      } else {
+        await axios.get(`${config.url}/api/tags`, { timeout: 3000 });
+        health.endpoints[key] = 'healthy';
       }
-      checkedRunnerUrl.add(healthUrl);
-      await axios.get(healthUrl, { timeout: 3000 });
-      health.endpoints[key] = 'healthy';
     } catch {
       health.endpoints[key] = 'unavailable';
       if (key === 'primary') health.status = 'critical';
@@ -1350,17 +1666,23 @@ app.get('/', (req, res) => {
 });
 
 export {
+  applyOutputControls,
   app,
   calculateAverageMessagesPerSession,
+  checkModelInRunnerList,
   classifyInput,
+  coerceModelForEndpoint,
   detectPII,
   filterResponse,
   getAllowedEndpoints,
   isEndpointAllowed,
+  normalizePromptText,
+  normalizeOllamaModelName,
   redactSensitiveText,
   resolveConfiguredSafetyMode,
   resolveEffectiveSafetyMode,
   resolveSessionEndpoint,
+  runPromptHandlers,
   sanitizeResponse
 };
 

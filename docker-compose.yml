@@ -33,6 +33,12 @@ services:
     container_name: nemoclaw
     ports:
       - "9000:8080"
+    command:
+      - sh
+      - -lc
+      - |
+        node -e "const net=require('net');net.createServer((socket)=>{const upstream=net.connect(18789,'127.0.0.1');socket.pipe(upstream);upstream.pipe(socket);const close=()=>{if(!socket.destroyed) socket.destroy(); if(!upstream.destroyed) upstream.destroy();};socket.on('error',close);upstream.on('error',close);socket.on('close',close);upstream.on('close',close);}).listen(8080,'0.0.0.0');" &
+        exec /usr/local/bin/nemoclaw-wrapper.sh
     volumes:
       - nemoclaw_data:/workspace
       - /tmp

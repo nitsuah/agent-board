@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "[pre-commit] Running dashboard regression and e2e tests in Docker..."
+
+if ! docker ps --format '{{.Names}}' | grep -q '^agent-dashboard$'; then
+  echo "[pre-commit] agent-dashboard container is not running."
+  echo "[pre-commit] Start services first: docker compose up -d --build"
+  exit 1
+fi
+
+docker exec agent-dashboard npm test
+
+echo "[pre-commit] Tests passed."
