@@ -292,6 +292,15 @@ function App() {
     }
   };
 
+  const handleMessageInputKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!loading && activeSession && messageInput.trim()) {
+        sendMessage(e);
+      }
+    }
+  };
+
   const switchEndpoint = async (endpoint, model) => {
     if (!activeSession) return;
     try {
@@ -830,6 +839,7 @@ function App() {
                       type="text"
                       value={messageInput}
                       onChange={e => setMessageInput(e.target.value)}
+                      onKeyDown={handleMessageInputKeyDown}
                       placeholder="Type your message..."
                       maxLength={4000}
                       disabled={loading}
