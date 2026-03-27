@@ -2,24 +2,11 @@
 
 ## Todo
 
-- [ ] Implement persistent storage for agent session history (P2, L)
-- [ ] Add support for multiple agent profiles and configurations (P2, M)
-- [ ] Integrate OpenAI/Anthropic API for basic agent interactions (P1, M)
-- [ ] Create a settings panel for managing environment variables and API keys (P2, S)
-- [ ] Add unit tests for core agent communication logic (P3, M)
-- [ ] Develop a CLI tool to launch the board from the terminal (P3, S)
-- [ ] Implement user authentication for multi-user access (P2, L)
-- [ ] Add dark mode support to the dashboard UI (P3, S)
+- [ ] Deploy publicly — not just localhost (P3, L)
 
 ## In Progress
 
 ## Done
-
-- [x] Initialize project with basic Express server and React frontend (P1, M)
-- [x] Define basic project directory structure and linting rules (P1, S)
-- [x] Implement SSE streaming for real-time LLM response token streaming (P1, L)
-- [x] Design and build agent status card component (P2, S)
-- [x] Fix undefined execAsync reference in /api/system/info endpoint (P1, S)
 
 <!--
 AGENT INSTRUCTIONS:
