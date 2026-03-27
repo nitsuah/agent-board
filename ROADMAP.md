@@ -1,72 +1,44 @@
-# Roadmap
+# ROADMAP
 
-## Q1 2025 (Near Term)
+Last Updated: 2026-03-27
 
-- [x] Project setup and architecture
-  * **Goal**: Establish a scalable foundation for the agent-board ecosystem.
-  * **Rationale**: Ensure long-term maintainability and modularity.
-  * **Scope**: Repository initialization, linting, and base directory structure.
-  * **Success**: Clean builds and structured folder hierarchy.
-  * **Risks**: Over-engineering early abstractions.
-- [x] Core Dashboard UI: Build a responsive grid for agent visualization.
-  * **Goal**: Provide a central interface to monitor multiple agents simultaneously.
-  * **Rationale**: Users need a single pane of glass for agent status.
-  * **Scope**: JavaScript-based frontend (React/Vue) with card-based layouts.
-  * **Success**: Rendering 10+ agents with real-time status indicators.
-  * **Risks**: UI performance bottlenecks with high update frequencies.
-- [ ] Real-time Communication Bridge: Implement WebSocket connectivity.
-  * **Goal**: Enable low-latency updates from agents to the board.
-  * **Rationale**: Polling is inefficient for dynamic agent behavior.
-  * **Scope**: Node.js WebSocket server and client-side listeners.
-  * **Note**: Not yet implemented — docs/API.md states "WebSocket Support — Not currently implemented".
-  * **Success**: Message delivery latency under 100ms.
-  * **Risks**: Handling socket reconnections and state synchronization.
-- [x] Docker containerization: Set up Compose stack with all services.
-  * **Goal**: Reproducible local environment for all contributors.
-  * **Scope**: Dashboard, Ollama, Jaeger, NemoClaw endpoints.
-  * **Success**: `docker compose up` starts all four services without error.
+## 2025 Q1 - Foundation and Dashboard
 
-## Q2 2025 (Mid Term)
+- [x] Establish the repository structure, dashboard shell, and local Docker stack.
+- [x] Ship the core dashboard UI and baseline model configuration.
+- [ ] Finish the real-time communication bridge that early docs implied.
 
-- [ ] Persistence Layer: Implement agent history, logs, and state snapshot persistence.
-  * **Goal**: Save agent states, logs, and configurations across sessions.
-  * **Rationale**: Prevent data loss on page refresh or server restart.
-  * **Scope**: Build on existing DB infrastructure (Postgres in docker-compose.yml, /api/persistence/status endpoint); agent history and state snapshots not yet implemented.
-  * **Success**: Successful retrieval of agent history after a full reboot.
-  * **Risks**: Database schema migrations as agent data structures evolve.
-- [ ] Agent Command Interface: Enable bi-directional interaction.
-  * **Goal**: Allow users to send instructions (Start/Stop/Configure) to agents.
-  * **Rationale**: Moving from passive monitoring to active management.
-  * **Scope**: Command API endpoints and UI action buttons.
-  * **Success**: Commands executed by agents within 500ms of UI click.
-  * **Risks**: Security and concurrent command handling.
-- [ ] Task Queue Management: Visualize and route pending/active/completed tasks.
-  * **Goal**: Provide task lifecycle visibility across agents.
-  * **Scope**: Queue UI component + routing API.
-  * **Success**: Task state transitions visible in real time.
-- [ ] Health Checking and Monitoring: Agent heartbeat and resource tracking.
-  * **Goal**: Detect and surface unhealthy or stalled agents.
-  * **Scope**: Heartbeat endpoints + CPU/memory metrics display.
-  * **Success**: Unhealthy agent flagged within 30s.
+## 2025 Q2 - Persistence and Agent Control
 
-## Q1 2026 (Current Quarter)
+- [ ] Implement persistence for agent history, logs, and state snapshots.
+- [ ] Ship the agent command interface for start, stop, and restart actions.
+- [ ] Add task queue visibility and routing.
+- [ ] Add heartbeat and resource monitoring.
 
-- [ ] Test coverage baseline — wire up coverage collection; METRICS.md currently shows 0% but tests already exist in dashboard/tests; target >80% with CI reporting on push.
-- [ ] Feature inventory audit — annotate FEATURES.md with shipped/planned/exploratory status against actual code.
-- [ ] Security validation — verify PII detection, content filtering, and safe mode with passing test cases.
-- [ ] API documentation completion — fill docs/API.md gaps for agent lifecycle, task, and security endpoints.
-- [ ] Docker/Kubernetes deployment — multi-node setup, load balancing, prod environment variable handling.
-- [ ] GPU acceleration setup — enable NVIDIA CUDA in Ollama Docker for RTX 4080 (P1).
-- [ ] GPU-optimized model portfolio — qwen3-32b + phi-3.5-mini to 4080 VRAM (P2).
-- [ ] Model lifecycle and resource management API — load/unload endpoints, Model Manager UI (P2).
+## 2026 Q1 - Quality Reset
 
-## Q2 2026+ (Future)
+- [ ] P0: Restore coverage reporting and publish a trustworthy baseline.
+- [ ] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
+- [ ] P1: Validate safety-layer behavior with tests and examples.
+- [ ] P2: Finish API documentation for lifecycle, task, and security flows.
+- [ ] P2: Define a validated production deployment path.
 
-- [ ] Multi-tenancy and RBAC — org/user/role management with permission matrices.
-- [ ] Custom agent plugins — extension points for user-provided agent types.
-- [ ] Audit logging and compliance — full log retention, HIPAA/SOC2 preparation.
-- [ ] Public deployment infrastructure — production domain, SSL/TLS, CDN, DDoS protection.
-- [ ] Analytics and observability — agent performance dashboards, cost tracking, SLA monitoring.
-- [ ] MCP (Model Context Protocol) integration — extended model support.
-- [ ] Webhook trigger system — external event-driven agent workflows.
-- [ ] Event bus for cross-agent communication and coordination.
+## 2026 Q2 - Extensibility and Team Readiness
+
+- [ ] Add multi-tenancy and RBAC planning.
+- [ ] Define custom agent plugin boundaries.
+- [ ] Expand audit logging and compliance support.
+- [ ] Improve analytics and operational observability.
+
+## Notes
+
+- The stack is still local-first and Docker-native.
+- The immediate gap is quality and validation, not feature volume.
+- GPU enablement and broader model orchestration stay behind the Q1 quality reset.
+
+<!--
+AGENT INSTRUCTIONS:
+1. Keep the roadmap quarter-first.
+2. Use short checkpoint bullets, not narrative paragraphs.
+3. Keep task-level detail in TASKS.md.
+-->

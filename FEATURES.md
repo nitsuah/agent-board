@@ -1,25 +1,27 @@
 # Features
 
+Status guide: `[shipped]` is working in the current local-first dashboard, `[in-progress]` needs further implementation or validation, and `[planned]` remains roadmap work.
+
 ## Core Functionality
-- **Agent Lifecycle Management** - Start, stop, and restart individual agents directly from the dashboard.
-- **Real-time Status Monitoring** - Live tracking of agent availability, current task, and heartbeats.
-- **Task Queue Visualization** - View pending, active, and completed tasks assigned to each agent.
-- **Multi-Agent Coordination** - Manage and broadcast commands to multiple agents simultaneously.
-- **Persistent Agent History** - Database-backed logging of all agent activities and state changes over time.
-- **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.
+- `[shipped]` **Agent Lifecycle Management** - Start, stop, and restart individual agents directly from the dashboard.
+- `[shipped]` **Real-time Status Monitoring** - Live tracking of agent availability, current task, and heartbeats.
+- `[in-progress]` **Task Queue Visualization** - View pending, active, and completed tasks assigned to each agent.
+- `[shipped]` **Multi-Agent Coordination** - Manage and broadcast commands to multiple agents simultaneously.
+- `[in-progress]` **Persistent Agent History** - Persistence exists in the product story, but the current implementation still needs validation.
+- `[shipped]` **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.
 
 ## Integrations
-- **Webhook Triggers** - Initiate agent actions via incoming external HTTP requests.
-- **RESTful API** - Fully documented API for programmatic control of the board and its agents.
+- `[planned]` **Webhook Triggers** - Initiate agent actions via incoming external HTTP requests.
+- `[in-progress]` **RESTful API** - API documentation exists, but lifecycle and queue coverage still needs expansion.
 - **Custom Agent Scripts** - Support for loading and executing user-defined JavaScript logic within the agent runtime.
-- **Event Bus Integration** - Internal event emitter system for handling cross-agent communication.
+- `[planned]` **Event Bus Integration** - Internal event emitter system for handling cross-agent communication.
 
 ## UI/UX
-- **Real-time Log Streaming** - WebSocket-based terminal view for watching agent console output in real-time.
-- **Visual Connection Graph** - Graphical representation of agent relationships and data flow.
-- **Interactive Command Terminal** - Direct CLI-style interface to send manual overrides to active agents.
-- **Responsive Dashboard** - Mobile-friendly interface optimized for monitoring agents on various screen sizes.
-- **Dark/Light Mode Support** - Toggleable UI themes for different working environments.
+- `[planned]` **Real-time Log Streaming** - WebSocket-based terminal view for watching agent console output in real time.
+- `[planned]` **Visual Connection Graph** - Graphical representation of agent relationships and data flow.
+- `[planned]` **Interactive Command Terminal** - Direct CLI-style interface to send manual overrides to active agents.
+- `[shipped]` **Responsive Dashboard** - Mobile-friendly interface optimized for monitoring agents on various screen sizes.
+- `[shipped]` **Dark/Light Mode Support** - Toggleable UI themes for different working environments.
 
 ## DevOps & Infrastructure
 - **Dockerized Deployment** - Pre-configured Dockerfile and Compose setups for containerized environments.
