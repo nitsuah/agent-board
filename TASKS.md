@@ -16,8 +16,8 @@
 ### Restore Test Coverage Reporting
 
 **Status:** Open  
-**Context:** METRICS.md shows 0% coverage, 0 tests — this suggests either tests don't exist or the measurement hasn't been set up. FEATURES.md lists no test counts. Since this is a local-first security tool, lack of test visibility is a gap.  
-**Acceptance:** `npm test` (or equivalent) runs and reports coverage; METRICS.md shows actual value (target >80%); CI reports coverage on push
+**Context:** METRICS.md currently shows 0% coverage and 0 tests, but the dashboard package already has runnable integration tests (e.g., under `dashboard/tests` with a `dashboard/package.json` `test` script). The real gap is that coverage collection/reporting is not wired up, so METRICS.md is stale and test visibility is poor for a local-first security tool.  
+**Acceptance:** The existing `npm test` (or equivalent dashboard test script) runs the current test suite with coverage enabled; METRICS.md is updated with the actual coverage value (target >80%) and test counts; CI publishes coverage reports on push
 
 ---
 

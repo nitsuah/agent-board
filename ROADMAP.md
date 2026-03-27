@@ -15,16 +15,16 @@
 
 - ✅ **Project setup & architecture** — Repository initialized, docs/ organized, base structure in place
 - ✅ **Core Dashboard UI** — React-based grid layout with agent cards, real-time status indicators implemented
-- ✅ **Real-time Communication Bridge** — WebSocket server setup (latency <100ms target)
+- 🔄 **Real-time Communication Bridge** — WebSocket support not yet implemented (see `docs/API.md`: "WebSocket Support — Not currently implemented")
 - ✅ **Docker containerization** — Compose setup with Dashboard, Ollama, Jaeger, NemoClaw endpoints
 
 ---
 
-## 2025 Q2 📋 — NOT STARTED (Should have been current in Dec 2025, now 3 months overdue)
+## 2025 Q2 📋 — AGENT HISTORY PERSISTENCE NOT STARTED (Infra partially in place; should have been current in Dec 2025, now 3 months overdue)
 
-**Goal:** Agent management, data persistence, foundational APIs.
+**Goal:** Agent management, data persistence, foundational APIs (build on existing DB + `/api/persistence/status` groundwork).
 
-- 📋 **Persistence Layer** — Database (SQLite or MongoDB) for agent history, logs, state snapshots
+- 📋 **Persistence Layer** — Implement agent history, logs, and state snapshot persistence on top of the existing database infrastructure
 - 📋 **Agent Command Interface** — Start/Stop/Restart endpoints + UI buttons (sub-500ms command execution)
 - 📋 **Task Queue Management** — Pending/Active/Completed task visualization and routing
 - 📋 **Health Checking & Monitoring** — Agent heartbeat tracking, resource (CPU/memory) monitoring
