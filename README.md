@@ -1,15 +1,54 @@
-# Agent Board - Local AI Agent Ecosystem
+# Agent Board - Local AI Ops Cockpit
 
-Local AI agent dashboard with multi-model support, session management, and NemoClaw safety sandbox.
+Agent Board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
+
+## Why Agent Board
+
+- **Ship safer prompts faster**: built-in input classification, prompt-injection checks, blocked-input handling, and output sanitization.
+- **Run multiple experiences**: switch between Developer Assistant, Research Mode, and Safe Chat with server-enforced routing and safety policies.
+- **Observe everything live**: metrics dashboards, WebSocket event streaming, and OpenTelemetry traces to Jaeger.
+- **Stay local-first**: designed to run on your own machine with Docker.
+
+## Product Highlights
+
+- **Experience-aware sessions**: persistent sessions with user context, role metadata, and full message history.
+- **Safety layer**: PII detection/redaction, harmful content filtering, and strict-mode handling for sensitive workflows.
+- **Model routing**: primary Ollama endpoint, Docker Model Runner endpoints, and server-side endpoint restrictions.
+- **Operations UI**: dark and light themes, system panel controls, live container status, and endpoint health visibility.
+- **Observability stack**: metrics APIs, event bus, persistence status, tracing status, and Jaeger integration.
+
+## Quick Start
+
+```powershell
+cd C:\Users\$env:USERNAME\code\agent-board
+docker compose up -d
+```
+
+Open these endpoints:
+
+- Dashboard: http://localhost:3000
+- Jaeger UI: http://localhost:16686
+- Ollama API: http://localhost:8081
+- NemoClaw: http://localhost:9000
+
+## What You Can Do In 2 Minutes
+
+1. Open the dashboard and create a new session.
+2. Pick an experience (Developer, Research, or Safe Chat).
+3. Send a normal prompt, then a deliberately unsafe one to see safety interception.
+4. Open the Metrics tab to inspect safety and feedback telemetry.
+5. Check Jaeger to view request traces on the critical path.
 
 ## Features
 
-- **Multi-Model Support** - Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
-- **Agent Sessions** - Persistent session management with full message history
-- **Safety Sandbox** - NemoClaw integration for policy-enforced safe mode
-- **Web Dashboard** - React UI with live Docker status monitoring
-- **Local-First** - Everything runs on your machine, no external APIs required
-- **Instant Model Switching** - Switch endpoints mid-conversation per session
+- **Multi-model support**: Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
+- **Agent sessions**: persistent session management with full message history
+- **Safety sandbox**: NemoClaw integration for policy-enforced safe mode
+- **Experience modes**: server-enforced endpoint and safety rules per experience
+- **Metrics dashboard**: summary, safety, feedback, and error telemetry
+- **Web dashboard**: React UI with live Docker status monitoring
+- **OpenTelemetry tracing**: OTLP/HTTP export to Jaeger with graceful fallback
+- **Instant model switching**: switch endpoints mid-conversation per session
 
 ## Directory Structure
 
@@ -24,18 +63,6 @@ services/                     # Additional microservices (future)
 scripts/                      # Setup & management scripts
 docker-compose.yml            # Stack definition
 ```
-
-## Quick Start
-
-```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
-docker compose up -d
-```
-
-**Endpoints:**
-- Dashboard: http://localhost:3000
-- Ollama API: http://localhost:8081
-- NemoClaw: http://localhost:9000
 
 ## Models
 
@@ -62,19 +89,29 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 ## API
 
 ### Sessions
-- `POST /api/sessions` — Create session (`{ endpoint, model, name }`)
+- `POST /api/sessions` — Create session (`{ endpoint, model, name, userId, userRole, experience, safetyMode }`)
 - `GET /api/sessions` — List all sessions
 - `GET /api/sessions/:id` — Get session with messages
 - `DELETE /api/sessions/:id` — Delete session
 - `PUT /api/sessions/:id/model` — Switch model/endpoint (`{ endpoint, model }`)
+- `POST /api/sessions/:id/feedback` — Record thumbs up/down on an assistant message (`{ messageIndex, positive }`)
 
 ### Messages
 - `POST /api/sessions/:id/message` — Send message (`{ message, useSafeMode }`)
+
+### Product Surface
+- `GET /api/experiences` — List available experience configs
+- `GET /api/metrics/summary` — Session/message totals, model distribution, experience distribution
+- `GET /api/metrics/safety` — Input classifications, blocked prompts, filtered outputs
+- `GET /api/metrics/feedback` — Positive/negative feedback by model and experience
+- `GET /api/metrics/errors` — Error rate and recent failures
 
 ### System
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
 - `GET /api/docker/status` — Container status
+- `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
+- `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
 
 ## Architecture
 
@@ -123,6 +160,8 @@ dashboard/
 - NemoClaw sandboxes agent execution with `--cap-drop=all`
 - Capability allowlist: `NET_BIND_SERVICE` only
 - `no-new-privileges` enforced on sandbox container
+- Safe Chat sessions are server-restricted to the primary endpoint and strict safety mode
+- Output filtering redacts detected PII and replaces blocked harmful responses before they reach the UI
 
 ## License
 

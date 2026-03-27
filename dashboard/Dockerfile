@@ -11,6 +11,8 @@ RUN npm install
 
 # Copy application files
 COPY server.js ./
+COPY persistence.js ./
+COPY tracing.js ./
 COPY src ./src
 COPY index.html vite.config.js ./
 COPY tests ./tests
