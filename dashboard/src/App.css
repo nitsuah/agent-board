@@ -852,6 +852,166 @@ body {
   }
 }
 
+/* ===== Agent Status Card ===== */
+.agent-card {
+  padding: 0.65rem 0.75rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: all 0.2s ease;
+}
+
+.agent-card:hover {
+  background: #333;
+  border-color: #00d4ff;
+}
+
+.agent-card.active {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.12), transparent);
+  border-color: #00d4ff;
+}
+
+.agent-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.agent-card-name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.agent-status-dot.new      { background: #888; }
+.agent-status-dot.idle     { background: #4caf50; }
+.agent-status-dot.streaming {
+  background: #00d4ff;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+.agent-card-meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #666;
+  flex-wrap: wrap;
+}
+
+.agent-card-endpoint {
+  color: #00b8d9;
+}
+
+.agent-card-msgs,
+.agent-card-time {
+  color: #555;
+}
+
+.agent-card-streaming {
+  font-size: 0.72rem;
+  color: #00d4ff;
+  margin-top: 0.1rem;
+}
+
+/* ===== Streaming UI ===== */
+.streaming-badge {
+  font-size: 0.75rem;
+  color: #00d4ff;
+  margin-left: 0.5rem;
+  animation: fade-in-out 1.2s ease-in-out infinite;
+}
+
+.streaming-indicator {
+  color: #00d4ff;
+  font-size: 0.7rem;
+}
+
+.message.streaming .message-content {
+  border-left: 2px solid #00d4ff;
+  padding-left: 0.5rem;
+}
+
+.cursor-blink {
+  color: #00d4ff;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.dot-pulse {
+  display: inline-block;
+  animation: dot-fade 1.4s ease-in-out infinite;
+}
+
+@keyframes dot-fade {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+
+@keyframes fade-in-out {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
+}
+
+/* Message bubble styling */
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+
+.message.user {
+  align-self: flex-end;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.user .message-content {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 153, 204, 0.2));
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #e0e0e0;
+}
+
+.message.assistant .message-content {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  color: #d0d0d0;
+}
+
 /* ── Experience selector ─────────────────────────────────────────────────── */
 .experience-select {
   background: rgba(147, 51, 234, 0.18);
