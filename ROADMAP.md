@@ -1,37 +1,44 @@
-# Roadmap
+# ROADMAP
 
-## Q1 2025 (Near Term)
+Last Updated: 2026-03-27
 
-- [x] Project setup and architecture
-  * **Goal**: Establish a scalable foundation for the agent-board ecosystem.
-  * **Rationale**: Ensure long-term maintainability and modularity.
-  * **Scope**: Repository initialization, linting, and base directory structure.
-  * **Success**: Clean builds and structured folder hierarchy.
-  * **Risks**: Over-engineering early abstractions.
-- [/] Core Dashboard UI: Build a responsive grid for agent visualization.
-  * **Goal**: Provide a central interface to monitor multiple agents simultaneously.
-  * **Rationale**: Users need a single pane of glass for agent status.
-  * **Scope**: JavaScript-based frontend (React/Vue) with card-based layouts.
-  * **Success**: Rendering 10+ agents with real-time status indicators.
-  * **Risks**: UI performance bottlenecks with high update frequencies.
-- [ ] Real-time Communication Bridge: Implement WebSocket connectivity.
-  * **Goal**: Enable low-latency updates from agents to the board.
-  * **Rationale**: Polling is inefficient for dynamic agent behavior.
-  * **Scope**: Node.js WebSocket server and client-side listeners.
-  * **Success**: Message delivery latency under 100ms.
-  * **Risks**: Handling socket reconnections and state synchronization.
+## 2025 Q1 - Foundation and Dashboard
 
-## Q2 2025 (Mid Term)
+- [x] Establish the repository structure, dashboard shell, and local Docker stack.
+- [x] Ship the core dashboard UI and baseline model configuration.
+- [ ] Finish the real-time communication bridge that early docs implied.
 
-- [ ] Persistence Layer: Integrate database storage for agent history.
-  * **Goal**: Save agent states, logs, and configurations across sessions.
-  * **Rationale**: Prevent data loss on page refresh or server restart.
-  * **Scope**: Integration with a lightweight DB (e.g., SQLite or MongoDB).
-  * **Success**: Successful retrieval of agent history after a full reboot.
-  * **Risks**: Database schema migrations as agent data structures evolve.
-- [ ] Agent Command Interface: Enable bi-directional interaction.
-  * **Goal**: Allow users to send instructions (Start/Stop/Configure) to agents.
-  * **Rationale**: Moving from passive monitoring to active management.
-  * **Scope**: Command API endpoints and UI action buttons.
-  * **Success**: Commands executed by agents within 500ms of UI click.
-  * **Risks**: Security
+## 2025 Q2 - Persistence and Agent Control
+
+- [ ] Implement persistence for agent history, logs, and state snapshots.
+- [ ] Ship the agent command interface for start, stop, and restart actions.
+- [ ] Add task queue visibility and routing.
+- [ ] Add heartbeat and resource monitoring.
+
+## 2026 Q1 - Quality Reset
+
+- [ ] P0: Restore coverage reporting and publish a trustworthy baseline.
+- [ ] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
+- [ ] P1: Validate safety-layer behavior with tests and examples.
+- [ ] P2: Finish API documentation for lifecycle, task, and security flows.
+- [ ] P2: Define a validated production deployment path.
+
+## 2026 Q2 - Extensibility and Team Readiness
+
+- [ ] Add multi-tenancy and RBAC planning.
+- [ ] Define custom agent plugin boundaries.
+- [ ] Expand audit logging and compliance support.
+- [ ] Improve analytics and operational observability.
+
+## Notes
+
+- The stack is still local-first and Docker-native.
+- The immediate gap is quality and validation, not feature volume.
+- GPU enablement and broader model orchestration stay behind the Q1 quality reset.
+
+<!--
+AGENT INSTRUCTIONS:
+1. Keep the roadmap quarter-first.
+2. Use short checkpoint bullets, not narrative paragraphs.
+3. Keep task-level detail in TASKS.md.
+-->
