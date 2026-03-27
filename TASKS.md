@@ -2,14 +2,16 @@
 
 Last Updated: 2026-03-27
 
-## P0 - Blocking
+## Todo
+
+### P0 - Blocking
 
 - [ ] Restore test coverage reporting.
   - Priority: P0
   - Context: METRICS.md still reports 0% coverage even though dashboard tests exist under `dashboard/tests`.
   - Acceptance Criteria: dashboard tests run with coverage, METRICS.md reflects measured values, and CI publishes coverage results.
 
-## P1 - High
+### P1 - High
 
 - [ ] Validate dashboard and Docker initialization.
   - Priority: P1
@@ -31,7 +33,7 @@ Last Updated: 2026-03-27
   - Context: the local stack is still CPU-bound even though the host has a 24 GB GPU available.
   - Acceptance Criteria: the Ollama service is configured for CUDA, GPU detection is validated, and setup prerequisites are documented.
 
-## P2 - Medium
+### P2 - Medium
 
 - [ ] Add a GPU-oriented model portfolio after CUDA is enabled.
   - Priority: P2
@@ -58,7 +60,7 @@ Last Updated: 2026-03-27
   - Context: once coverage reporting is working, the repo still needs broader automated coverage around lifecycle, safety, and task orchestration.
   - Acceptance Criteria: at least 20 focused tests cover the core agent flows and publish coverage.
 
-## P3 - Exploratory
+### P3 - Exploratory
 
 - [ ] Clarify MCP integration scope.
   - Priority: P3
@@ -74,6 +76,8 @@ Last Updated: 2026-03-27
   - Priority: P3
   - Context: event-bus coordination is still listed as capability without a proven scenario.
   - Acceptance Criteria: two agents exchange events in a documented demo path.
+
+## In Progress
 
 ## Done
 
