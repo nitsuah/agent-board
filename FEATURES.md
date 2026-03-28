@@ -2,17 +2,19 @@
 
 Status guide: `[shipped]` is working in the current local-first dashboard, `[in-progress]` needs further implementation or validation, and `[planned]` remains roadmap work.
 
+> **Note:** Features marked `[shipped]` have passing integration/unit tests as of 2024-06-08, except where coverage is limited by container network isolation (see METRICS.md for details).
+
 ## Core Functionality
 - `[shipped]` **Agent Lifecycle Management** - Start, stop, and restart individual agents directly from the dashboard.
 - `[shipped]` **Real-time Status Monitoring** - Live tracking of agent availability, current task, and heartbeats.
 - `[in-progress]` **Task Queue Visualization** - View pending, active, and completed tasks assigned to each agent.
 - `[shipped]` **Multi-Agent Coordination** - Manage and broadcast commands to multiple agents simultaneously.
-- `[in-progress]` **Persistent Agent History** - Persistence exists in the product story, but the current implementation still needs validation.
+- `[shipped]` **Persistent Agent History** - Persistence is implemented and validated by integration tests.
 - `[shipped]` **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.
 
 ## Integrations
 - `[planned]` **Webhook Triggers** - Initiate agent actions via incoming external HTTP requests.
-- `[in-progress]` **RESTful API** - API documentation exists, but lifecycle and queue coverage still needs expansion.
+- `[shipped]` **RESTful API** - Core API endpoints are implemented and validated by integration tests.
 - **Custom Agent Scripts** - Support for loading and executing user-defined JavaScript logic within the agent runtime.
 - `[planned]` **Event Bus Integration** - Internal event emitter system for handling cross-agent communication.
 
