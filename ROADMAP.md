@@ -7,6 +7,7 @@ Last Updated: 2026-03-27
 - [x] Establish the repository structure, dashboard shell, and local Docker stack.
 - [x] Ship the core dashboard UI and baseline model configuration.
 - [ ] Finish the real-time communication bridge that early docs implied.
+- [ ] Discover features from [1code](https://github.com/21st-dev/1code) and implement any relevant functionality or patterns into our stack (we're primarily focused on local models but want to see if there are useful patterns / approaches we can adopt from 1code to our design as well or include outright)
 
 ## 2025 Q2 - Persistence and Agent Control
 

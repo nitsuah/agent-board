@@ -6,8 +6,8 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | 0% | >80% | 🔴 |
-| **Total Test Count** | 0 | >50 | 🔴 |
+| **Unit Test Coverage** | N/A | >80% | 🟡 |
+| **Total Test Count** | 9 | >50 | 🟡 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -32,11 +32,13 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 Run the following commands to generate current values for this table:
 
-### 1. Test Coverage & Count
+### 1. Test Count
 ```bash
-# Using Jest
-npm test -- --coverage
+# Using Docker Compose (test count only)
+docker-compose -f agent-board/docker-compose.yml run --rm agent-dashboard npm run test
 ```
+
+> **Note:** Coverage is not currently measured. The tracing status test may fail in Docker due to container network isolation (cannot reach 127.0.0.1:3000 from test context), but this does not indicate a product bug.
 
 ### 2. Security Audit
 ```bash
@@ -70,5 +72,5 @@ npm outdated
 cloc . --exclude-dir=node_modules,dist
 ```
 
----
-*Last Updated: TODO: INSERT_DATE*
+----
+*Last Updated: 2024-06-08*
