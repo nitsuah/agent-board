@@ -106,6 +106,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [dockerStatus, setDockerStatus] = useState(null);
+  const [systemServices, setSystemServices] = useState(null);
+  const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
@@ -162,16 +164,19 @@ function App() {
     fetchSessions();
     fetchTasks();
     fetchDockerStatus();
+    fetchSystemServices();
     fetchSystemInfo();
     fetchDemoMode();
 
     const sessionInterval = setInterval(fetchSessions, 5000);
     const taskInterval = setInterval(fetchTasks, 7000);
     const dockerInterval = setInterval(fetchDockerStatus, 10000);
+    const servicesInterval = setInterval(fetchSystemServices, 10000);
     return () => {
       clearInterval(sessionInterval);
       clearInterval(taskInterval);
       clearInterval(dockerInterval);
+      clearInterval(servicesInterval);
     };
   }, []);
 
@@ -208,6 +213,38 @@ function App() {
       const data = await res.json();
       if (data.success) setSystemInfo(data.system);
     } catch (error) { console.error('Error fetching system info:', error); }
+  };
+
+  const fetchSystemServices = async () => {
+    try {
+      const res = await fetch('/api/system/services');
+      const data = await res.json();
+      if (data.success) {
+        setSystemServices(data);
+      }
+    } catch (error) {
+      console.error('Error fetching system services:', error);
+      setSystemServices(null);
+    }
+  };
+
+  const runServiceAction = async (serviceKey, action) => {
+    const actionId = `${serviceKey}:${action}`;
+    setServiceActionsInFlight(prev => ({ ...prev, [actionId]: true }));
+    try {
+      const res = await fetch(`/api/system/services/${serviceKey}/${action}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Service action failed:', data.error || 'Unknown error');
+      }
+      await Promise.all([fetchDockerStatus(), fetchSystemServices()]);
+    } catch (error) {
+      console.error('Service action failed:', error);
+    } finally {
+      setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
+    }
   };
 
   const fetchDemoMode = async () => {
@@ -789,6 +826,11 @@ function App() {
               <div className="docker-status">
                 <h3>Services</h3>
                 {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => (
+                  (() => {
+                    const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
+                    const serviceMeta = systemServices?.services?.[serviceKey];
+                    const canControl = !!(systemServices?.dockerControlEnabled && serviceMeta?.controllable);
+                    return (
                   <div key={name} className="docker-status-item">
                     <div className="docker-service-info">
                       <div className="docker-service-name">
@@ -800,7 +842,25 @@ function App() {
                       </div>
                       <div className="docker-service-port">{status.ports}</div>
                     </div>
+                    <div className="docker-actions">
+                      <button
+                        className="btn-docker-action start"
+                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
+                        onClick={() => runServiceAction(serviceKey, 'start')}
+                      >
+                        Start
+                      </button>
+                      <button
+                        className="btn-docker-action restart"
+                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
+                        onClick={() => runServiceAction(serviceKey, 'restart')}
+                      >
+                        Restart
+                      </button>
+                    </div>
                   </div>
+                    );
+                  })()
                 ))}
                 <h3 style={{ marginTop: '1rem' }}>LLM Endpoints</h3>
                 {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
@@ -814,6 +874,19 @@ function App() {
                     </div>
                   </div>
                 ))}
+                <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#9bb3c9' }}>
+                  <div>
+                    <strong>Primary endpoint resolved:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}
+                  </div>
+                  {Array.isArray(systemServices?.primaryLlm?.candidates) && (
+                    <div>
+                      <strong>Discovery candidates:</strong> {systemServices.primaryLlm.candidates.join(', ')}
+                    </div>
+                  )}
+                  <div>
+                    <strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}
+                  </div>
+                </div>
                 <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
                   Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br />
                   Manage stack: <code>stack-manager.ps1</code>

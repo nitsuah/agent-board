@@ -32,6 +32,9 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const execAsync = promisify(exec);
+const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
+const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'docker-compose.yml');
+const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
 
 // LLM Configuration - Support multiple endpoints
 // apiStyle: 'ollama' uses /api/chat + /api/tags; 'openai' uses /v1/chat/completions + /v1/models
@@ -70,11 +73,47 @@ const LLM_CONFIG = {
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 const BB_MCP_ENABLED = isTruthyEnv(process.env.BB_MCP_ENABLED);
+const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
+  process.env.PRIMARY_LLM_URL_CANDIDATES,
+  [
+    process.env.PRIMARY_LLM_URL || 'http://ollama:8080',
+    'http://localhost:8081',
+    'http://localhost:11434',
+  ]
+);
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
 const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
 
 function isTruthyEnv(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
+
+function parseUrlListEnv(rawValue, fallback = []) {
+  const fromEnv = String(rawValue || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const merged = [...fromEnv, ...fallback]
+    .map((item) => String(item || '').trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  const seen = new Set();
+  const unique = [];
+  for (const candidate of merged) {
+    try {
+      // Validate URL shape while preserving normalized string.
+      new URL(candidate);
+      if (!seen.has(candidate)) {
+        unique.push(candidate);
+        seen.add(candidate);
+      }
+    } catch {
+      // Ignore invalid URL candidate.
+    }
+  }
+
+  return unique;
 }
 
 const PUBLIC_DEMO_MODE = isTruthyEnv(process.env.PUBLIC_DEMO_MODE);
@@ -167,6 +206,79 @@ function resolveTaskAssignment(sessionId) {
 
 async function checkHttpService(url, timeoutMs = 3000) {
   await axios.get(url, { timeout: timeoutMs });
+}
+
+async function resolvePrimaryLlmUrl(timeoutMs = 1200) {
+  for (const baseUrl of PRIMARY_LLM_URL_CANDIDATES) {
+    try {
+      await checkHttpService(`${baseUrl}/api/tags`, timeoutMs);
+      return { url: baseUrl, discovered: true };
+    } catch {
+      // Continue to next candidate.
+    }
+  }
+
+  return {
+    url: LLM_CONFIG.primary.url,
+    discovered: false,
+  };
+}
+
+async function resolveEndpointUrl(endpoint) {
+  if (endpoint === 'primary') {
+    const resolved = await resolvePrimaryLlmUrl();
+    return resolved.url;
+  }
+  return LLM_CONFIG[endpoint]?.url || LLM_CONFIG.primary.url;
+}
+
+function getServiceRegistry() {
+  return {
+    ollama: {
+      key: 'ollama',
+      label: 'Ollama (local)',
+      backendType: 'ollama-container',
+      composeService: 'ollama',
+      ports: '8081:8080',
+      controllable: true,
+      candidates: PRIMARY_LLM_URL_CANDIDATES,
+    },
+    nemoclaw: {
+      key: 'nemoclaw',
+      label: 'NemoClaw (sandbox)',
+      backendType: 'sandbox',
+      composeService: 'nemoclaw',
+      ports: '9000:8080',
+      controllable: true,
+      candidates: [NEMOCLAW_URL],
+    },
+    bb_mcp: {
+      key: 'bb_mcp',
+      label: 'Blackboard Learn MCP',
+      backendType: 'mcp',
+      composeService: 'bb-mcp',
+      ports: '3100:3100',
+      controllable: BB_MCP_ENABLED,
+      candidates: [BB_MCP_URL],
+      disabledReason: BB_MCP_ENABLED ? null : 'BB_MCP_ENABLED=false',
+    },
+  };
+}
+
+async function runComposeAction(action, serviceName) {
+  const actionMap = {
+    start: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" up -d ${serviceName}`,
+    stop: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" stop ${serviceName}`,
+    restart: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" restart ${serviceName}`,
+  };
+
+  const command = actionMap[action];
+  if (!command) {
+    throw new Error(`Unsupported action: ${action}`);
+  }
+
+  const { stdout, stderr } = await execAsync(command, { timeout: 60_000, maxBuffer: 1024 * 1024 });
+  return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
 }
 
 async function checkTcpService(url, timeoutMs = 3000) {
@@ -785,12 +897,14 @@ app.use(express.static(join(__dirname, 'dist')));
  * Ollama: GET /api/tags   Docker Model Runner (OpenAI): GET /v1/models
  */
 app.get('/api/docker/status', async (req, res) => {
+  const primaryResolution = await resolvePrimaryLlmUrl();
+
   // Physical service checks (containers or Docker Desktop features)
   const serviceChecks = [
     {
       name: 'ollama',
       label: 'Ollama (local)',
-      url: `${LLM_CONFIG.primary.url}/api/tags`,
+      url: `${primaryResolution.url}/api/tags`,
       ports: '8081:8080',
       backendType: 'ollama-container',
       checkType: 'http'
@@ -852,7 +966,16 @@ app.get('/api/docker/status', async (req, res) => {
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
     if (config.backendType === 'ollama-container') {
       const ollamaUp = containers['ollama']?.running ?? false;
-      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: ollamaUp, fallback: !ollamaUp };
+      endpoints[key] = {
+        name: config.name,
+        model: config.defaultModel,
+        backendType: config.backendType,
+        live: ollamaUp,
+        fallback: !ollamaUp,
+        resolvedUrl: primaryResolution.url,
+        discovered: primaryResolution.discovered,
+        candidates: PRIMARY_LLM_URL_CANDIDATES,
+      };
     } else if (config.backendType === 'docker-runner') {
       const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
@@ -890,11 +1013,115 @@ app.post('/api/docker/:action', async (req, res) => {
   });
 });
 
+app.get('/api/system/services', async (req, res) => {
+  try {
+    const registry = getServiceRegistry();
+    const primaryResolution = await resolvePrimaryLlmUrl();
+
+    const ollamaUrl = primaryResolution.url;
+    const services = {};
+
+    for (const service of Object.values(registry)) {
+      if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
+        services[service.key] = {
+          ...service,
+          running: false,
+          status: 'disabled',
+          resolvedUrl: null,
+        };
+        continue;
+      }
+
+      const candidateUrl = service.key === 'ollama' ? ollamaUrl : service.candidates[0];
+      const probePath = service.key === 'ollama' ? '/api/tags' : service.key === 'bb_mcp' ? '/health' : '/';
+      const probeUrl = `${candidateUrl}${probePath}`;
+
+      try {
+        await checkHttpService(probeUrl, 3000);
+        services[service.key] = {
+          ...service,
+          running: true,
+          status: 'healthy',
+          resolvedUrl: candidateUrl,
+        };
+      } catch {
+        services[service.key] = {
+          ...service,
+          running: false,
+          status: 'unavailable',
+          resolvedUrl: candidateUrl,
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      dockerControlEnabled: DOCKER_CONTROL_ENABLED,
+      inDocker: IN_DOCKER,
+      services,
+      primaryLlm: {
+        resolvedUrl: primaryResolution.url,
+        discovered: primaryResolution.discovered,
+        candidates: PRIMARY_LLM_URL_CANDIDATES,
+      },
+    });
+  } catch (error) {
+    logStructured('error', 'system_services_failed', { error: error.message });
+    res.status(500).json({ success: false, error: 'Failed to load system services' });
+  }
+});
+
+app.post('/api/system/services/:serviceKey/:action', async (req, res) => {
+  const { serviceKey, action } = req.params;
+  const validActions = new Set(['start', 'stop', 'restart']);
+  if (!validActions.has(action)) {
+    return res.status(400).json({ success: false, error: 'Invalid action' });
+  }
+
+  const registry = getServiceRegistry();
+  const service = registry[serviceKey];
+  if (!service) {
+    return res.status(404).json({ success: false, error: `Unknown service: ${serviceKey}` });
+  }
+
+  if (!service.controllable) {
+    return res.status(400).json({
+      success: false,
+      error: `Service is not controllable in current mode${service.disabledReason ? ` (${service.disabledReason})` : ''}`,
+    });
+  }
+
+  if (!DOCKER_CONTROL_ENABLED) {
+    return res.status(501).json({
+      success: false,
+      error: 'Docker control is disabled. Set AGENT_BOARD_ENABLE_DOCKER_CONTROL=true to enable start/stop/restart actions.',
+    });
+  }
+
+  try {
+    const result = await runComposeAction(action, service.composeService);
+    res.json({
+      success: true,
+      serviceKey,
+      action,
+      result,
+    });
+  } catch (error) {
+    logStructured('error', 'service_control_failed', {
+      serviceKey,
+      action,
+      error: error.message,
+    });
+    res.status(500).json({ success: false, error: `Service action failed: ${error.message}` });
+  }
+});
+
 /**
  * Get system information
  */
 app.get('/api/system/info', async (req, res) => {
   try {
+    const primaryResolution = await resolvePrimaryLlmUrl();
     const systemInfo = {
       platform: process.platform,
       nodeVersion: process.version,
@@ -903,6 +1130,9 @@ app.get('/api/system/info', async (req, res) => {
       environment: {
         port: PORT,
         llmEndpoints: Object.keys(LLM_CONFIG),
+        primaryLlmResolvedUrl: primaryResolution.url,
+        primaryLlmCandidates: PRIMARY_LLM_URL_CANDIDATES,
+        dockerControlEnabled: DOCKER_CONTROL_ENABLED,
         nemoClawUrl: NEMOCLAW_URL,
         persistence: getPersistenceStatus(),
         tracing: getTracingStatus()
@@ -925,6 +1155,7 @@ app.get('/api/system/info', async (req, res) => {
 app.get('/api/models', async (req, res) => {
   try {
     const models = [];
+    const primaryResolution = await resolvePrimaryLlmUrl();
     // Track which Docker Runner models we've already fetched (shared endpoint)
     let dockerRunnerFetched = false;
     let dockerRunnerModels = null;
@@ -955,11 +1186,12 @@ app.get('/api/models', async (req, res) => {
           }
         } else {
           // Ollama format: { models: [{ name, details: { parameter_size } }] }
-          const response = await axios.get(`${config.url}/api/tags`, { timeout: 5000 });
+          const endpointUrl = key === 'primary' ? primaryResolution.url : config.url;
+          const response = await axios.get(`${endpointUrl}/api/tags`, { timeout: 5000 });
           const endpointModels = response.data.models?.map(m => ({
             id: key,
             endpoint: config.name,
-            endpointUrl: config.url,
+            endpointUrl,
             backendType: config.backendType,
             type: config.type,
             name: m.name,
@@ -1036,7 +1268,7 @@ app.get('/api/tracing/status', (req, res) => {
 /**
  * Create a new agent session
  */
-app.post('/api/sessions', (req, res) => {
+app.post('/api/sessions', async (req, res) => {
   const {
     endpoint: requestedEndpoint = 'primary',
     name = `session-${++sessionCounter}`,
@@ -1064,12 +1296,14 @@ app.post('/api/sessions', (req, res) => {
   const resolvedSafetyMode = resolveConfiguredSafetyMode(experience, safetyMode);
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const resolvedLlmUrl = await resolveEndpointUrl(endpoint);
+
   const session = {
     id: sessionId,
     name,
     model,
     endpoint,
-    llmUrl: LLM_CONFIG[endpoint]?.url || LLM_CONFIG.primary.url,
+    llmUrl: resolvedLlmUrl,
     messages: [],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -1291,7 +1525,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       if (fallbackEndpoint && fallbackEndpoint !== session.endpoint) {
         const previousEndpoint = session.endpoint;
         session.endpoint = fallbackEndpoint;
-        session.llmUrl = LLM_CONFIG[fallbackEndpoint].url;
+        session.llmUrl = await resolveEndpointUrl(fallbackEndpoint);
         session.model = LLM_CONFIG[fallbackEndpoint].defaultModel;
         session.updatedAt = new Date();
         llmUrl = session.llmUrl;
@@ -1475,6 +1709,10 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
   // Add user message to history
   session.messages.push({ role: 'user', content: message, timestamp: new Date() });
 
+  if (!useSafeMode && session.endpoint === 'primary') {
+    session.llmUrl = await resolveEndpointUrl('primary');
+  }
+
   const llmUrl = useSafeMode ? NEMOCLAW_URL : session.llmUrl;
   const apiStyle = useSafeMode ? 'ollama' : (LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama');
   const msgs = session.messages.map(m => ({ role: m.role, content: m.content }));
@@ -1548,7 +1786,7 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
 /**
  * Switch endpoint/model in a session
  */
-app.put('/api/sessions/:id/model', (req, res) => {
+app.put('/api/sessions/:id/model', async (req, res) => {
   const session = sessions.get(req.params.id);
 
   if (!session) {
@@ -1572,7 +1810,7 @@ app.put('/api/sessions/:id/model', (req, res) => {
   const prevEndpoint = session.endpoint;
   session.endpoint = endpoint;
   session.model = coerceModelForEndpoint(endpoint, model) || LLM_CONFIG[endpoint].defaultModel;
-  session.llmUrl = LLM_CONFIG[endpoint].url;
+  session.llmUrl = await resolveEndpointUrl(endpoint);
   session.updatedAt = new Date();
   upsertSessionContext(session, logStructured);
 

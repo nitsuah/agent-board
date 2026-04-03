@@ -116,6 +116,10 @@ Last Updated: 2026-04-03
 
 ## Done
 
+- [x] Add service discovery and system-panel service control backlayer.
+  - Completed: 2026-04-03
+  - Evidence: backend now resolves primary LLM URL from candidate list (`/api/system/services`), exposes controllability metadata, and supports gated `start|stop|restart` service actions; system panel now shows discovery data and action controls.
+
 - [x] Restore test coverage reporting baseline with Docker (`npm run test:coverage`) and publish measured values in METRICS.md.
 - [x] Audit shipped versus planned features in FEATURES.md with explicit status markers.
 - [x] Verify safety layer behavior via passing tests in `dashboard/tests/safety-layer.js`.
