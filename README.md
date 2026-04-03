@@ -117,8 +117,17 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
 - `GET /api/docker/status` — Container status
+- `GET /api/system/services` — Service discovery catalog (resolved URLs, candidates, controllability)
+- `POST /api/system/services/:serviceKey/:action` — Service action API (`start|stop|restart`, gated)
 - `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
 - `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
+
+### Runtime Config
+- `PRIMARY_LLM_URL` — Default primary Ollama URL fallback.
+- `PRIMARY_LLM_URL_CANDIDATES` — Comma-separated discovery candidates for primary Ollama URL resolution.
+- `AGENT_BOARD_ENABLE_DOCKER_CONTROL` — Set `true` to enable service action API endpoints.
+- `DOCKER_COMPOSE_FILE` — Optional compose-file override for service actions.
+- `DOCKER_PROJECT_DIR` — Optional compose project-directory override for service actions.
 
 ## Architecture
 
