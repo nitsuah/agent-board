@@ -69,6 +69,7 @@ const LLM_CONFIG = {
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
+const BB_MCP_ENABLED = isTruthyEnv(process.env.BB_MCP_ENABLED);
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
 const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
 
@@ -666,6 +667,15 @@ async function runPromptHandlers(rawMessage, session, safetyMode) {
   }
 
   if (normalized === '/bb-health') {
+    if (!BB_MCP_ENABLED) {
+      return {
+        handled: true,
+        blocked: false,
+        classification: { category: 'safe', reason: 'handler_bb_health_disabled' },
+        response: 'Blackboard MCP is disabled. Set BB_MCP_ENABLED=true to enable bb-mcp checks and proxy routes.'
+      };
+    }
+
     try {
       const resp = await axios.get(`${BB_MCP_URL}/health`, { timeout: 4000 });
       const status = resp.data?.status || 'unknown';
@@ -801,16 +811,19 @@ app.get('/api/docker/status', async (req, res) => {
       ports: '9000:8080',
       backendType: 'sandbox',
       checkType: 'tcp'
-    },
-    {
+    }
+  ];
+
+  if (BB_MCP_ENABLED) {
+    serviceChecks.push({
       name: 'bb-mcp',
       label: 'Blackboard Learn MCP',
       url: `${BB_MCP_URL}/health`,
       ports: '3100:3100',
       backendType: 'mcp',
       checkType: 'http'
-    },
-  ];
+    });
+  }
 
   const containers = {};
   for (const { name, label, url, ports, backendType, checkType } of serviceChecks) {
@@ -2219,7 +2232,13 @@ app.get('/api/connectors', (req, res) => {
     }
     const raw = readFileSync(CONNECTORS_PATH, 'utf-8');
     const { connectors } = JSON.parse(raw);
-    res.json({ success: true, connectors });
+    const filteredConnectors = (connectors || []).filter((connector) => {
+      if (connector?.id !== 'blackboard-learn') {
+        return true;
+      }
+      return BB_MCP_ENABLED;
+    });
+    res.json({ success: true, connectors: filteredConnectors });
   } catch (err) {
     logStructured('error', 'connectors_read_failed', { error: err.message });
     res.status(500).json({ success: false, error: 'Failed to load connectors' });
@@ -2235,7 +2254,9 @@ app.get('/api/connectors', (req, res) => {
  * This keeps credentials (BB_MCP_URL) server-side and avoids CORS issues.
  */
 function resolveConnectorUrl(connectorId) {
-  if (connectorId === 'blackboard-learn') return BB_MCP_URL;
+  if (connectorId === 'blackboard-learn') {
+    return BB_MCP_ENABLED ? BB_MCP_URL : null;
+  }
   // Extend here for additional MCP connectors
   return null;
 }
@@ -2381,6 +2402,7 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
       port: PORT,
       endpoints: Object.fromEntries(Object.entries(LLM_CONFIG).map(([key, config]) => [key, config.url])),
       nemoClawUrl: NEMOCLAW_URL,
+      bbMcpEnabled: BB_MCP_ENABLED,
       bbMcpUrl: BB_MCP_URL,
       websocketPath: '/ws/events'
     });
