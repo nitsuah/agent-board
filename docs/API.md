@@ -45,7 +45,6 @@ Aggregates models from all available LLM endpoints.
 GET /api/models
 ```
 
-**Response:**
 ```json
 {
   "success": true,
@@ -109,9 +108,6 @@ POST /api/sessions
 Content-Type: application/json
 
 {
-  "model": "llama2:latest",
-  "endpoint": "primary",
-  "name": "My First Chat"
 }
 ```
 
@@ -128,8 +124,6 @@ Content-Type: application/json
   }
 }
 ```
-
-**Parameters:**
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | model | string | ❌ | `llama2:latest` | Model name |
@@ -154,9 +148,7 @@ const response = await fetch('/api/sessions', {
 const { session } = await response.json();
 console.log(`Created session: ${session.id}`);
 ```
-
 ---
-
 ### List All Sessions
 
 **Request:**
@@ -185,14 +177,6 @@ GET /api/sessions
       "endpoint": "qwen_coder",
       "messageCount": 12,
       "createdAt": "2026-03-19T10:02:00.000Z",
-      "updatedAt": "2026-03-19T10:15:00.000Z"
-    }
-  ]
-}
-```
-
-**Usage:**
-```javascript
 const response = await fetch('/api/sessions');
 const { sessions } = await response.json();
 sessions.forEach(s => {
@@ -214,13 +198,7 @@ GET /api/sessions/:id
 **Response:**
 ```json
 {
-  "success": true,
-  "session": {
-    "id": "sess_1710864000000_abc123xyz",
-    "name": "My First Chat",
-    "model": "qwen",
     "endpoint": "primary",
-    "llmUrl": "http://llm_qwen3:8080",
     "messages": [
       {
         "role": "user",
@@ -422,6 +400,116 @@ const response = await fetch(`/api/sessions/${sessionId}`, {
 const { deleted } = await response.json();
 if (deleted) console.log('Session deleted');
 ```
+
+---
+
+## Task Queue
+
+### List Tasks
+
+**Request:**
+```
+GET /api/tasks?status=pending&sessionId=sess_...
+```
+
+**Query Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| status | string | ❌ | One of `pending`, `in_progress`, `blocked`, `completed` |
+| sessionId | string | ❌ | Filter tasks assigned to a specific session |
+
+### Create Task
+
+**Request:**
+```
+POST /api/tasks
+Content-Type: application/json
+
+{
+  "title": "Investigate latency spike",
+  "description": "Check tracing and DB metrics",
+  "priority": "urgent",
+  "sessionId": "sess_1710863999999_abc123xyz"
+}
+```
+
+**Errors:**
+- 400: missing or invalid title
+- 400: invalid priority
+- 400: assigned session does not exist
+
+### Update Task
+
+**Request:**
+```
+PUT /api/tasks/:id
+Content-Type: application/json
+
+{
+  "status": "in_progress",
+  "priority": "high",
+  "sessionId": "sess_1710863999999_abc123xyz"
+}
+```
+
+### Delete Task
+
+**Request:**
+```
+DELETE /api/tasks/:id
+```
+
+### List Tasks for a Session
+
+**Request:**
+```
+GET /api/sessions/:id/tasks
+```
+
+---
+
+## Webhooks
+
+### Trigger Webhook Event
+
+Receive an external event and optionally create a routed task.
+
+**Request:**
+```
+POST /api/webhooks/trigger
+Content-Type: application/json
+
+{
+  "event": "ci_fail",
+  "source": "github-actions",
+  "payload": {
+    "runId": 1422,
+    "branch": "main"
+  },
+  "createTask": {
+    "title": "Fix failing CI run",
+    "priority": "high",
+    "sessionId": "sess_1710863999999_abc123xyz"
+  }
+}
+```
+
+**Allowed `event` values:**
+- `ci_pass`
+- `ci_fail`
+- `deploy`
+- `deploy_fail`
+- `alert`
+- `review_requested`
+- `pr_merged`
+- `custom`
+
+**Errors:**
+- 400: missing `event`
+- 400: unknown `event` value
+- 400: invalid `source`
+- 400: non-object `payload`
+- 400: `createTask.sessionId` does not reference a live session
 
 ---
 

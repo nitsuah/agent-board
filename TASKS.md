@@ -1,15 +1,8 @@
 # TASKS
 
-Last Updated: 2026-03-27
+Last Updated: 2026-04-03
 
 ## Todo
-
-### P0 - Blocking
-
-- [ ] Restore test coverage reporting.
-  - Priority: P0
-  - Context: METRICS.md still reports 0% coverage even though dashboard tests exist under `dashboard/tests`.
-  - Acceptance Criteria: dashboard tests run with coverage, METRICS.md reflects measured values, and CI publishes coverage results.
 
 ### P1 - High
 
@@ -38,15 +31,10 @@ Last Updated: 2026-03-27
   - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that have not been revalidated together.
   - Acceptance Criteria: `docker compose up` completes cleanly and the documented local endpoints respond.
 
-- [ ] Audit shipped versus planned features.
+- [ ] Expand safety-layer coverage and add adversarial prompt cases.
   - Priority: P1
-  - Context: FEATURES.md lists broad capabilities without clearly separating shipped work from planned work.
-  - Acceptance Criteria: FEATURES.md uses `[shipped]`, `[planned]`, and `[exploratory]` markers that match the current dashboard state.
-
-- [ ] Verify safety layer behavior.
-  - Priority: P1
-  - Context: README and FEATURES.md claim PII filtering and harmful-content protections, but the behavior is not backed by visible validation.
-  - Acceptance Criteria: at least one safety feature has a passing test and documented behavior example.
+  - Context: baseline safety tests pass, but edge-case coverage for prompt injection and mixed-content payloads remains thin.
+  - Acceptance Criteria: new test cases for prompt injection and mixed PII payloads are added and pass in Docker.
 
 - [ ] Enable Ollama GPU acceleration for the RTX 4080.
   - Priority: P1
@@ -117,11 +105,6 @@ Last Updated: 2026-03-27
   - Context: `docs/MCP_SETUP.md` exists, but the practical integration story is still unclear.
   - Acceptance Criteria: one documented MCP provider flow works end to end.
 
-- [ ] Add a webhook trigger story.
-  - Priority: P3
-  - Context: FEATURES.md references webhooks without examples or validation.
-  - Acceptance Criteria: example payloads and one tested trigger path are documented.
-
 - [ ] Validate cross-agent event bus behavior.
   - Priority: P3
   - Context: event-bus coordination is still listed as capability without a proven scenario.
@@ -131,6 +114,10 @@ Last Updated: 2026-03-27
 
 ## Done
 
+- [x] Restore test coverage reporting baseline with Docker (`npm run test:coverage`) and publish measured values in METRICS.md.
+- [x] Audit shipped versus planned features in FEATURES.md with explicit status markers.
+- [x] Verify safety layer behavior via passing tests in `dashboard/tests/safety-layer.js`.
+- [x] Add webhook trigger story with tested endpoint (`POST /api/webhooks/trigger`) and API docs.
 - [x] Project setup and architecture foundation.
 - [x] Core dashboard UI.
 - [x] Service containerization for dashboard, Ollama, Jaeger, and NemoClaw.
