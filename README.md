@@ -24,6 +24,13 @@ cd C:\Users\$env:USERNAME\code\agent-board
 docker compose up -d
 ```
 
+Enable Blackboard MCP only when needed:
+
+```powershell
+$env:BB_MCP_ENABLED='true'
+docker compose --profile bb-mcp up -d
+```
+
 Open these endpoints:
 
 - Dashboard: http://localhost:3000

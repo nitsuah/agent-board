@@ -48,10 +48,12 @@ Last Updated: 2026-04-03
   - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
   - Acceptance Criteria: at least one MCP container (e.g., Playwright) can be started, used, and stopped via the manager API; compose integration documented.
 
-- [ ] **[Q2-CEO] bb-mcp opt-in integration** — add `BB_MCP_ENABLED` env flag to compose; when set, wire bb-mcp as an available MCP provider for agents.
+- [x] **[Q2-CEO] bb-mcp opt-in integration** — add `BB_MCP_ENABLED` env flag to compose; when set, wire bb-mcp as an available MCP provider for agents.
   - Priority: P2
   - Context: bb-mcp is a sister repo providing Blackboard/LMS tooling; agents should be able to use it without it running by default.
   - Acceptance Criteria: `BB_MCP_ENABLED=true docker compose up` starts bb-mcp alongside agent-board; agents can invoke its tools; disabled by default.
+  - Completed: 2026-04-03
+  - Evidence: `docker-compose.yml` now gates `bb-mcp` behind profile `bb-mcp`; `agent-dashboard` receives `BB_MCP_ENABLED`; dashboard API hides Blackboard connectors and proxy routes when disabled.
 
 - [ ] Add a GPU-oriented model portfolio after CUDA is enabled.
   - Priority: P2
