@@ -7,7 +7,7 @@ Status guide: `[shipped]` is working in the current local-first dashboard, `[in-
 ## Core Functionality
 - `[shipped]` **Agent Lifecycle Management** - Start, stop, and restart individual agents directly from the dashboard.
 - `[shipped]` **Real-time Status Monitoring** - Live tracking of agent availability, current task, and heartbeats.
-- `[in-progress]` **Task Queue Visualization** - View pending, active, and completed tasks assigned to each agent.
+- `[shipped]` **Task Queue Visualization** - View pending, active, blocked, and completed tasks from the dashboard sidebar.
 - `[shipped]` **Multi-Agent Coordination** - Manage and broadcast commands to multiple agents simultaneously.
 - `[shipped]` **Persistent Agent History** - Persistence is implemented and validated by integration tests.
 - `[shipped]` **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.

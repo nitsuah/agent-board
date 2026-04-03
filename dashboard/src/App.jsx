@@ -141,6 +141,10 @@ function App() {
   const [metricsSafety, setMetricsSafety] = useState(null);
   const [metricsFeedback, setMetricsFeedback] = useState(null);
   const [metricsErrors, setMetricsErrors] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [taskSummary, setTaskSummary] = useState({ total: 0, byStatus: {} });
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskPriority, setTaskPriority] = useState('medium');
 
   const chatBottomRef = useRef(null);
   const activeStreamRef = useRef(null);
@@ -156,13 +160,19 @@ function App() {
   useEffect(() => {
     fetchModels();
     fetchSessions();
+    fetchTasks();
     fetchDockerStatus();
     fetchSystemInfo();
     fetchDemoMode();
 
     const sessionInterval = setInterval(fetchSessions, 5000);
+    const taskInterval = setInterval(fetchTasks, 7000);
     const dockerInterval = setInterval(fetchDockerStatus, 10000);
-    return () => { clearInterval(sessionInterval); clearInterval(dockerInterval); };
+    return () => {
+      clearInterval(sessionInterval);
+      clearInterval(taskInterval);
+      clearInterval(dockerInterval);
+    };
   }, []);
 
   const fetchModels = async () => {
@@ -230,6 +240,19 @@ function App() {
       if (errors.success) setMetricsErrors(errors.errors);
     } catch (error) { console.error('Error fetching metrics:', error); }
   }, []);
+
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch('/api/tasks');
+      const data = await res.json();
+      if (data.success) {
+        setTasks(data.tasks || []);
+        setTaskSummary(data.summary || { total: 0, byStatus: {} });
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
 
   useEffect(() => {
     if (demoMode.enabled) {
@@ -493,6 +516,85 @@ function App() {
         idx === messageIndex ? { ...msg, feedback: feedbackValue } : msg
       )));
     } catch (error) { console.error('Error sending feedback:', error); }
+  };
+
+  const createTask = async () => {
+    if (!taskTitle.trim()) return;
+
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: taskTitle.trim(),
+          priority: taskPriority,
+          sessionId: activeSession || null
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error creating task:', data.error || 'Unknown error');
+        return;
+      }
+
+      setTaskTitle('');
+      setTaskPriority('medium');
+      fetchTasks();
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
+  };
+
+  const updateTaskStatus = async (taskId, status) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error updating task status:', data.error || 'Unknown error');
+        return;
+      }
+      fetchTasks();
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    }
+  };
+
+  const routeTaskToSession = async (taskId) => {
+    if (!activeSession) return;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: activeSession })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error routing task:', data.error || 'Unknown error');
+        return;
+      }
+      fetchTasks();
+    } catch (error) {
+      console.error('Error routing task:', error);
+    }
+  };
+
+  const deleteTask = async (taskId) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) {
+        console.error('Error deleting task:', data.error || 'Unknown error');
+        return;
+      }
+      fetchTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -892,6 +994,56 @@ function App() {
                       />
                     );
                   })}
+                </div>
+              </section>
+
+              <section className="section">
+                <h2>Task Queue</h2>
+                <div className="task-summary-row">
+                  <span>Total {taskSummary.total || 0}</span>
+                  <span>Pending {taskSummary.byStatus?.pending || 0}</span>
+                  <span>Active {taskSummary.byStatus?.in_progress || 0}</span>
+                </div>
+
+                <div className="task-create-row">
+                  <input
+                    type="text"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="Add a task"
+                    maxLength={140}
+                  />
+                  <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="urgent">urgent</option>
+                  </select>
+                  <button className="btn-primary" onClick={createTask}>Add</button>
+                </div>
+
+                <div className="task-list">
+                  {tasks.slice(0, 12).map((task) => (
+                    <div key={task.id} className={`task-item status-${task.status}`}>
+                      <div className="task-item-head">
+                        <strong>{task.title}</strong>
+                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                      </div>
+                      <div className="task-item-meta">
+                        <span>{task.status.replace('_', ' ')}</span>
+                        <span>{task.assignedSessionName || 'unassigned'}</span>
+                      </div>
+                      <div className="task-item-actions">
+                        <button onClick={() => updateTaskStatus(task.id, 'in_progress')}>Start</button>
+                        <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
+                        <button onClick={() => routeTaskToSession(task.id)} disabled={!activeSession}>Route</button>
+                        <button onClick={() => deleteTask(task.id)}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                  {tasks.length === 0 && (
+                    <div className="task-empty">No tasks yet.</div>
+                  )}
                 </div>
               </section>
             </aside>

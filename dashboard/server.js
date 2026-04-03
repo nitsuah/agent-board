@@ -93,6 +93,10 @@ const IN_DOCKER = existsSync('/.dockerenv');
 const sessions = new Map();
 let sessionCounter = 0;
 const SAFETY_RANK = { research: 0, standard: 1, strict: 2 };
+const tasks = new Map();
+let taskCounter = 0;
+const TASK_STATUSES = new Set(['pending', 'in_progress', 'blocked', 'completed']);
+const TASK_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
 
 function logStructured(level, eventType, data = {}) {
   const payload = JSON.stringify({
@@ -113,6 +117,51 @@ function logStructured(level, eventType, data = {}) {
   }
 
   console.log(payload);
+}
+
+function normalizeTaskStatus(value) {
+  if (!value) return 'pending';
+  const normalized = String(value).toLowerCase();
+  return TASK_STATUSES.has(normalized) ? normalized : null;
+}
+
+function normalizeTaskPriority(value) {
+  if (!value) return 'medium';
+  const normalized = String(value).toLowerCase();
+  return TASK_PRIORITIES.has(normalized) ? normalized : null;
+}
+
+function buildTaskSummary(task) {
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+    sessionId: task.sessionId,
+    assignedSessionName: task.assignedSessionName,
+    assignedUserId: task.assignedUserId,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    completedAt: task.completedAt || null
+  };
+}
+
+function resolveTaskAssignment(sessionId) {
+  if (!sessionId) {
+    return { sessionId: null, assignedSessionName: null, assignedUserId: null };
+  }
+
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  return {
+    sessionId,
+    assignedSessionName: session.name,
+    assignedUserId: session.userId
+  };
 }
 
 async function checkHttpService(url, timeoutMs = 3000) {
@@ -1607,6 +1656,243 @@ app.post('/api/sessions/:id/feedback', (req, res) => {
   });
 
   res.json({ success: true, recorded: eventType });
+});
+
+/**
+ * Task Queue API
+ * Lightweight in-memory queue for visibility and routing.
+ */
+
+app.get('/api/tasks', (req, res) => {
+  const { status, sessionId } = req.query;
+  const normalizedStatus = status ? normalizeTaskStatus(status) : null;
+
+  if (status && !normalizedStatus) {
+    return res.status(400).json({ success: false, error: 'Invalid status filter' });
+  }
+
+  const items = Array.from(tasks.values())
+    .filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
+    .filter((task) => (sessionId ? task.sessionId === sessionId : true))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map(buildTaskSummary);
+
+  const byStatus = { pending: 0, in_progress: 0, blocked: 0, completed: 0 };
+  items.forEach((task) => {
+    byStatus[task.status] = (byStatus[task.status] || 0) + 1;
+  });
+
+  res.json({
+    success: true,
+    tasks: items,
+    summary: {
+      total: items.length,
+      byStatus
+    }
+  });
+});
+
+app.post('/api/tasks', (req, res) => {
+  const {
+    title,
+    description = '',
+    priority,
+    sessionId
+  } = req.body || {};
+
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    return res.status(400).json({ success: false, error: 'title is required' });
+  }
+
+  const normalizedPriority = normalizeTaskPriority(priority);
+  if (!normalizedPriority) {
+    return res.status(400).json({ success: false, error: 'Invalid priority' });
+  }
+
+  const assignment = resolveTaskAssignment(sessionId);
+  if (sessionId && !assignment) {
+    return res.status(400).json({ success: false, error: 'Assigned session does not exist' });
+  }
+
+  const taskId = `task_${Date.now()}_${++taskCounter}`;
+  const now = new Date();
+  const task = {
+    id: taskId,
+    title: title.trim().slice(0, 140),
+    description: typeof description === 'string' ? description.trim().slice(0, 2000) : '',
+    status: 'pending',
+    priority: normalizedPriority,
+    sessionId: assignment?.sessionId || null,
+    assignedSessionName: assignment?.assignedSessionName || null,
+    assignedUserId: assignment?.assignedUserId || null,
+    createdAt: now,
+    updatedAt: now,
+    completedAt: null
+  };
+
+  tasks.set(taskId, task);
+
+  eventBus.emit('task_created', {
+    session_id: task.sessionId,
+    user_id: task.assignedUserId || 'anonymous',
+    model: null,
+    endpoint: null,
+    experience: null,
+    metadata: {
+      taskId,
+      status: task.status,
+      priority: task.priority,
+      hasAssignment: Boolean(task.sessionId)
+    }
+  });
+
+  if (task.sessionId) {
+    eventBus.emit('task_routed', {
+      session_id: task.sessionId,
+      user_id: task.assignedUserId || 'anonymous',
+      model: null,
+      endpoint: null,
+      experience: null,
+      metadata: {
+        taskId,
+        toSessionId: task.sessionId
+      }
+    });
+  }
+
+  res.json({ success: true, task: buildTaskSummary(task) });
+});
+
+app.put('/api/tasks/:id', (req, res) => {
+  const task = tasks.get(req.params.id);
+  if (!task) {
+    return res.status(404).json({ success: false, error: 'Task not found' });
+  }
+
+  const {
+    title,
+    description,
+    status,
+    priority,
+    sessionId
+  } = req.body || {};
+
+  if (title !== undefined) {
+    if (typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ success: false, error: 'title must be a non-empty string' });
+    }
+    task.title = title.trim().slice(0, 140);
+  }
+
+  if (description !== undefined) {
+    if (typeof description !== 'string') {
+      return res.status(400).json({ success: false, error: 'description must be a string' });
+    }
+    task.description = description.trim().slice(0, 2000);
+  }
+
+  if (priority !== undefined) {
+    const normalizedPriority = normalizeTaskPriority(priority);
+    if (!normalizedPriority) {
+      return res.status(400).json({ success: false, error: 'Invalid priority' });
+    }
+    task.priority = normalizedPriority;
+  }
+
+  if (status !== undefined) {
+    const normalizedStatus = normalizeTaskStatus(status);
+    if (!normalizedStatus) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    if (task.status !== normalizedStatus) {
+      task.status = normalizedStatus;
+      eventBus.emit('task_status_changed', {
+        session_id: task.sessionId,
+        user_id: task.assignedUserId || 'anonymous',
+        model: null,
+        endpoint: null,
+        experience: null,
+        metadata: {
+          taskId: task.id,
+          status: normalizedStatus
+        }
+      });
+    }
+  }
+
+  if (sessionId !== undefined) {
+    const assignment = resolveTaskAssignment(sessionId);
+    if (sessionId && !assignment) {
+      return res.status(400).json({ success: false, error: 'Assigned session does not exist' });
+    }
+
+    const previousSessionId = task.sessionId;
+    task.sessionId = assignment?.sessionId || null;
+    task.assignedSessionName = assignment?.assignedSessionName || null;
+    task.assignedUserId = assignment?.assignedUserId || null;
+
+    if (previousSessionId !== task.sessionId) {
+      eventBus.emit('task_routed', {
+        session_id: task.sessionId,
+        user_id: task.assignedUserId || 'anonymous',
+        model: null,
+        endpoint: null,
+        experience: null,
+        metadata: {
+          taskId: task.id,
+          fromSessionId: previousSessionId,
+          toSessionId: task.sessionId
+        }
+      });
+    }
+  }
+
+  if (task.status === 'completed' && !task.completedAt) {
+    task.completedAt = new Date();
+    eventBus.emit('task_completed', {
+      session_id: task.sessionId,
+      user_id: task.assignedUserId || 'anonymous',
+      model: null,
+      endpoint: null,
+      experience: null,
+      metadata: {
+        taskId: task.id,
+        priority: task.priority
+      }
+    });
+  }
+
+  if (task.status !== 'completed') {
+    task.completedAt = null;
+  }
+
+  task.updatedAt = new Date();
+  tasks.set(task.id, task);
+
+  res.json({ success: true, task: buildTaskSummary(task) });
+});
+
+app.delete('/api/tasks/:id', (req, res) => {
+  const task = tasks.get(req.params.id);
+  if (!task) {
+    return res.status(404).json({ success: false, error: 'Task not found' });
+  }
+
+  tasks.delete(req.params.id);
+  eventBus.emit('task_deleted', {
+    session_id: task.sessionId,
+    user_id: task.assignedUserId || 'anonymous',
+    model: null,
+    endpoint: null,
+    experience: null,
+    metadata: {
+      taskId: task.id,
+      status: task.status
+    }
+  });
+
+  res.json({ success: true, deleted: true });
 });
 
 // ============ METRICS API ============

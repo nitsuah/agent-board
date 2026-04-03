@@ -7,7 +7,7 @@
     "dev": "node server.js",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/safety-layer.js && node --experimental-vm-modules tests/review-blockers.js && node --experimental-vm-modules tests/persistence-status.js && node --experimental-vm-modules tests/tracing-status.js && node --experimental-vm-modules tests/websocket-events.js && node --experimental-vm-modules tests/demo-mode.js && node --experimental-vm-modules tests/metrics-api.js && node --experimental-vm-modules tests/functional-health.js && node --experimental-vm-modules tests/e2e-chat.js"
+    "test": "node tests/safety-layer.js && node --experimental-vm-modules tests/review-blockers.js && node --experimental-vm-modules tests/persistence-status.js && node --experimental-vm-modules tests/tracing-status.js && node --experimental-vm-modules tests/websocket-events.js && node --experimental-vm-modules tests/demo-mode.js && node --experimental-vm-modules tests/metrics-api.js && node --experimental-vm-modules tests/task-queue.js && node --experimental-vm-modules tests/functional-health.js && node --experimental-vm-modules tests/e2e-chat.js"
   },
   "dependencies": {
     "express": "^4.18.2",
