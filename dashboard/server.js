@@ -1949,7 +1949,7 @@ app.post('/api/webhooks/trigger', (req, res) => {
     return res.status(400).json({ success: false, error: 'source must be a string ≤ 80 chars' });
   }
 
-  if (payload !== null && typeof payload !== 'object') {
+  if (payload !== null && (typeof payload !== 'object' || Array.isArray(payload))) {
     return res.status(400).json({ success: false, error: 'payload must be an object' });
   }
 
@@ -1967,8 +1967,17 @@ app.post('/api/webhooks/trigger', (req, res) => {
   });
 
   let createdTask = null;
-  if (taskSpec && typeof taskSpec === 'object' && typeof taskSpec.title === 'string') {
-    const priority = normalizeTaskPriority(taskSpec.priority) || 'medium';
+  if (taskSpec !== undefined && taskSpec !== null) {
+    if (typeof taskSpec !== 'object' || Array.isArray(taskSpec)) {
+      return res.status(400).json({ success: false, error: 'createTask must be an object' });
+    }
+    if (typeof taskSpec.title !== 'string' || !taskSpec.title.trim()) {
+      return res.status(400).json({ success: false, error: 'createTask.title must be a non-empty string' });
+    }
+    const priority = taskSpec.priority === undefined ? 'medium' : normalizeTaskPriority(taskSpec.priority);
+    if (!priority) {
+      return res.status(400).json({ success: false, error: 'createTask.priority must be one of: low, medium, high, urgent' });
+    }
     const assignment = taskSpec.sessionId ? resolveTaskAssignment(taskSpec.sessionId) : null;
 
     if (taskSpec.sessionId && !assignment) {

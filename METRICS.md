@@ -41,7 +41,7 @@ docker compose run --rm agent-dashboard npm run test
 ### 2. Coverage
 ```bash
 # Coverage baseline from the dashboard image
-docker exec agent-dashboard sh -c "cd /app; npm run test:coverage"
+docker compose run --rm agent-dashboard npm run test:coverage
 ```
 
 Current coverage baseline (2026-04-03):
