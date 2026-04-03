@@ -43,11 +43,23 @@ Last Updated: 2026-03-27
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
 
+## 2026 Q3 - Blackboard & MCP Frontend
+
+> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server itself live here.
+
+- [ ] **bb-mcp streaming UI**: render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
+- [ ] **Multi-persona Blackboard workflows**: surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas in the dashboard; each persona loads its permitted tool set.
+- [ ] **Blackboard agent demo mode**: add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
+- [ ] **bb-mcp tool registry UI**: display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
+- [ ] **Portfolio-grade showcase path**: package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
+
 ## Notes
 
 - The stack is still local-first and Docker-native.
-- The immediate gap is quality and validation, not feature volume.
-- GPU enablement and broader model orchestration stay behind the Q1 quality reset.
+- Q2 critical path: (1) Docker optimization + GPU → (2) file I/O + workspace access → (3) MCP container manager → (4) multi-tenancy & RBAC.
+- Q3 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
+- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
+- MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--
 AGENT INSTRUCTIONS:

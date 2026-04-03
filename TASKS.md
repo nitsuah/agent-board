@@ -80,6 +80,26 @@ Last Updated: 2026-03-27
   - Context: the stack is local-first today and still lacks an agreed production deployment contract.
   - Acceptance Criteria: deployment guide or prod compose path exists and secrets handling is documented.
 
+- [ ] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
+  - Priority: P2
+  - Context: bb-mcp's server-side SSE transport is a Q2 item; this is the dashboard-side consumer. Together they complete the streaming story.
+  - Acceptance Criteria: agent-board task panel streams bb-mcp responses character-by-character; typing indicator shows while stream is open; no content shift on completion.
+
+- [ ] **[Q3-CEO] Multi-persona Blackboard agent selector** — expose student, instructor, admin, and parent bb-mcp tool sets as selectable agent personas in the dashboard.
+  - Priority: P2
+  - Context: bb-mcp RBAC gates tools per role server-side; the dashboard needs a persona picker so the right tool set loads for the right user type.
+  - Acceptance Criteria: persona selector appears when bb-mcp is enabled; switching persona reloads available tools from the bb-mcp manifest; demo mode works without a live Blackboard instance.
+
+- [ ] **[Q3-CEO] Blackboard agent demo mode** — add a demo-mode preset that walks through a full Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard connection.
+  - Priority: P2
+  - Context: portfolio showcase requires a runnable demo; demo mode lets this work without institutional credentials.
+  - Acceptance Criteria: `BB_MCP_ENABLED=true BB_MCP_DEMO=true docker compose up` runs the full demo flow; documented in README.
+
+- [ ] **[Q3-CEO] bb-mcp tool registry panel** — display available bb-mcp tools alongside other MCP providers in the dashboard; show last invocation time and per-role availability status.
+  - Priority: P3
+  - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
+  - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
+
 - [ ] Document agent lifecycle APIs.
   - Priority: P2
   - Context: README references agent start, stop, restart, and persistence behavior that is not described in `docs/API.md`.
