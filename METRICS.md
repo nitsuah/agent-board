@@ -6,8 +6,8 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | N/A | >80% | 🟡 |
-| **Total Test Count** | 9 | >50 | 🟡 |
+| **Unit Test Coverage** | 63.41% statements / 57.05% branches / 74.07% functions / 63.41% lines | >80% | 🟡 |
+| **Total Test Count** | 12 test files (9 unit + 3 integration/e2e) | >50 | 🟡 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -34,18 +34,27 @@ Run the following commands to generate current values for this table:
 
 ### 1. Test Count
 ```bash
-# Using Docker Compose (test count only)
-docker-compose -f agent-board/docker-compose.yml run --rm agent-dashboard npm run test
+# Unit + integration/e2e test run inside Docker
+docker compose run --rm agent-dashboard npm run test
 ```
 
-> **Note:** Coverage is not currently measured. The tracing status test may fail in Docker due to container network isolation (cannot reach 127.0.0.1:3000 from test context), but this does not indicate a product bug.
+### 2. Coverage
+```bash
+# Coverage baseline from the dashboard image
+docker exec agent-dashboard sh -c "cd /app; npm run test:coverage"
+```
 
-### 2. Security Audit
+Current coverage baseline (2026-04-03):
+- `persistence.js`: 83.24% statements
+- `server.js`: 62.65% statements
+- `tracing.js`: 54.45% statements
+
+### 3. Security Audit
 ```bash
 npm audit
 ```
 
-### 3. Code Quality & Linting
+### 4. Code Quality & Linting
 ```bash
 # Linting
 npm run lint
@@ -54,23 +63,23 @@ npm run lint
 npx eslint . --format json
 ```
 
-### 4. Bundle Size
+### 5. Bundle Size
 ```bash
 # After build
 npm run build
 du -sh ./dist # or ./build
 ```
 
-### 5. Dependency Freshness
+### 6. Dependency Freshness
 ```bash
 npm outdated
 ```
 
-### 6. Lines of Code
+### 7. Lines of Code
 ```bash
 # Requires cloc installed
 cloc . --exclude-dir=node_modules,dist
 ```
 
 ----
-*Last Updated: 2024-06-08*
+*Last Updated: 2026-04-03*

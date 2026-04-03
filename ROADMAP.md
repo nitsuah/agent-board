@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-03-27
+Last Updated: 2026-04-03
 
 ## 2025 Q1 - Foundation and Dashboard
 
@@ -13,15 +13,16 @@ Last Updated: 2026-03-27
 
 - [ ] Implement persistence for agent history, logs, and state snapshots.
 - [ ] Ship the agent command interface for start, stop, and restart actions.
-- [ ] Add task queue visibility and routing.
+- [x] Add task queue visibility and routing.
+- [x] Add webhook trigger ingestion and task creation path.
 - [ ] Add heartbeat and resource monitoring.
 
 ## 2026 Q1 - Quality Reset
 
-- [ ] P0: Restore coverage reporting and publish a trustworthy baseline.
-- [ ] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
+- [x] P0: Restore coverage reporting and publish a trustworthy baseline.
+- [x] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
 - [ ] P1: Validate safety-layer behavior with tests and examples.
-- [ ] P2: Finish API documentation for lifecycle, task, and security flows.
+- [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
 
 ## 2026 Q2 - Extensibility and Team Readiness
