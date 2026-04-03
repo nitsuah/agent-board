@@ -26,6 +26,18 @@ Last Updated: 2026-03-27
 
 ## 2026 Q2 - Extensibility and Team Readiness
 
+### Stability & Resource Optimization (CEO Priority)
+- [ ] **Docker image optimization**: Reduce container footprint by making heavy subsystems (e.g., bb-mcp, large model pre-loads) opt-in rather than always-on. Logging, metrics, and the database must always be available.
+- [ ] **Selective model loading**: Only load models explicitly enabled by configuration; default to a lightweight profile suitable for laptops and lower-memory environments.
+- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices and pass CUDA/device flags to the Ollama runtime so inference executes on GPU when available. Document prerequisites including driver and container-toolkit requirements.
+- [ ] **File I/O and workspace access**: Add an agent capability to read and write files within a user-selected folder, enabling code authoring and git commits to local codebases via configurable workspace mounts.
+
+### MCP Container Ecosystem (CEO Priority)
+- [ ] **MCP container manager**: Introduce a lightweight manager service (or API layer) that can spin MCP tool containers up and down on demand — e.g., Playwright MCP, Jira/Confluence MCP, Docker Hub–sourced MCPs — without requiring them to run continuously.
+- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack so agent-board agents can use Blackboard tooling when the flag is set.
+- [ ] **Multi-MCP orchestration**: Design a registry pattern so new MCP containers can be declared and surfaced to agents without manual compose changes.
+
+### Existing Items
 - [ ] Add multi-tenancy and RBAC planning.
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
