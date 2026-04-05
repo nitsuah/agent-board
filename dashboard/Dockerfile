@@ -1,5 +1,10 @@
 FROM node:22-slim
 
+RUN apt-get update \
+  && (apt-get install -y --no-install-recommends docker.io docker-compose-plugin ca-certificates \
+      || apt-get install -y --no-install-recommends docker.io docker-compose ca-certificates) \
+  && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 

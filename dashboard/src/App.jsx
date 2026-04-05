@@ -158,6 +158,11 @@ function App() {
     return EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
   }, [demoMode.enabled]);
 
+  const getPreferredModelForEndpoint = useCallback((endpoint) => {
+    const endpointModels = models.filter((model) => model.id === endpoint);
+    return endpointModels[0]?.model || ENDPOINT_META[endpoint]?.model || currentModel;
+  }, [models, currentModel]);
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchModels();
@@ -342,7 +347,7 @@ function App() {
       const endpoint = endpointPool.includes(currentEndpoint)
         ? currentEndpoint
         : endpointPool[0];
-      const model = ENDPOINT_META[endpoint]?.model || currentModel;
+      const model = getPreferredModelForEndpoint(endpoint);
 
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -514,7 +519,7 @@ function App() {
   };
 
   const handleEndpointSelection = (endpoint) => {
-    const model = ENDPOINT_META[endpoint]?.model || 'llama2:latest';
+    const model = getPreferredModelForEndpoint(endpoint);
     setCurrentEndpoint(endpoint);
     setCurrentModel(model);
     switchEndpoint(endpoint, model);

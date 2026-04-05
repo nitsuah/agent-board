@@ -6,6 +6,7 @@ const {
   applyOutputControls,
   calculateAverageMessagesPerSession,
   checkModelInRunnerList,
+  chooseRunnableOllamaModel,
   classifyInput,
   coerceModelForEndpoint,
   isEndpointAllowed,
@@ -93,6 +94,22 @@ function testCheckModelInRunnerList() {
   assert.equal(checkModelInRunnerList(models, null), false);
 }
 
+function testChooseRunnableOllamaModel() {
+  assert.equal(
+    chooseRunnableOllamaModel('llama2:latest', ['qwen2.5:0.5b'], 'llama2:latest'),
+    'qwen2.5:0.5b'
+  );
+  assert.equal(
+    chooseRunnableOllamaModel('llama2', ['llama2:latest', 'qwen2.5:0.5b'], 'llama2:latest'),
+    'llama2:latest'
+  );
+  assert.equal(
+    chooseRunnableOllamaModel('', ['qwen2.5:0.5b'], 'llama2:latest'),
+    'qwen2.5:0.5b'
+  );
+  assert.equal(chooseRunnableOllamaModel('llama2:latest', [], 'llama2:latest'), null);
+}
+
 function testSafeModeDoesNotAlterEndpointRouting() {
   // Safe mode is now enforced by system prompts, NOT by changing the LLM URL.
   // Verify that resolveEffectiveSafetyMode promotes to 'strict' with useSafeMode=true
@@ -153,6 +170,7 @@ try {
   testMetricsAveraging();
   testModelCoercion();
   testCheckModelInRunnerList();
+  testChooseRunnableOllamaModel();
   testSafeModeDoesNotAlterEndpointRouting();
   testExperienceSelectorMeta();
   testPromptNormalization();

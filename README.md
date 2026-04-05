@@ -17,6 +17,22 @@ Agent Board is a local-first control room for multi-model AI workflows. It gives
 - **Operations UI**: dark and light themes, system panel controls, live container status, and endpoint health visibility.
 - **Observability stack**: metrics APIs, event bus, persistence status, tracing status, and Jaeger integration.
 
+## Screenshots
+
+Captured from the local Docker stack at `http://localhost:3000`.
+
+### Dashboard Overview
+
+![Agent Board dashboard overview](docs/screenshots/dashboard-overview.png)
+
+### Metrics View
+
+![Agent Board metrics panel](docs/screenshots/metrics-panel.png)
+
+### System Management
+
+![Agent Board system management panel](docs/screenshots/system-panel.png)
+
 ## Quick Start
 
 ```powershell

@@ -4,14 +4,100 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-echo "[pre-commit] Running dashboard regression and e2e tests in Docker..."
+resolve_docker_bin() {
+  local candidate resolved
+  for candidate in \
+    docker \
+    docker.exe \
+    "/c/Program Files/Docker/Docker/resources/bin/docker.exe" \
+    "/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe"
+  do
+    if resolved="$(command -v "$candidate" 2>/dev/null)"; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
 
-if ! docker ps --format '{{.Names}}' | grep -q '^agent-dashboard$'; then
-  echo "[pre-commit] agent-dashboard container is not running."
-  echo "[pre-commit] Start services first: docker compose up -d --build"
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+DOCKER_BIN="${DOCKER_BIN:-$(resolve_docker_bin || true)}"
+COMPOSE_FILE="${COMPOSE_FILE:-$REPO_ROOT/docker-compose.yml}"
+COMPOSE_PROJECT_DIR="${COMPOSE_PROJECT_DIR:-$REPO_ROOT}"
+
+if [ -z "$DOCKER_BIN" ]; then
+  echo "[pre-commit] Docker CLI was not found."
+  echo "[pre-commit] Add Docker Desktop to PATH or install it at:"
+  echo "[pre-commit]   C:\\Program Files\\Docker\\Docker\\resources\\bin"
   exit 1
 fi
 
-docker exec agent-dashboard npm test
+run_compose() {
+  if "$DOCKER_BIN" compose version >/dev/null 2>&1; then
+    "$DOCKER_BIN" compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" "$@"
+    return 0
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose -f "$COMPOSE_FILE" --project-directory "$COMPOSE_PROJECT_DIR" "$@"
+    return 0
+  fi
+
+  echo "[pre-commit] Docker Compose is not available."
+  exit 1
+}
+
+wait_for_dashboard() {
+  local attempt max_attempts=30
+
+  for attempt in $(seq 1 "$max_attempts"); do
+    if "$DOCKER_BIN" exec agent-dashboard node -e "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  return 1
+}
+
+should_run_dashboard_tests() {
+  local staged_file
+
+  while IFS= read -r staged_file; do
+    case "$staged_file" in
+      dashboard/*|docker-compose.yml|.githooks/pre-commit|scripts/stack-manager.ps1)
+        return 0
+        ;;
+    esac
+  done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+  return 1
+}
+
+if ! should_run_dashboard_tests; then
+  echo "[pre-commit] No dashboard-impacting staged changes detected; skipping Docker regression suite."
+  exit 0
+fi
+
+echo "[pre-commit] Running dashboard regression and e2e tests in Docker..."
+
+if ! "$DOCKER_BIN" ps --format '{{.Names}}' | grep -q '^agent-dashboard$'; then
+  echo "[pre-commit] agent-dashboard container is not running. Starting the stack..."
+  run_compose up -d --build
+fi
+
+echo "[pre-commit] Waiting for agent-dashboard to become ready..."
+if ! wait_for_dashboard; then
+  echo "[pre-commit] agent-dashboard did not become ready in time."
+  echo "[pre-commit] Check logs with: $DOCKER_BIN compose -f \"$COMPOSE_FILE\" --project-directory \"$COMPOSE_PROJECT_DIR\" logs agent-dashboard"
+  exit 1
+fi
+
+"$DOCKER_BIN" exec agent-dashboard npm test
 
 echo "[pre-commit] Tests passed."
