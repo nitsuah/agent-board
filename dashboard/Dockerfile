@@ -1,9 +1,14 @@
 FROM node:22-slim
 
-RUN apt-get update \
-  && (apt-get install -y --no-install-recommends docker.io docker-compose-plugin ca-certificates \
-      || apt-get install -y --no-install-recommends docker.io docker-compose ca-certificates) \
-  && rm -rf /var/lib/apt/lists/*
+# Docker CLI is opt-in. Build with --build-arg INSTALL_DOCKER_CLI=true only in
+# trusted dev/CI environments where Docker socket access is explicitly required.
+ARG INSTALL_DOCKER_CLI=false
+RUN if [ "$INSTALL_DOCKER_CLI" = "true" ]; then \
+      apt-get update \
+      && (apt-get install -y --no-install-recommends docker.io docker-compose-plugin ca-certificates \
+          || apt-get install -y --no-install-recommends docker.io docker-compose ca-certificates) \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Set working directory
 WORKDIR /app

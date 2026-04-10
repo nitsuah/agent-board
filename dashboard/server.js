@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createReadStream, existsSync, readFileSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
 import { WebSocketServer } from 'ws';
@@ -32,6 +32,7 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
 const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'docker-compose.yml');
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
@@ -241,6 +242,8 @@ function getServiceRegistry() {
       composeService: 'ollama',
       ports: '8081:8080',
       controllable: true,
+      checkType: 'http',
+      probePath: '/api/tags',
       candidates: PRIMARY_LLM_URL_CANDIDATES,
     },
     nemoclaw: {
@@ -250,6 +253,8 @@ function getServiceRegistry() {
       composeService: 'nemoclaw',
       ports: '9000:8080',
       controllable: true,
+      checkType: 'tcp',
+      probePath: null,
       candidates: [NEMOCLAW_URL],
     },
     bb_mcp: {
@@ -259,6 +264,8 @@ function getServiceRegistry() {
       composeService: 'bb-mcp',
       ports: '3100:3100',
       controllable: BB_MCP_ENABLED,
+      checkType: 'http',
+      probePath: '/health',
       candidates: [BB_MCP_URL],
       disabledReason: BB_MCP_ENABLED ? null : 'BB_MCP_ENABLED=false',
     },
@@ -266,21 +273,22 @@ function getServiceRegistry() {
 }
 
 async function runComposeAction(action, serviceName) {
-  const commandTemplates = {
-    start: (composeCmd) => `${composeCmd} -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" up -d ${serviceName}`,
-    stop: (composeCmd) => `${composeCmd} -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" stop ${serviceName}`,
-    restart: (composeCmd) => `${composeCmd} -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" restart ${serviceName}`,
+const actionArgs = {
+    start: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'up', '-d', serviceName],
+    stop: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'stop', serviceName],
+    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'restart', serviceName],
   };
 
-  const template = commandTemplates[action];
-  if (!template) {
+  const args = actionArgs[action];
+  if (!args) {
     throw new Error(`Unsupported action: ${action}`);
   }
 
   let lastError = null;
-  for (const composeCmd of ['docker compose', 'docker-compose']) {
+  // Try 'docker compose' (plugin) first, then 'docker-compose' (standalone)
+  for (const [cmd, ...prefix] of [['docker', 'compose'], ['docker-compose']]) {
     try {
-      const { stdout, stderr } = await execAsync(template(composeCmd), { timeout: 60_000, maxBuffer: 1024 * 1024 });
+      const { stdout, stderr } = await execFileAsync(cmd, [...prefix, ...args], { timeout: 60_000, maxBuffer: 1024 * 1024 });
       return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
     } catch (error) {
       lastError = error;
@@ -1096,40 +1104,53 @@ app.get('/api/system/services', async (req, res) => {
     const primaryResolution = await resolvePrimaryLlmUrl();
 
     const ollamaUrl = primaryResolution.url;
-    const services = {};
 
-    for (const service of Object.values(registry)) {
-      if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
-        services[service.key] = {
-          ...service,
-          running: false,
-          status: 'disabled',
-          resolvedUrl: null,
-        };
-        continue;
-      }
+    const serviceEntries = await Promise.all(
+      Object.values(registry).map(async (service) => {
+        if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
+          return [
+            service.key,
+            {
+              ...service,
+              running: false,
+              status: 'disabled',
+              resolvedUrl: null,
+            },
+          ];
+        }
 
-      const candidateUrl = service.key === 'ollama' ? ollamaUrl : service.candidates[0];
-      const probePath = service.key === 'ollama' ? '/api/tags' : service.key === 'bb_mcp' ? '/health' : '/';
-      const probeUrl = `${candidateUrl}${probePath}`;
+        const candidateUrl = service.key === 'ollama' ? ollamaUrl : service.candidates[0];
 
-      try {
-        await checkHttpService(probeUrl, 3000);
-        services[service.key] = {
-          ...service,
-          running: true,
-          status: 'healthy',
-          resolvedUrl: candidateUrl,
-        };
-      } catch {
-        services[service.key] = {
-          ...service,
-          running: false,
-          status: 'unavailable',
-          resolvedUrl: candidateUrl,
-        };
-      }
-    }
+        try {
+          if (service.checkType === 'tcp') {
+            await checkTcpService(candidateUrl, 3000);
+          } else {
+            const probeUrl = `${candidateUrl}${service.probePath || '/'}`;
+            await checkHttpService(probeUrl, 3000);
+          }
+          return [
+            service.key,
+            {
+              ...service,
+              running: true,
+              status: 'healthy',
+              resolvedUrl: candidateUrl,
+            },
+          ];
+        } catch {
+          return [
+            service.key,
+            {
+              ...service,
+              running: false,
+              status: 'unavailable',
+              resolvedUrl: candidateUrl,
+            },
+          ];
+        }
+      })
+    );
+    const services = Object.fromEntries(serviceEntries);
 
     res.json({
       success: true,
@@ -1593,7 +1614,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-    const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
+const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
@@ -1746,7 +1767,7 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
   session.messages.push({ role: 'user', content: message, timestamp: new Date() });
   upsertSessionContext(session, logStructured);
 
-  if (session.endpoint === 'primary') {
+if (session.endpoint === 'primary') {
     session.llmUrl = await resolveEndpointUrl('primary');
   }
 
