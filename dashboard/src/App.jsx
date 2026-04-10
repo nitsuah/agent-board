@@ -158,6 +158,48 @@ function App() {
     return EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
   }, [demoMode.enabled]);
 
+  const getPreferredModelForEndpoint = useCallback((endpoint) => {
+    const configuredModel = ENDPOINT_META[endpoint]?.model || currentModel;
+    const endpointModels = models.filter((model) => model.id === endpoint);
+    const getModelIdentifier = (model) => model?.name || model?.model;
+
+    if (!endpointModels.length) {
+      return configuredModel;
+    }
+
+    // Prefer an exact match with the configured default model
+    const exactConfiguredMatch = endpointModels.find((model) => {
+      const identifier = getModelIdentifier(model);
+      return identifier === configuredModel || model?.model === configuredModel;
+    });
+    if (exactConfiguredMatch) {
+      return getModelIdentifier(exactConfiguredMatch);
+    }
+
+    // Fall back to a tagged variant (e.g. "llama2" matches "llama2:latest")
+    const taggedConfiguredMatch = endpointModels.find((model) => {
+      const identifier = getModelIdentifier(model);
+      return (
+        typeof configuredModel === 'string' &&
+        typeof identifier === 'string' &&
+        identifier.startsWith(`${configuredModel}:`)
+      );
+    });
+    if (taggedConfiguredMatch) {
+      return getModelIdentifier(taggedConfiguredMatch);
+    }
+
+    // Use the endpoint-marked default if present
+    const endpointDefault = endpointModels.find(
+      (model) => model?.default || model?.isDefault || model?.is_default
+    );
+    if (endpointDefault) {
+      return getModelIdentifier(endpointDefault);
+    }
+
+    return configuredModel || getModelIdentifier(endpointModels[0]);
+  }, [models, currentModel]);
+
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetchModels();
@@ -342,7 +384,7 @@ function App() {
       const endpoint = endpointPool.includes(currentEndpoint)
         ? currentEndpoint
         : endpointPool[0];
-      const model = ENDPOINT_META[endpoint]?.model || currentModel;
+      const model = getPreferredModelForEndpoint(endpoint);
 
       const res = await fetch('/api/sessions', {
         method: 'POST',
@@ -514,7 +556,7 @@ function App() {
   };
 
   const handleEndpointSelection = (endpoint) => {
-    const model = ENDPOINT_META[endpoint]?.model || 'llama2:latest';
+    const model = getPreferredModelForEndpoint(endpoint);
     setCurrentEndpoint(endpoint);
     setCurrentModel(model);
     switchEndpoint(endpoint, model);

@@ -125,10 +125,15 @@ services:
       - NEMOCLAW_URL=http://nemoclaw:8080
       - BB_MCP_URL=http://bb-mcp:3100
       - BB_MCP_ENABLED=${BB_MCP_ENABLED:-false}
+      - AGENT_BOARD_ENABLE_DOCKER_CONTROL=${AGENT_BOARD_ENABLE_DOCKER_CONTROL:-false}
       - PORT=3000
       - DATABASE_URL=postgresql://agent:agent@agent-db:5432/agent_board
       - OTEL_ENABLED=true
       - OTEL_ENDPOINT=http://jaeger:4318
+    volumes:
+      - ../:/workspace-root:ro
+    # Docker socket access is intentionally not mounted by default.
+    # Add it only in a trusted dev override/profile when Docker control is explicitly needed.
     # healthcheck is disabled until a stable in-container HTTP client is available
     # depends_on:
 

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createReadStream, existsSync, readFileSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
 import { WebSocketServer } from 'ws';
@@ -32,6 +32,7 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
 const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'docker-compose.yml');
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
@@ -241,6 +242,8 @@ function getServiceRegistry() {
       composeService: 'ollama',
       ports: '8081:8080',
       controllable: true,
+      checkType: 'http',
+      probePath: '/api/tags',
       candidates: PRIMARY_LLM_URL_CANDIDATES,
     },
     nemoclaw: {
@@ -250,6 +253,8 @@ function getServiceRegistry() {
       composeService: 'nemoclaw',
       ports: '9000:8080',
       controllable: true,
+      checkType: 'tcp',
+      probePath: null,
       candidates: [NEMOCLAW_URL],
     },
     bb_mcp: {
@@ -259,6 +264,8 @@ function getServiceRegistry() {
       composeService: 'bb-mcp',
       ports: '3100:3100',
       controllable: BB_MCP_ENABLED,
+      checkType: 'http',
+      probePath: '/health',
       candidates: [BB_MCP_URL],
       disabledReason: BB_MCP_ENABLED ? null : 'BB_MCP_ENABLED=false',
     },
@@ -266,19 +273,34 @@ function getServiceRegistry() {
 }
 
 async function runComposeAction(action, serviceName) {
-  const actionMap = {
-    start: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" up -d ${serviceName}`,
-    stop: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" stop ${serviceName}`,
-    restart: `docker compose -f "${DOCKER_COMPOSE_FILE}" --project-directory "${DOCKER_PROJECT_DIR}" restart ${serviceName}`,
+const actionArgs = {
+    start: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'up', '-d', serviceName],
+    stop: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'stop', serviceName],
+    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'restart', serviceName],
   };
 
-  const command = actionMap[action];
-  if (!command) {
+  const args = actionArgs[action];
+  if (!args) {
     throw new Error(`Unsupported action: ${action}`);
   }
 
-  const { stdout, stderr } = await execAsync(command, { timeout: 60_000, maxBuffer: 1024 * 1024 });
-  return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
+  let lastError = null;
+  // Try 'docker compose' (plugin) first, then 'docker-compose' (standalone)
+  for (const [cmd, ...prefix] of [['docker', 'compose'], ['docker-compose']]) {
+    try {
+      const { stdout, stderr } = await execFileAsync(cmd, [...prefix, ...args], { timeout: 60_000, maxBuffer: 1024 * 1024 });
+      return { stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
+    } catch (error) {
+      lastError = error;
+      const details = `${error.message || ''}\n${error.stderr || ''}`;
+      const binaryMissing = /(not found|is not recognized|docker-compose: not found|docker: not found|is not a docker command|unknown shorthand flag:\s*'f'\s*in -f)/i.test(details);
+      if (!binaryMissing) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('Docker Compose CLI is not available in the dashboard container.');
 }
 
 async function checkTcpService(url, timeoutMs = 3000) {
@@ -313,6 +335,31 @@ function normalizeOllamaModelName(modelName = '') {
   return String(modelName).trim().replace(/:latest$/i, '');
 }
 
+function chooseRunnableOllamaModel(requestedModel, availableModels = [], defaultModel = '') {
+  if (!Array.isArray(availableModels) || availableModels.length === 0) {
+    return null;
+  }
+
+  const normalizedRequested = normalizeOllamaModelName(requestedModel);
+  const normalizedDefault = normalizeOllamaModelName(defaultModel);
+
+  const requestedMatch = availableModels.find(
+    (available) => normalizeOllamaModelName(available) === normalizedRequested
+  );
+  if (requestedMatch) {
+    return requestedMatch;
+  }
+
+  const defaultMatch = availableModels.find(
+    (available) => normalizeOllamaModelName(available) === normalizedDefault
+  );
+  if (defaultMatch) {
+    return defaultMatch;
+  }
+
+  return availableModels[0];
+}
+
 async function getOllamaModelNames(baseUrl) {
   const response = await axios.get(`${baseUrl}/api/tags`, { timeout: 5000 });
   return response.data.models?.map((model) => model.name).filter(Boolean) || [];
@@ -325,33 +372,71 @@ async function ensureRunnableModelForSession(session) {
   }
 
   const availableModels = await getOllamaModelNames(session.llmUrl);
-  if (!availableModels.length) {
+  const resolvedModel = chooseRunnableOllamaModel(session.model, availableModels, endpointConfig.defaultModel);
+  if (!resolvedModel) {
     return { adjusted: false, reason: 'no_models' };
   }
 
-  const normalizedCurrent = normalizeOllamaModelName(session.model);
-  const matchingModel = availableModels.find(
-    (available) => normalizeOllamaModelName(available) === normalizedCurrent
-  );
+  if (session.model !== resolvedModel) {
+    const previousModel = session.model;
+    session.model = resolvedModel;
+    return {
+      adjusted: true,
+      reason: normalizeOllamaModelName(previousModel) === normalizeOllamaModelName(resolvedModel)
+        ? 'normalized_match'
+        : 'fallback_available',
+      model: resolvedModel
+    };
+  }
 
-  if (matchingModel) {
-    if (session.model !== matchingModel) {
-      session.model = matchingModel;
-      return { adjusted: true, reason: 'normalized_match', model: matchingModel };
+  return { adjusted: false, model: resolvedModel };
+}
+
+async function prepareSessionForLlmCall(session) {
+  let llmUrl = session.llmUrl;
+  let apiStyle = LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama';
+
+  const modelResolution = await ensureRunnableModelForSession(session);
+  if (modelResolution.reason === 'no_models') {
+    const fallbackEndpoint = getAvailabilityFallbackEndpoint();
+    if (fallbackEndpoint && fallbackEndpoint !== session.endpoint) {
+      const previousEndpoint = session.endpoint;
+      session.endpoint = fallbackEndpoint;
+      session.llmUrl = await resolveEndpointUrl(fallbackEndpoint);
+      session.model = LLM_CONFIG[fallbackEndpoint].defaultModel;
+      session.updatedAt = new Date();
+      llmUrl = session.llmUrl;
+      apiStyle = LLM_CONFIG[fallbackEndpoint].apiStyle;
+
+      eventBus.emit('endpoint_auto_fallback', {
+        session_id: session.id,
+        user_id: session.userId,
+        model: session.model,
+        endpoint: session.endpoint,
+        experience: session.experience,
+        metadata: {
+          from: previousEndpoint,
+          to: fallbackEndpoint,
+          reason: 'ollama_no_models'
+        }
+      });
     }
-    return { adjusted: false };
+  } else if (modelResolution.adjusted) {
+    session.updatedAt = new Date();
+    eventBus.emit('model_auto_corrected', {
+      session_id: session.id,
+      user_id: session.userId,
+      model: session.model,
+      endpoint: session.endpoint,
+      experience: session.experience,
+      metadata: {
+        reason: modelResolution.reason,
+        resolvedModel: modelResolution.model
+      }
+    });
   }
 
-  const fallbackModel = availableModels.includes(endpointConfig.defaultModel)
-    ? endpointConfig.defaultModel
-    : availableModels[0];
-
-  if (session.model !== fallbackModel) {
-    session.model = fallbackModel;
-    return { adjusted: true, reason: 'fallback_available', model: fallbackModel };
-  }
-
-  return { adjusted: false };
+  return { llmUrl, apiStyle, modelResolution };
 }
 
 function coerceModelForEndpoint(endpoint, requestedModel) {
@@ -1019,40 +1104,53 @@ app.get('/api/system/services', async (req, res) => {
     const primaryResolution = await resolvePrimaryLlmUrl();
 
     const ollamaUrl = primaryResolution.url;
-    const services = {};
 
-    for (const service of Object.values(registry)) {
-      if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
-        services[service.key] = {
-          ...service,
-          running: false,
-          status: 'disabled',
-          resolvedUrl: null,
-        };
-        continue;
-      }
+    const serviceEntries = await Promise.all(
+      Object.values(registry).map(async (service) => {
+        if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
+          return [
+            service.key,
+            {
+              ...service,
+              running: false,
+              status: 'disabled',
+              resolvedUrl: null,
+            },
+          ];
+        }
 
-      const candidateUrl = service.key === 'ollama' ? ollamaUrl : service.candidates[0];
-      const probePath = service.key === 'ollama' ? '/api/tags' : service.key === 'bb_mcp' ? '/health' : '/';
-      const probeUrl = `${candidateUrl}${probePath}`;
+        const candidateUrl = service.key === 'ollama' ? ollamaUrl : service.candidates[0];
 
-      try {
-        await checkHttpService(probeUrl, 3000);
-        services[service.key] = {
-          ...service,
-          running: true,
-          status: 'healthy',
-          resolvedUrl: candidateUrl,
-        };
-      } catch {
-        services[service.key] = {
-          ...service,
-          running: false,
-          status: 'unavailable',
-          resolvedUrl: candidateUrl,
-        };
-      }
-    }
+        try {
+          if (service.checkType === 'tcp') {
+            await checkTcpService(candidateUrl, 3000);
+          } else {
+            const probeUrl = `${candidateUrl}${service.probePath || '/'}`;
+            await checkHttpService(probeUrl, 3000);
+          }
+          return [
+            service.key,
+            {
+              ...service,
+              running: true,
+              status: 'healthy',
+              resolvedUrl: candidateUrl,
+            },
+          ];
+        } catch {
+          return [
+            service.key,
+            {
+              ...service,
+              running: false,
+              status: 'unavailable',
+              resolvedUrl: candidateUrl,
+            },
+          ];
+        }
+      })
+    );
+    const services = Object.fromEntries(serviceEntries);
 
     res.json({
       success: true,
@@ -1516,48 +1614,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-    let llmUrl = session.llmUrl;
-    let apiStyle = LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama';
-
-    const modelResolution = await ensureRunnableModelForSession(session);
-    if (modelResolution.reason === 'no_models') {
-      const fallbackEndpoint = getAvailabilityFallbackEndpoint();
-      if (fallbackEndpoint && fallbackEndpoint !== session.endpoint) {
-        const previousEndpoint = session.endpoint;
-        session.endpoint = fallbackEndpoint;
-        session.llmUrl = await resolveEndpointUrl(fallbackEndpoint);
-        session.model = LLM_CONFIG[fallbackEndpoint].defaultModel;
-        session.updatedAt = new Date();
-        llmUrl = session.llmUrl;
-        apiStyle = LLM_CONFIG[fallbackEndpoint].apiStyle;
-
-        eventBus.emit('endpoint_auto_fallback', {
-          session_id: session.id,
-          user_id: session.userId,
-          model: session.model,
-          endpoint: session.endpoint,
-          experience: session.experience,
-          metadata: {
-            from: previousEndpoint,
-            to: fallbackEndpoint,
-            reason: 'ollama_no_models'
-          }
-        });
-      }
-    } else if (modelResolution.adjusted) {
-      session.updatedAt = new Date();
-      eventBus.emit('model_auto_corrected', {
-        session_id: session.id,
-        user_id: session.userId,
-        model: session.model,
-        endpoint: session.endpoint,
-        experience: session.experience,
-        metadata: {
-          reason: modelResolution.reason,
-          resolvedModel: modelResolution.model
-        }
-      });
-    }
+const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
@@ -1708,14 +1765,19 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
 
   // Add user message to history
   session.messages.push({ role: 'user', content: message, timestamp: new Date() });
+  upsertSessionContext(session, logStructured);
 
-  if (!useSafeMode && session.endpoint === 'primary') {
+if (session.endpoint === 'primary') {
     session.llmUrl = await resolveEndpointUrl('primary');
   }
 
-  const llmUrl = useSafeMode ? NEMOCLAW_URL : session.llmUrl;
-  const apiStyle = useSafeMode ? 'ollama' : (LLM_CONFIG[session.endpoint]?.apiStyle || 'ollama');
-  const msgs = session.messages.map(m => ({ role: m.role, content: m.content }));
+  const safetyMode = resolveEffectiveSafetyMode(session, useSafeMode);
+  const prepared = await prepareSessionForLlmCall(session);
+  const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
+  const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
+  const systemMessages = buildSystemMessages({ ...session, safetyMode });
+  const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
+  const msgs = [...systemMessages, ...historyMessages];
 
   let fullContent = '';
 
@@ -1755,6 +1817,7 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
       if (!fullContent) fullContent = 'No response received';
       session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
       session.updatedAt = new Date();
+      upsertSessionContext(session, logStructured);
       send({ type: 'done', messageCount: session.messages.length });
       res.end();
     });
@@ -1765,6 +1828,7 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
       if (!fullContent) {
         session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
         session.updatedAt = new Date();
+        upsertSessionContext(session, logStructured);
       }
       send({ type: 'error', message: errMsg });
       res.end();
@@ -1778,6 +1842,7 @@ app.post('/api/sessions/:id/stream', async (req, res) => {
     const errMsg = `[Error] Could not reach LLM at ${llmUrl}: ${error.message}`;
     session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
     session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
     send({ type: 'error', message: errMsg });
     res.end();
   }
@@ -2616,6 +2681,7 @@ export {
   app,
   calculateAverageMessagesPerSession,
   checkModelInRunnerList,
+  chooseRunnableOllamaModel,
   classifyInput,
   coerceModelForEndpoint,
   detectPII,
