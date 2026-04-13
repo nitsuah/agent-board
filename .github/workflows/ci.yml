@@ -1,0 +1,29 @@
+# .github/workflows/ci.yml
+
+name: CI
+
+on:
+  push:
+    branches: [ main, feedback-dev-* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+      - name: Docker Compose Build
+        run: docker compose build
+      - name: Docker Compose Up
+        run: docker compose up -d
+      - name: Check Docker Compose Services
+        run: docker compose ps
