@@ -1,0 +1,13 @@
+# model-manifest.json
+#
+# Controls which models are loaded at startup. Only models listed in "enabled" will be loaded.
+# To add more models, add their names to the "enabled" array and ensure they are pulled via Ollama or Docker Model Runner.
+# Example: "qwen3-coder:latest", "glm-4.7-flash:latest"
+{
+  "default": "llama2:latest",
+  "enabled": [
+    "llama2:latest"
+    // "qwen3-coder:latest",
+    // "glm-4.7-flash:latest"
+  ]
+}
