@@ -87,9 +87,26 @@ scripts/                      # Setup & management scripts
 docker-compose.yml            # Stack definition
 ```
 
-## Models
 
-Models are pulled into the `llm_qwen_coder` Ollama container. Currently available:
+## Models & Selective Loading
+
+Models are loaded at startup based on the `model-manifest.json` file in the repo root. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
+
+To enable additional models:
+1. Pull the model in your Ollama container (e.g. `docker exec ollama ollama pull qwen3-coder:latest`).
+2. Add the model name to the `enabled` array in `model-manifest.json`.
+3. Restart the stack.
+
+**Example `model-manifest.json`:**
+```json
+{
+  "default": "llama2:latest",
+  "enabled": [
+    "llama2:latest",
+    "qwen3-coder:latest"
+  ]
+}
+```
 
 | Model | Size | Use |
 |---|---|---|
@@ -99,8 +116,8 @@ Models are pulled into the `llm_qwen_coder` Ollama container. Currently availabl
 
 Pull additional models:
 ```powershell
-docker exec llm_qwen_coder ollama pull llama3.2:latest   # 2 GB, good general model
-docker exec llm_qwen_coder ollama pull qwen3:1.7b        # 1.4 GB, small but capable
+docker exec ollama ollama pull llama3.2:latest   # 2 GB, good general model
+docker exec ollama ollama pull qwen3:1.7b        # 1.4 GB, small but capable
 ```
 
 ### Docker Model Runner (optional)
@@ -170,6 +187,17 @@ dashboard/
 .\scripts\stack-manager.ps1 -Action logs     # Tail logs
 ```
 
+## Testing Framework Setup (Planned)
+
+This project currently does not have a default testing framework. Recommended next steps:
+
+- For Python: Add pytest and sample tests if/when Python code is introduced.
+- For Node.js/JS: Add Jest or Vitest if/when Node/JS code is introduced.
+- For Docker/infra: Add test scripts or use Testcontainers for integration testing.
+
+See TASKS.md for pending test coverage and safety-layer validation items.
+
+
 ## Troubleshooting
 
 **Chat returns error / LLM not responding**
@@ -185,6 +213,60 @@ dashboard/
 - Ollama: `8081` (host) → `8080` (container)
 - NemoClaw: `9000` → `8080`
 - Dashboard: `3000` → `3000`
+
+
+## GPU Acceleration (CUDA/RTX 4080)
+
+To enable GPU acceleration for Ollama (recommended for RTX 4080 or similar):
+
+1. **Install NVIDIA drivers** for your GPU (latest version recommended).
+2. **Install NVIDIA Container Toolkit** on your host:
+   - https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+3. **Update Docker Compose** to use the NVIDIA runtime for the Ollama service:
+   - Add to `ollama` service:
+     ```yaml
+     deploy:
+       resources:
+         reservations:
+           devices:
+             - driver: nvidia
+               count: 1
+               capabilities: [gpu]
+     runtime: nvidia
+     environment:
+       - NVIDIA_VISIBLE_DEVICES=all
+     ```
+   - Or run with: `docker compose --gpus all up`
+4. **Verify GPU is detected**:
+   - `docker exec ollama nvidia-smi`
+   - Ollama logs should show CUDA device available.
+5. **Documented models**: After enabling GPU, add larger models to `model-manifest.json` as needed.
+
+**Note:** If you have an RTX 4080, you should see ~24 GB VRAM available. Only enable large models if you have sufficient VRAM.
+
+## Production Deployment
+
+For production use:
+
+- Use a dedicated secrets management solution (do not commit secrets to git).
+- Set strong passwords for Postgres and any external services.
+- Use Docker Compose overrides for production (e.g., `docker-compose.prod.yml`).
+- Restrict exposed ports to trusted networks only.
+- Enable HTTPS/SSL termination at the proxy or load balancer.
+- Monitor resource usage and logs (Jaeger, dashboard, Ollama, bb-mcp).
+- Regularly update images and dependencies.
+
+**Example production override:**
+```yaml
+services:
+  agent-dashboard:
+    environment:
+      - NODE_ENV=production
+      - OTEL_ENABLED=true
+      - OTEL_ENDPOINT=https://jaeger.prod.example.com:4318
+    ports:
+      - "127.0.0.1:3000:3000"  # Bind to localhost or internal network
+```
 
 ## Safety & Security
 
