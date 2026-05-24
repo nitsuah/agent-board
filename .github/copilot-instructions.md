@@ -4,9 +4,9 @@ This file provides custom instructions to GitHub Copilot when working in this re
 
 ## Project Context
 
-**Project Name:** [Your Project Name]  
-**Description:** [Brief description of what this project does]  
-**Tech Stack:** [e.g., Next.js, TypeScript, PostgreSQL, etc.]
+**Project Name:** Agent Board  
+**Description:** A local-first control room for multi-model AI workflows — chat surface, safety rails, and live observability in one place.  
+**Tech Stack:** React, Vite, Express, JavaScript (ES modules), Node.js, PostgreSQL, WebSockets, OpenTelemetry, Docker
 
 ## Code Style & Conventions
 
@@ -19,7 +19,7 @@ This file provides custom instructions to GitHub Copilot when working in this re
 
 ### Language-Specific Guidelines
 
-- **TypeScript**: Use strict mode, prefer interfaces over types for object shapes
+- **JavaScript**: Use ES modules (`import`/`export`), prefer `async`/`await` over raw promise chains
 - **React**: Use functional components with hooks, avoid class components
 - **Database**: Use parameterized queries, never string concatenation for SQL
 - **Testing**: Write tests for all new features, aim for >80% coverage
@@ -27,25 +27,24 @@ This file provides custom instructions to GitHub Copilot when working in this re
 ### File Organization
 
 - Keep files focused on a single responsibility
-- Use index files for barrel exports where appropriate
-- Place types in dedicated `types/` directory or co-located with implementation
 - Group related functionality in feature-specific directories
+- Place server-side code in `dashboard/` alongside `server.js`
+- Place frontend React components under `dashboard/src/`
 
 ## Architecture Patterns
 
 ### Component Structure
 
-- Follow atomic design principles (atoms, molecules, organisms)
-- Keep components small and composable
+- Keep React components small and composable
 - Extract shared logic into custom hooks
 - Use composition over prop drilling
 
 ### Data Flow
 
-- Use server components for data fetching when possible
-- Implement proper error boundaries
+- Server-side endpoints are Express REST routes
+- Frontend communicates with the backend via `fetch` and WebSocket (`ws`)
+- Implement proper error boundaries in React
 - Handle loading states consistently
-- Use optimistic updates for better UX
 
 ### API Design
 
@@ -58,24 +57,22 @@ This file provides custom instructions to GitHub Copilot when working in this re
 
 - Write unit tests for utility functions and helpers
 - Write integration tests for API endpoints
-- Write E2E tests for critical user flows
+- Run tests with `npm test` inside the `dashboard/` directory
+- Run coverage with `npm run test:coverage`
 - Mock external dependencies in tests
 
 ## Security Considerations
 
 - Never commit secrets, API keys, or credentials
 - Validate and sanitize all user inputs
-- Use environment variables for configuration
-- Implement proper authentication and authorization
+- Use environment variables for configuration (see `.env.example`)
 - Follow OWASP security best practices
 
 ## Performance Guidelines
 
 - Optimize database queries (use indexes, avoid N+1 queries)
-- Implement proper caching strategies
-- Use code splitting and lazy loading
-- Optimize images and assets
-- Monitor bundle size and runtime performance
+- Use WebSocket events for real-time updates instead of polling
+- Monitor bundle size with `npm run build`
 
 ## Documentation Requirements
 
@@ -86,23 +83,20 @@ This file provides custom instructions to GitHub Copilot when working in this re
 
 ## Common Pitfalls to Avoid
 
-- Don't use `any` type in TypeScript
-- Don't bypass TypeScript errors with `@ts-ignore`
-- Don't commit console.log statements
-- Don't hardcode configuration values
+- Don't use TypeScript — this project is plain JavaScript
+- Don't commit `console.log` statements
+- Don't hardcode configuration values — use environment variables
 - Don't skip error handling
-- Don't mix async/await with promise chains
+- Don't mix `async`/`await` with raw `.then()` chains
 
 ## Preferred Libraries & Tools
 
-- [List your preferred libraries for common tasks]
-- [Include reasoning for why certain libraries are preferred]
-
-## Additional Context
-
-- [Any project-specific quirks or special considerations]
-- [Links to relevant documentation or ADRs]
-- [Team conventions or preferences]
+- **HTTP server**: Express
+- **WebSockets**: `ws`
+- **HTTP client (server-side)**: axios
+- **Bundler**: Vite
+- **Observability**: OpenTelemetry SDK + Jaeger
+- **Database**: PostgreSQL via `pg`
 
 ---
 

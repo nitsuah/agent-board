@@ -32,7 +32,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by opening a [GitHub issue](https://github.com/nitsuah/agent-board/issues) or contacting the project maintainer directly at https://github.com/nitsuah. All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 

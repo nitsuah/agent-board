@@ -13,7 +13,7 @@ We release patches for security vulnerabilities in the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-If you discover a security vulnerability, please report it by emailing the maintainers directly. You can expect:
+If you discover a security vulnerability, please report it via [GitHub Security Advisories](https://github.com/nitsuah/agent-board/security/advisories/new) (private vulnerability reporting). Do not share details publicly until a fix has been released. You can expect:
 
 1. **Acknowledgment**: We'll acknowledge receipt of your vulnerability report within 48 hours
 2. **Updates**: We'll send you regular updates about our progress

@@ -1,4 +1,4 @@
-# Contributing to [Project Name]
+# Contributing to Agent Board
 
 Thank you for your interest in contributing! We welcome contributions from everyone.
 
@@ -15,19 +15,19 @@ Thank you for your interest in contributing! We welcome contributions from every
 
 ## 🤝 Code of Conduct
 
-This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to [maintainer@email.com].
+This project adheres to a Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior by opening an issue or contacting the maintainer at https://github.com/nitsuah.
 
 ## 🚀 Getting Started
 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/PROJECT_NAME.git
-   cd PROJECT_NAME
+   git clone https://github.com/YOUR_USERNAME/agent-board.git
+   cd agent-board
    ```
 3. **Add the upstream repository**:
    ```bash
-   git remote add upstream https://github.com/ORIGINAL_OWNER/PROJECT_NAME.git
+   git remote add upstream https://github.com/nitsuah/agent-board.git
    ```
 4. **Create a new branch** for your changes:
    ```bash
@@ -55,8 +55,7 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- [List required software, tools, and versions]
-- Example: Node.js 18+, npm/yarn, etc.
+- Node.js 18+, npm
 
 ### Installation
 
@@ -77,25 +76,13 @@ npm run dev
 # Run all tests
 npm test
 
-# Run tests in watch mode
-npm run test:watch
-
 # Run tests with coverage
 npm run test:coverage
 ```
 
 ### Code Formatting
 
-```bash
-# Format code
-npm run format
-
-# Lint code
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
-```
+This project does not have automated formatting scripts. Follow the existing code style manually when making changes.
 
 ## 🔄 Pull Request Process
 
@@ -202,7 +189,7 @@ When suggesting features, please include:
 - **Alternatives considered**: Other approaches you've thought about
 - **Additional context**: Screenshots, mockups, examples
 
-Use the [feature request template](../../issues/new?template=feature_request.md) if available.
+Open a [new issue](../../issues/new) to suggest a feature.
 
 ## 🙏 Recognition
 
@@ -221,7 +208,6 @@ By contributing, you agree that your contributions will be licensed under the sa
 If you have questions, feel free to:
 
 - Open an issue with the `question` label
-- Join our [community chat/forum]
-- Contact the maintainers at [contact@email.com]
+- Contact the maintainer at https://github.com/nitsuah
 
 Thank you for contributing! 🎉
