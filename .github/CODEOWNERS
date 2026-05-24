@@ -1,0 +1,55 @@
+# CODEOWNERS
+
+> This file defines who owns and should review changes to specific files or directories.
+> Learn more: [CODEOWNERS](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+
+## Global owners - these users will be requested for review on all PRs
+
+* @OWNER_USERNAME
+
+## Documentation
+
+*.md @OWNER_USERNAME
+/docs/ @OWNER_USERNAME
+
+## Configuration files
+
+*.json @OWNER_USERNAME
+*.yaml @OWNER_USERNAME
+*.yml @OWNER_USERNAME
+*.toml @OWNER_USERNAME
+
+## CI/CD workflows
+
+/.github/workflows/ @OWNER_USERNAME
+
+## Source code
+
+/src/ @OWNER_USERNAME
+/lib/ @OWNER_USERNAME
+/app/ @OWNER_USERNAME
+/components/ @OWNER_USERNAME
+
+## Database
+
+/database/ @OWNER_USERNAME
+*.sql @OWNER_USERNAME
+
+## Tests
+
+/tests/ @OWNER_USERNAME
+/test/ @OWNER_USERNAME
+*.test.* @OWNER_USERNAME
+*.spec.* @OWNER_USERNAME
+
+## Infrastructure & deployment
+
+/infrastructure/ @OWNER_USERNAME
+/terraform/ @OWNER_USERNAME
+Dockerfile @OWNER_USERNAME
+docker-compose*.yml @OWNER_USERNAME
+
+## Security-sensitive files
+
+/SECURITY.md @OWNER_USERNAME
+/.github/workflows/ @OWNER_USERNAME
