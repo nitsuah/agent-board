@@ -34,7 +34,7 @@ const PORT = process.env.PORT || 3000;
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
-const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'docker-compose.yml');
+const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'config', 'docker-compose.yml');
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
 
 // LLM Configuration - Support multiple endpoints

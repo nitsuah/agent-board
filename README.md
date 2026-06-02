@@ -37,14 +37,14 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ```powershell
 cd C:\Users\$env:USERNAME\code\agent-board
-docker compose up -d
+docker compose -f config/docker-compose.yml up -d
 ```
 
 Enable Blackboard MCP only when needed:
 
 ```powershell
 $env:BB_MCP_ENABLED='true'
-docker compose --profile bb-mcp up -d
+docker compose -f config/docker-compose.yml --profile bb-mcp up -d
 ```
 
 Open these endpoints:
@@ -80,11 +80,13 @@ dashboard/                    # Web UI & API server (React + Express)
   src/                        # React frontend
   tests/                      # Integration tests
   Dockerfile
-config/                       # Configuration (future)
+config/                       # Stack config and model manifests
+  docker-compose.yml          # Stack definition
+  model-manifest.json         # Model loading config
+  connectors.json             # Connector config
 llm/                          # Model configs / Modelfiles (future)
 services/                     # Additional microservices (future)
 scripts/                      # Setup & management scripts
-docker-compose.yml            # Stack definition
 ```
 
 
