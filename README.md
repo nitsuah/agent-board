@@ -90,14 +90,14 @@ docker-compose.yml            # Stack definition
 
 ## Models & Selective Loading
 
-Models are loaded at startup based on the `model-manifest.json` file in the repo root. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
+Models are loaded at startup based on the `config/model-manifest.json` file. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
 
 To enable additional models:
 1. Pull the model in your Ollama container (e.g. `docker exec ollama ollama pull qwen3-coder:latest`).
-2. Add the model name to the `enabled` array in `model-manifest.json`.
+2. Add the model name to the `enabled` array in `config/model-manifest.json`.
 3. Restart the stack.
 
-**Example `model-manifest.json`:**
+**Example `config/model-manifest.json`:**
 ```json
 {
   "default": "llama2:latest",
@@ -240,7 +240,7 @@ To enable GPU acceleration for Ollama (recommended for RTX 4080 or similar):
 4. **Verify GPU is detected**:
    - `docker exec ollama nvidia-smi`
    - Ollama logs should show CUDA device available.
-5. **Documented models**: After enabling GPU, add larger models to `model-manifest.json` as needed.
+5. **Documented models**: After enabling GPU, add larger models to `config/model-manifest.json` as needed.
 
 **Note:** If you have an RTX 4080, you should see ~24 GB VRAM available. Only enable large models if you have sufficient VRAM.
 
