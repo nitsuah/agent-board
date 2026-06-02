@@ -173,6 +173,16 @@ services:
     networks:
       - agent-network
 
+  # ===== TEST (unit — no stack required) =====
+  test:
+    build:
+      context: ../dashboard
+      target: test
+    profiles:
+      - test
+    environment:
+      - AGENT_DASHBOARD_DISABLE_LISTEN=1
+
 volumes:
   agent_db_data:
   ollama_data:  # Local Ollama model storage (llama2, etc.)

@@ -179,25 +179,39 @@ dashboard/
 └── Dockerfile
 ```
 
-## Management Scripts
+## Development Workflow
 
+All lint, test, and quality checks run via Docker — no local Node.js required.
+
+**Run unit tests:**
 ```powershell
-.\scripts\stack-manager.ps1 -Action start    # Start all containers
-.\scripts\stack-manager.ps1 -Action stop     # Stop all
-.\scripts\stack-manager.ps1 -Action restart  # Restart all
-.\scripts\stack-manager.ps1 -Action status   # Show status
-.\scripts\stack-manager.ps1 -Action logs     # Tail logs
+docker compose -f config/docker-compose.yml --profile test run --rm test
 ```
 
-## Testing Framework Setup (Planned)
+**Start the full stack:**
+```powershell
+docker compose -f config/docker-compose.yml up -d
+```
 
-This project currently does not have a default testing framework. Recommended next steps:
+**Stack management:**
+```powershell
+.\scripts\stack-manager.ps1 -Action start
+.\scripts\stack-manager.ps1 -Action stop
+.\scripts\stack-manager.ps1 -Action status
+.\scripts\stack-manager.ps1 -Action logs
+```
 
-- For Python: Add pytest and sample tests if/when Python code is introduced.
-- For Node.js/JS: Add Jest or Vitest if/when Node/JS code is introduced.
-- For Docker/infra: Add test scripts or use Testcontainers for integration testing.
+**Pre-commit hooks** (installs git hooks for whitespace/yaml checks; unit tests run on push):
+```powershell
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+```
 
-See TASKS.md for pending test coverage and safety-layer validation items.
+**Integration tests** require a running stack (`docker compose up -d`) then:
+```powershell
+cd dashboard && npm run test:integration
+```
 
 
 ## Troubleshooting
