@@ -37,14 +37,14 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ```powershell
 cd C:\Users\$env:USERNAME\code\agent-board
-docker compose up -d
+docker compose -f config/docker-compose.yml up -d
 ```
 
 Enable Blackboard MCP only when needed:
 
 ```powershell
 $env:BB_MCP_ENABLED='true'
-docker compose --profile bb-mcp up -d
+docker compose -f config/docker-compose.yml --profile bb-mcp up -d
 ```
 
 Open these endpoints:
@@ -80,24 +80,26 @@ dashboard/                    # Web UI & API server (React + Express)
   src/                        # React frontend
   tests/                      # Integration tests
   Dockerfile
-config/                       # Configuration (future)
+config/                       # Stack config and model manifests
+  docker-compose.yml          # Stack definition
+  model-manifest.json         # Model loading config
+  connectors.json             # Connector config
 llm/                          # Model configs / Modelfiles (future)
 services/                     # Additional microservices (future)
 scripts/                      # Setup & management scripts
-docker-compose.yml            # Stack definition
 ```
 
 
 ## Models & Selective Loading
 
-Models are loaded at startup based on the `model-manifest.json` file in the repo root. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
+Models are loaded at startup based on the `config/model-manifest.json` file. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
 
 To enable additional models:
 1. Pull the model in your Ollama container (e.g. `docker exec ollama ollama pull qwen3-coder:latest`).
-2. Add the model name to the `enabled` array in `model-manifest.json`.
+2. Add the model name to the `enabled` array in `config/model-manifest.json`.
 3. Restart the stack.
 
-**Example `model-manifest.json`:**
+**Example `config/model-manifest.json`:**
 ```json
 {
   "default": "llama2:latest",
@@ -177,25 +179,39 @@ dashboard/
 └── Dockerfile
 ```
 
-## Management Scripts
+## Development Workflow
 
+All lint, test, and quality checks run via Docker — no local Node.js required.
+
+**Run unit tests:**
 ```powershell
-.\scripts\stack-manager.ps1 -Action start    # Start all containers
-.\scripts\stack-manager.ps1 -Action stop     # Stop all
-.\scripts\stack-manager.ps1 -Action restart  # Restart all
-.\scripts\stack-manager.ps1 -Action status   # Show status
-.\scripts\stack-manager.ps1 -Action logs     # Tail logs
+docker compose -f config/docker-compose.yml --profile test run --rm test
 ```
 
-## Testing Framework Setup (Planned)
+**Start the full stack:**
+```powershell
+docker compose -f config/docker-compose.yml up -d
+```
 
-This project currently does not have a default testing framework. Recommended next steps:
+**Stack management:**
+```powershell
+.\scripts\stack-manager.ps1 -Action start
+.\scripts\stack-manager.ps1 -Action stop
+.\scripts\stack-manager.ps1 -Action status
+.\scripts\stack-manager.ps1 -Action logs
+```
 
-- For Python: Add pytest and sample tests if/when Python code is introduced.
-- For Node.js/JS: Add Jest or Vitest if/when Node/JS code is introduced.
-- For Docker/infra: Add test scripts or use Testcontainers for integration testing.
+**Pre-commit hooks** (installs git hooks for whitespace/yaml checks; unit tests run on push):
+```powershell
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+```
 
-See TASKS.md for pending test coverage and safety-layer validation items.
+**Integration tests** require a running stack (`docker compose up -d`) then:
+```powershell
+cd dashboard && npm run test:integration
+```
 
 
 ## Troubleshooting
@@ -240,7 +256,7 @@ To enable GPU acceleration for Ollama (recommended for RTX 4080 or similar):
 4. **Verify GPU is detected**:
    - `docker exec ollama nvidia-smi`
    - Ollama logs should show CUDA device available.
-5. **Documented models**: After enabling GPU, add larger models to `model-manifest.json` as needed.
+5. **Documented models**: After enabling GPU, add larger models to `config/model-manifest.json` as needed.
 
 **Note:** If you have an RTX 4080, you should see ~24 GB VRAM available. Only enable large models if you have sufficient VRAM.
 

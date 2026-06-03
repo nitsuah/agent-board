@@ -9,7 +9,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ComposeFile = "$PSScriptRoot/../docker-compose.yml"
+$ComposeFile = "$PSScriptRoot/../config/docker-compose.yml"
 
 function Write-Header {
     param([string]$text)
