@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-04-03
+Last Updated: 2026-06-02
 
 ## 2025 Q1 - Foundation and Dashboard
 
@@ -25,40 +25,53 @@ Last Updated: 2026-04-03
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
 
-## 2026 Q2 - Extensibility and Team Readiness
+## 2026 Q2 - Extensibility Foundations
 
-### Stability & Resource Optimization (CEO Priority)
-- [ ] **Docker image optimization**: Reduce container footprint by making heavy subsystems (e.g., bb-mcp, large model pre-loads) opt-in rather than always-on. Logging, metrics, and the database must always be available.
-- [ ] **Selective model loading**: Only load models explicitly enabled by configuration; default to a lightweight profile suitable for laptops and lower-memory environments.
-- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices and pass CUDA/device flags to the Ollama runtime so inference executes on GPU when available. Document prerequisites including driver and container-toolkit requirements.
-- [ ] **File I/O and workspace access**: Add an agent capability to read and write files within a user-selected folder, enabling code authoring and git commits to local codebases via configurable workspace mounts.
-
-### MCP Container Ecosystem (CEO Priority)
-- [ ] **MCP container manager**: Introduce a lightweight manager service (or API layer) that can spin MCP tool containers up and down on demand — e.g., Playwright MCP, Jira/Confluence MCP, Docker Hub–sourced MCPs — without requiring them to run continuously.
-- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack so agent-board agents can use Blackboard tooling when the flag is set.
-- [ ] **Multi-MCP orchestration**: Design a registry pattern so new MCP containers can be declared and surfaced to agents without manual compose changes.
-
-### Existing Items
 - [ ] Add multi-tenancy and RBAC planning.
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
 
-## 2026 Q3 - Blackboard & MCP Frontend
+## 2026 Q3 - Custom Agents, Stability & MCP Ecosystem
+
+### Stability & Resource Optimization
+
+- [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in rather than always-on; logging, metrics, and the database remain required.
+- [ ] **Selective model loading**: Load only models explicitly enabled by configuration; default to a lightweight profile suitable for laptops and lower-memory environments.
+- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices and pass CUDA/device flags to the Ollama runtime; document driver and container-toolkit prerequisites.
+- [ ] **Service lifecycle management**: On-demand start/stop for models and services from the dashboard; surface per-service resource usage and running status.
+
+### Custom Agent System
+
+- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with its own worktree, context, and output stream.
+- [ ] **Plugin architecture**: Core plugin API for task-specific or integration-specific agent extensions; plugins register capabilities without modifying core code.
+- [ ] **BYOK external LLM integration**: Standardized key management and provider interface to connect Claude, Gemini, and other APIs directly from the dashboard.
+- [ ] **Local model bridge**: Adapter layer exposing local Ollama models to external tools; enables hybrid local/cloud agent workflows.
+- [ ] **Workspace file browser**: R/W access to user-selected directories with git-aware file tree navigation surfaced in the dashboard.
+- [ ] **File safety guardrails**: Require confirmation before destructive file operations; provide recovery options and pre-operation snapshots for agent-driven file work.
+- [ ] **Context persistence and code memory**: Visual file structure, file annotations, and cross-session agent memory to reduce context loss in long-running workflows.
+
+### MCP Container Ecosystem
+
+- [ ] **MCP container manager**: Lightweight manager service to spin MCP tool containers (Playwright, Jira/Confluence, Docker Hub–sourced MCPs) up and down on demand.
+- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack.
+- [ ] **Multi-MCP orchestration**: Registry pattern so new MCP containers can be declared and surfaced to agents without manual compose changes.
+
+## 2026 Q4 - Blackboard & MCP Frontend
 
 > agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server itself live here.
 
-- [ ] **bb-mcp streaming UI**: render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
-- [ ] **Multi-persona Blackboard workflows**: surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas in the dashboard; each persona loads its permitted tool set.
-- [ ] **Blackboard agent demo mode**: add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
-- [ ] **bb-mcp tool registry UI**: display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
-- [ ] **Portfolio-grade showcase path**: package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
+- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
+- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas; each persona loads its permitted tool set.
+- [ ] **Blackboard agent demo mode**: Add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
+- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
+- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
 
 ## Notes
 
 - The stack is still local-first and Docker-native.
-- Q2 critical path: (1) Docker optimization + GPU → (2) file I/O + workspace access → (3) MCP container manager → (4) multi-tenancy & RBAC.
-- Q3 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
+- Q3 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
+- Q4 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
 - GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
