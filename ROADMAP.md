@@ -2,14 +2,14 @@
 
 Last Updated: 2026-06-02
 
-## 2025 Q1 - Foundation and Dashboard
+## 2026 Q1 - Foundation and Dashboard
 
 - [x] Establish the repository structure, dashboard shell, and local Docker stack.
 - [x] Ship the core dashboard UI and baseline model configuration.
 - [ ] Finish the real-time communication bridge that early docs implied.
 - [ ] Discover features from [1code](https://github.com/21st-dev/1code) and implement any relevant functionality or patterns into our stack (we're primarily focused on local models but want to see if there are useful patterns / approaches we can adopt from 1code to our design as well or include outright)
 
-## 2025 Q2 - Persistence and Agent Control
+## 2026 Q2 - Persistence and Agent Control
 
 - [ ] Implement persistence for agent history, logs, and state snapshots.
 - [ ] Ship the agent command interface for start, stop, and restart actions.
@@ -17,7 +17,7 @@ Last Updated: 2026-06-02
 - [x] Add webhook trigger ingestion and task creation path.
 - [ ] Add heartbeat and resource monitoring.
 
-## 2026 Q1 - Quality Reset
+## 2026 Q3 - Quality Reset
 
 - [x] P0: Restore coverage reporting and publish a trustworthy baseline.
 - [x] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
@@ -25,14 +25,24 @@ Last Updated: 2026-06-02
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
 
-## 2026 Q2 - Extensibility Foundations
+## 2026 Q4 - Extensibility Foundations
 
-- [ ] Add multi-tenancy and RBAC planning.
+- [ ] Add multi-tenancy (user login/sso/etc.) and RBAC planning.
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
 
-## 2026 Q3 - Custom Agents, Stability & MCP Ecosystem
+## 2026 Q4 - Blackboard & MCP Frontend
+
+> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server itself live here by improving the chat experience and feedback loops enabled theirein (improvements to both the underlying mcp and model/chat/guardrails around it by connecting to a real LRN instance).
+
+- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
+- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas; each persona loads its permitted tool set.
+- [ ] **Blackboard agent demo mode**: Add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
+- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
+- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
+
+## 2027 Q1 - Custom Agents, Stability & MCP Ecosystem
 
 ### Stability & Resource Optimization
 
@@ -43,29 +53,19 @@ Last Updated: 2026-06-02
 
 ### Custom Agent System
 
-- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with its own worktree, context, and output stream.
+- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with its own worktree, context, and output stream (cursor, codex, etc. can be its own panel/pane setup)
 - [ ] **Plugin architecture**: Core plugin API for task-specific or integration-specific agent extensions; plugins register capabilities without modifying core code.
 - [ ] **BYOK external LLM integration**: Standardized key management and provider interface to connect Claude, Gemini, and other APIs directly from the dashboard.
 - [ ] **Local model bridge**: Adapter layer exposing local Ollama models to external tools; enables hybrid local/cloud agent workflows.
 - [ ] **Workspace file browser**: R/W access to user-selected directories with git-aware file tree navigation surfaced in the dashboard.
 - [ ] **File safety guardrails**: Require confirmation before destructive file operations; provide recovery options and pre-operation snapshots for agent-driven file work.
-- [ ] **Context persistence and code memory**: Visual file structure, file annotations, and cross-session agent memory to reduce context loss in long-running workflows.
+- [ ] **Context persistence and code memory**: Visual file structure and agentic connections, file annotations, and cross-session agent memory to reduce context loss in long-running workflows. See the Neo4js.md `/docs` for more details on this vision. But our objective is building an immersive 3D AI "Memory Palace" workspace using Neo4j, Graphiti, and 3D Force Graph (WebGL) to map code structures and cross-session agent memories into an interactive, spatial context network.
 
 ### MCP Container Ecosystem
 
-- [ ] **MCP container manager**: Lightweight manager service to spin MCP tool containers (Playwright, Jira/Confluence, Docker Hub–sourced MCPs) up and down on demand.
-- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack.
+- [ ] **MCP container manager**: Lightweight manager service to spin MCP tool containers (Playwright, Jira/Confluence, Docker Hub–sourced MCPs) up and down on demand via UI.
+- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack. or make it specific to an agent/chat experience that can be enabled/disabled as needed.
 - [ ] **Multi-MCP orchestration**: Registry pattern so new MCP containers can be declared and surfaced to agents without manual compose changes.
-
-## 2026 Q4 - Blackboard & MCP Frontend
-
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server itself live here.
-
-- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
-- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas; each persona loads its permitted tool set.
-- [ ] **Blackboard agent demo mode**: Add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
-- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
-- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
 
 ## Notes
 
