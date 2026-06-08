@@ -4,13 +4,14 @@ param(
     [Parameter(Mandatory)]
     [string]$Slug,
 
-    [string]$SiteName = "",   # custom Netlify subdomain (slug used if blank)
-    [switch]$Draft            # preview deploy (no --prod flag)
+    [string]$SiteName  = "",  # custom Netlify subdomain (slug used if blank)
+    [switch]$Draft,           # preview deploy (no --prod flag)
+    [string]$OutputDir = ""   # defaults to ../output (correct on host and in container)
 )
 
 $ErrorActionPreference = "Stop"
-$projectDir = $PSScriptRoot
-$siteDir    = Join-Path $projectDir "output" $Slug "site"
+$outputRoot = if ($OutputDir) { $OutputDir } else { Join-Path $PSScriptRoot ".." "output" }
+$siteDir    = Join-Path $outputRoot $Slug "site"
 
 # ── Validate ──────────────────────────────────────────────────────────────────
 if (-not (Test-Path $siteDir)) {

@@ -11,16 +11,17 @@ param(
     [string] $Description  = "Website Design & Development — One-time setup",
     [string] $InvoiceNum   = "",
     [string] $DueDate      = "",
-    [switch] $Monthly                # generates $50/month recurring invoice instead
+    [switch] $Monthly,               # generates $50/month recurring invoice instead
+    [string] $OutputDir    = ""      # defaults to ../output (host and container safe)
 )
 
 $ErrorActionPreference = "Stop"
-$projectDir  = $PSScriptRoot
-$invoiceDir  = Join-Path $projectDir "output" $Slug "invoice"
+$outputRoot  = if ($OutputDir) { $OutputDir } else { Join-Path $PSScriptRoot ".." "output" }
+$invoiceDir  = Join-Path $outputRoot $Slug "invoice"
 New-Item -ItemType Directory -Force $invoiceDir | Out-Null
 
 # ── Load .env ─────────────────────────────────────────────────────────────────
-$envFile = Join-Path $projectDir ".env"
+$envFile = Join-Path $PSScriptRoot ".." ".env"
 $cfg = @{}
 if (Test-Path $envFile) {
     Get-Content $envFile | Where-Object { $_ -match '^\s*[^#]\S+=\S' } | ForEach-Object {

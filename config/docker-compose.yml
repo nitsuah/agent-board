@@ -232,8 +232,12 @@ services:
       - YOUR_COMPANY=${YOUR_COMPANY:-Your Web Agency}
       - YOUR_EMAIL=${YOUR_EMAIL:-}
       - YOUR_PHONE=${YOUR_PHONE:-}
+      # Netlify auth token — avoids interactive `netlify login` inside the container.
+      # Get yours at: https://app.netlify.com/user/applications#personal-access-tokens
+      - NETLIFY_AUTH_TOKEN=${NETLIFY_AUTH_TOKEN:-}
     volumes:
-      - website_output:/output
+      # /app/output matches $PSScriptRoot/../output inside the container scripts
+      - website_output:/app/output
       - ../tools/website/templates:/app/templates:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

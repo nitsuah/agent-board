@@ -47,7 +47,12 @@ function safeOutputPath(slug, ...parts) {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async function runPs1(script, args = {}) {
-  const argStr = Object.entries(args)
+  // Always inject OutputDir so scripts resolve paths correctly inside the
+  // container (/app/scripts/../output == /app/output, the mounted volume)
+  // as well as on the host (tools/website/scripts/../output).
+  const withOutputDir = { OutputDir: OUTPUT_DIR, ...args };
+
+  const argStr = Object.entries(withOutputDir)
     .filter(([, v]) => v !== undefined && v !== null && v !== '')
     .map(([k, v]) => {
       if (typeof v === 'boolean') return v ? `-${k}` : '';

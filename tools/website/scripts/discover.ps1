@@ -12,16 +12,20 @@ param(
     [string]$Category     = "restaurants",
     [int]   $Radius       = 5,          # miles
     [int]   $MaxResults   = 40,
-    [switch]$NoWebsiteOnly              # only return businesses without a website
+    [switch]$NoWebsiteOnly,             # only return businesses without a website
+    # OutputDir defaults to ../output relative to this script's location so it
+    # resolves correctly both on the host and inside the Docker container
+    # (/app/scripts/../output == /app/output, which is the mounted volume).
+    [string]$OutputDir    = ""
 )
 
 $ErrorActionPreference = "Stop"
 $projectDir  = $PSScriptRoot
-$outputDir   = Join-Path $projectDir "output"
+$outputDir   = if ($OutputDir) { $OutputDir } else { Join-Path $PSScriptRoot ".." "output" }
 New-Item -ItemType Directory -Force $outputDir | Out-Null
 
 # ── Load .env ─────────────────────────────────────────────────────────────────
-$envFile = Join-Path $projectDir ".env"
+$envFile = Join-Path $projectDir ".." ".env"
 $cfg = @{}
 if (Test-Path $envFile) {
     Get-Content $envFile | Where-Object { $_ -match '^\s*[^#]\S+=\S' } | ForEach-Object {

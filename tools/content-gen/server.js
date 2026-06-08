@@ -49,8 +49,21 @@ async function isMptRunning() {
 
 async function ensureMptRunning() {
   if (await isMptRunning()) return { started: false, message: 'already running' };
-  await execAsync(`docker compose -f "${MPT_COMPOSE}" up -d`);
-  // Wait up to 30s for it to become healthy
+
+  // Docker control requires the socket to be mounted
+  // (docker-compose.yml: uncomment /var/run/docker.sock when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true)
+  try {
+    await execAsync(`docker compose -f "${MPT_COMPOSE}" up -d`, { timeout: 10_000 });
+  } catch (err) {
+    if (err.message.includes('Cannot connect') || err.message.includes('socket')) {
+      throw new Error(
+        'MoneyPrinterTurbo is not running and Docker socket is not mounted.\n' +
+        `Start it manually on the host:\n  docker compose -f "${MPT_COMPOSE}" up -d`
+      );
+    }
+    throw err;
+  }
+
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
