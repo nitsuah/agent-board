@@ -173,6 +173,79 @@ services:
     networks:
       - agent-network
 
+  # ===== TOOL: CONTENT-GEN (profile: tools) =====
+  # AI video generation MCP server wrapping MoneyPrinterTurbo.
+  # MoneyPrinterTurbo itself runs on the HOST (not in this stack) because
+  # it manages its own Docker containers. This service just wraps its API.
+  # Enable with:  docker compose --profile tools up tool-content-gen
+  tool-content-gen:
+    build:
+      context: ../tools/content-gen
+      dockerfile: Dockerfile
+    container_name: tool-content-gen
+    restart: unless-stopped
+    profiles:
+      - tools
+    ports:
+      - "3200:3200"
+    environment:
+      - CONTENT_GEN_PORT=3200
+      - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
+      - MPT_UI_URL=${MPT_UI_URL:-http://host.docker.internal:8501}
+      - MONEYPRINTERTURBO_COMPOSE=${MONEYPRINTERTURBO_COMPOSE:-/workspace-root/content-gen/MoneyPrinterTurbo/docker-compose.yml}
+    volumes:
+      - ../:/workspace-root:ro
+      # Mount Docker socket so the server can start/stop MoneyPrinterTurbo
+      # Only enabled when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
+      # - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3200/health',(r)=>{r.resume();r.on('end',()=>process.exit(r.statusCode===200?0:1))}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - agent-network
+
+  # ===== TOOL: WEBSITE (profile: tools) =====
+  # B2B website generation MCP server. Runs website gen scripts on the host
+  # via PowerShell (mounted from workspace-root).
+  # Enable with:  docker compose --profile tools up tool-website
+  tool-website:
+    build:
+      context: ../tools/website
+      dockerfile: Dockerfile
+    container_name: tool-website
+    restart: unless-stopped
+    profiles:
+      - tools
+    ports:
+      - "3201:3201"
+    environment:
+      - WEBSITE_PORT=3201
+      - WEBSITE_OUTPUT_DIR=/output
+      - YELP_API_KEY=${YELP_API_KEY:-}
+      - GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY:-}
+      - YOUR_NAME=${YOUR_NAME:-}
+      - YOUR_COMPANY=${YOUR_COMPANY:-Your Web Agency}
+      - YOUR_EMAIL=${YOUR_EMAIL:-}
+      - YOUR_PHONE=${YOUR_PHONE:-}
+    volumes:
+      - website_output:/output
+      - ../tools/website/templates:/app/templates:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3201/health',(r)=>{r.resume();r.on('end',()=>process.exit(r.statusCode===200?0:1))}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - agent-network
+
   # ===== TEST (unit — no stack required) =====
   test:
     build:
@@ -187,6 +260,7 @@ volumes:
   agent_db_data:
   ollama_data:  # Local Ollama model storage (llama2, etc.)
   nemoclaw_data:
+  website_output:  # Persistent storage for generated client sites and pitch materials
 
 networks:
   agent-network:
