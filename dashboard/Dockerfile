@@ -1,4 +1,4 @@
-FROM node:22-slim AS base
+FROM node:26-slim AS base
 
 # Docker CLI is opt-in. Build with --build-arg INSTALL_DOCKER_CLI=true only in
 # trusted dev/CI environments where Docker socket access is explicitly required.
