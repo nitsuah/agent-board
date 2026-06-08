@@ -10,6 +10,13 @@ Last Updated: 2026-04-03
   - Priority: P1
   - Context: CEO flagged stability issues due to container size and memory usage on laptops and low-memory hosts.
   - Acceptance Criteria: `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services (bb-mcp, large models) are gated behind env flags and documented.
+  - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
+  - [ ] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.)
+
+- [ ] **[Q2-CEO] Model loading performance audit** — profile Ollama startup and model load times; identify bottlenecks and optimize for faster readiness.
+  - Priority: P1
+  - Context: large models take a long time to load, impacting development iteration speed and user experience.
+  - Acceptance Criteria: Ollama startup time is reduced by at least 50% for the default model set; profiling data is documented in the repo.
 
 - [ ] **[Q2-CEO] Selective model loading** — implement a model manifest or config flag so only explicitly requested models are loaded at startup; default to one small model.
   - Priority: P1
