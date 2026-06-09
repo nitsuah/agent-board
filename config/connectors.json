@@ -21,5 +21,47 @@
         "ferpa_tools": ["get_at_risk_students", "get_grade_distribution", "get_submission_status"]
       }
     }
+  ],
+  "tools": [
+    {
+      "id": "content-gen",
+      "name": "AI Video Generator",
+      "description": "Generate AI short videos from any topic using MoneyPrinterTurbo. Handles Docker lifecycle, renders HD portrait/landscape videos with subtitles, and returns download URLs.",
+      "mcp_server": "http://tool-content-gen:3200",
+      "mcp_server_local": "http://localhost:3200",
+      "system_prompt": "You are a creative video production assistant with access to an AI video generation pipeline. You can generate short-form videos on any topic, check render status, and manage the video generation container. Ask the user for a topic and any preferences (aspect ratio, language, subtitles). Report download URLs clearly when renders complete.",
+      "safety_config": "standard",
+      "guided_prompts": [
+        "Generate a 60-second video about [topic]",
+        "Make a portrait video for social media about [topic]",
+        "Create 3 videos about [topic] for A/B testing",
+        "Check the status of my video generation",
+        "Is the video generator running?"
+      ],
+      "tool_host": "local",
+      "requires": ["docker", "powershell"],
+      "source": "tools/content-gen",
+      "port": 3200
+    },
+    {
+      "id": "website",
+      "name": "B2B Website Generator",
+      "description": "Full B2B website sales pipeline: discover local businesses without websites, generate personalized pitch decks and cold emails, build industry-specific static sites, deploy to Netlify, and create invoices.",
+      "mcp_server": "http://tool-website:3201",
+      "mcp_server_local": "http://localhost:3201",
+      "system_prompt": "You are a B2B web agency assistant specializing in getting local businesses online fast and affordably. You can find businesses that need websites near any ZIP code, generate personalized pitch materials, build complete static sites, deploy them to Netlify, and create professional invoices. Default package: $500 one-time setup + $50/month maintenance. Be consultative — ask about the client's business before generating. Always generate real, compelling copy (never lorem ipsum).",
+      "safety_config": "standard",
+      "guided_prompts": [
+        "Find businesses near ZIP [code] that need a website",
+        "Generate a pitch deck for [business name]",
+        "Build a website for [business name] in [city]",
+        "Deploy the site for [slug] to Netlify",
+        "Create an invoice for [business name]"
+      ],
+      "tool_host": "local",
+      "requires": ["powershell", "netlify-cli"],
+      "source": "tools/website",
+      "port": 3201
+    }
   ]
 }

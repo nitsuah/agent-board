@@ -1,0 +1,38 @@
+Subject: Quick question about [COMPANY_NAME]'s online presence
+
+Hi [OWNER_NAME / "there"],
+
+I was searching for [CATEGORY] in [CITY] and came across [COMPANY_NAME].
+[PERSONALIZED_HOOK — e.g., "Loved the reviews about your [specific dish / service]!"]
+
+I noticed you [don't have a website yet / have a website that could use a refresh],
+and I wanted to reach out because I specialize in helping local [CATEGORY] businesses
+like yours get a professional online presence — fast and affordably.
+
+Here's what I put together for businesses like [COMPANY_NAME]:
+
+✓ Modern, mobile-friendly website live in 2 weeks
+✓ AI-powered chat widget (answers questions 24/7, captures leads while you sleep)
+✓ Google-ready SEO so people in [CITY] can find you
+✓ Lifetime hosting + monthly updates for $50/month
+
+One-time setup fee: $500. No surprises.
+
+I put together a quick preview of what your site could look like —
+I'd love to share it. Mind if I send it over, or hop on a 10-minute call this week?
+
+[YOUR_NAME]
+[YOUR_PHONE]
+[YOUR_EMAIL]
+
+P.S. — I only take on a handful of local clients at a time so I can give each one
+proper attention. Happy to answer any questions!
+
+---
+NOTES FOR PERSONALIZATION:
+- Replace [OWNER_NAME] with the owner's name if known (check Google/Yelp)
+- [PERSONALIZED_HOOK] should reference something specific about their business
+  (a popular item, a recent review, an award, years in business)
+- Adjust the tone based on industry (more formal for legal/medical, casual for restaurants)
+- For businesses with an existing website: change the hook to "I noticed your site
+  hasn't been updated in a while / isn't mobile-friendly"
