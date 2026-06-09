@@ -113,3 +113,9 @@ Voiceover:
 - If metrics lag: wait 2-3 seconds and refresh metrics endpoint cards
 - If Jaeger looks empty: generate one fresh message then refresh search
 - If Docker runner shows not loaded: continue demo; this is acceptable and already surfaced in health status
+
+## Assets
+
+- [[DEMO_VIDEO_120S.srt]] — 2-minute demo captions
+- [[DEMO_VIDEO_60S.srt]] — 60-second cut captions
+- [[DEMO_VIDEO_60S_MOBILE.srt]] — 60-second mobile cut captions
