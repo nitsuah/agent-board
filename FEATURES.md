@@ -26,6 +26,8 @@
 - **Environment Variable Configuration** - Flexible setup using `.env` files for secrets and system paths.
 - `[planned]` **Resource Usage Monitoring** - Visual tracking of CPU and memory consumption per agent process.
 - **Health Check Endpoints** - Built-in diagnostic routes for integration with uptime monitors and orchestrators.
+- **Service Discovery and Panel Control** - Backend resolves primary LLM URL from a candidate list; exposes controllability metadata and gated start/stop/restart service actions; system panel surfaces discovery data and live controls.
+- **bb-mcp Opt-In Integration** - `BB_MCP_ENABLED` compose profile flag gates the bb-mcp service; dashboard API hides Blackboard connectors and proxy routes when disabled, keeping the default footprint minimal.
 
 ## Security
 - `[planned]` **Secure API Key Management** - Encrypted storage and masking of sensitive credentials used by agents.
