@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-04-03
+Last Updated: 2026-06-08
 
 ## Todo
 
@@ -50,18 +50,6 @@ Last Updated: 2026-04-03
 
 ### P2 - Medium
 
-- [ ] **[Q2-CEO] MCP container manager** — design and implement a lightweight manager (container or API) that can spin up/down MCP tool containers (Playwright MCP, Jira/Confluence MCP, bb-mcp) on demand.
-  - Priority: P2
-  - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
-  - Acceptance Criteria: at least one MCP container (e.g., Playwright) can be started, used, and stopped via the manager API; compose integration documented.
-
-- [x] **[Q2-CEO] bb-mcp opt-in integration** — add `BB_MCP_ENABLED` env flag to compose; when set, wire bb-mcp as an available MCP provider for agents.
-  - Priority: P2
-  - Context: bb-mcp is a sister repo providing Blackboard/LMS tooling; agents should be able to use it without it running by default.
-  - Acceptance Criteria: `BB_MCP_ENABLED=true docker compose up` starts bb-mcp alongside agent-board; agents can invoke its tools; disabled by default.
-  - Completed: 2026-04-03
-  - Evidence: `docker-compose.yml` now gates `bb-mcp` behind profile `bb-mcp`; `agent-dashboard` receives `BB_MCP_ENABLED`; dashboard API hides Blackboard connectors and proxy routes when disabled.
-
 - [ ] Add a GPU-oriented model portfolio after CUDA is enabled.
   - Priority: P2
   - Context: the repo needs an explicit plan for which large and small models should live on GPU without displacing the existing CPU workflows.
@@ -76,6 +64,11 @@ Last Updated: 2026-04-03
   - Priority: P2
   - Context: the stack is local-first today and still lacks an agreed production deployment contract.
   - Acceptance Criteria: deployment guide or prod compose path exists and secrets handling is documented.
+
+- [ ] **[Q2-CEO] MCP container manager** — design and implement a lightweight manager (container or API) that can spin up/down MCP tool containers (Playwright MCP, Jira/Confluence MCP, bb-mcp) on demand.
+  - Priority: P2
+  - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
+  - Acceptance Criteria: at least one MCP container (e.g., Playwright) can be started, used, and stopped via the manager API; compose integration documented.
 
 - [ ] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
   - Priority: P2
@@ -120,25 +113,6 @@ Last Updated: 2026-04-03
   - Acceptance Criteria: two agents exchange events in a documented demo path.
 
 ## In Progress
-
-## Done
-
-- [x] Add service discovery and system-panel service control backlayer.
-  - Completed: 2026-04-03
-  - Evidence: backend now resolves primary LLM URL from candidate list (`/api/system/services`), exposes controllability metadata, and supports gated `start|stop|restart` service actions; system panel now shows discovery data and action controls.
-
-- [x] Restore test coverage reporting baseline with Docker (`npm run test:coverage`) and publish measured values in METRICS.md.
-- [x] Audit shipped versus planned features in FEATURES.md with explicit status markers.
-- [x] Verify safety layer behavior via passing tests in `dashboard/tests/safety-layer.js`.
-- [x] Add webhook trigger story with tested endpoint (`POST /api/webhooks/trigger`) and API docs.
-- [x] Project setup and architecture foundation.
-- [x] Core dashboard UI.
-- [x] Service containerization for dashboard, Ollama, Jaeger, and NemoClaw.
-- [x] Agent configuration and model support.
-- [x] Initial REST API documentation in `docs/API.md`.
-- [x] Observability stack wiring.
-- [x] Baseline security features.
-- [x] Core docs in `docs/`.
 
 <!--
 AGENT INSTRUCTIONS:

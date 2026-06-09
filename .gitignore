@@ -68,3 +68,5 @@ tools/content-gen/output/
 # Tool: local .env overrides (secrets)
 tools/content-gen/.env
 tools/website/.env
+
+.claude/worktrees/

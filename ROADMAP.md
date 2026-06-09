@@ -1,26 +1,21 @@
 # ROADMAP
 
-Last Updated: 2026-06-02
+Last Updated: 2026-06-08
 
-## 2026 Q1 - Foundation and Dashboard
+## 2026 Q1 - Foundation and Dashboard ✅
 
-- [x] Establish the repository structure, dashboard shell, and local Docker stack.
-- [x] Ship the core dashboard UI and baseline model configuration.
-- [ ] Finish the real-time communication bridge that early docs implied.
-- [ ] Discover features from [1code](https://github.com/21st-dev/1code) and implement any relevant functionality or patterns into our stack (we're primarily focused on local models but want to see if there are useful patterns / approaches we can adopt from 1code to our design as well or include outright)
+> Completed. See FEATURES.md for shipped capabilities.
 
 ## 2026 Q2 - Persistence and Agent Control
 
 - [ ] Implement persistence for agent history, logs, and state snapshots.
 - [ ] Ship the agent command interface for start, stop, and restart actions.
-- [x] Add task queue visibility and routing.
-- [x] Add webhook trigger ingestion and task creation path.
 - [ ] Add heartbeat and resource monitoring.
+- [ ] Finish the real-time communication bridge that early docs implied.
+- [ ] Discover features from [1code](https://github.com/21st-dev/1code) and implement any relevant functionality or patterns into our stack (we're primarily focused on local models but want to see if there are useful patterns / approaches we can adopt from 1code to our design as well or include outright)
 
 ## 2026 Q3 - Quality Reset
 
-- [x] P0: Restore coverage reporting and publish a trustworthy baseline.
-- [x] P1: Audit FEATURES.md and mark shipped versus planned capabilities.
 - [ ] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
