@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "MoneyPrinterTurbo"
+$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "modules\MoneyPrinterTurbo"
 $outputDir = Join-Path $mptDir "storage\local_materials"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 

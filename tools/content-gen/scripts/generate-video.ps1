@@ -25,7 +25,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "MoneyPrinterTurbo"
+$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "modules\MoneyPrinterTurbo"
 $apiBase = "http://localhost:8080"
 $pollInterval = 8   # seconds between status checks
 $startupTimeout = 90  # seconds to wait for container readiness

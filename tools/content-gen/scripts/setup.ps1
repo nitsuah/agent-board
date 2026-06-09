@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectDir = Split-Path $PSScriptRoot -Parent
-$mptDir = Join-Path $projectDir "MoneyPrinterTurbo"
+$mptDir = Join-Path $projectDir "modules\MoneyPrinterTurbo"
 
 function Write-Warn { param($msg) Write-Host "  ! $msg" -ForegroundColor Yellow }
 

@@ -1,0 +1,6 @@
+# MoneyPrinterTurbo clone — managed by scripts/setup.ps1
+modules/
+
+# Local env and generated output
+.env
+examples/*.mp4

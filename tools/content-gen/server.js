@@ -31,7 +31,7 @@ const PORT    = parseInt(process.env.CONTENT_GEN_PORT || '3200', 10);
 const MPT_API = process.env.MPT_API_URL   || 'http://localhost:8080';
 const MPT_UI  = process.env.MPT_UI_URL    || 'http://localhost:8501';
 const MPT_COMPOSE = process.env.MONEYPRINTERTURBO_COMPOSE
-  || path.join(__dirname, 'MoneyPrinterTurbo', 'docker-compose.yml');
+  || path.join(__dirname, 'modules', 'MoneyPrinterTurbo', 'docker-compose.yml');
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS  = 600_000;  // 10 min
