@@ -143,4 +143,4 @@ Voiceover:
 - Product update post: 75s cut with a brief text intro and PR link
 
 ## Related
-- [[repos/agent-board/docs/DEMO_VIDEO_SCRIPT|DEMO_VIDEO_SCRIPT]] — full 2-minute version
+- [[AGENT-BOARD-DEMO_VIDEO_SCRIPT|AGENT-BOARD-DEMO_VIDEO_SCRIPT]] — full 2-minute version
