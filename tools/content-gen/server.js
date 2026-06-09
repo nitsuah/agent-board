@@ -31,7 +31,7 @@ const PORT    = parseInt(process.env.CONTENT_GEN_PORT || '3200', 10);
 const MPT_API = process.env.MPT_API_URL   || 'http://localhost:8080';
 const MPT_UI  = process.env.MPT_UI_URL    || 'http://localhost:8501';
 const MPT_COMPOSE = process.env.MONEYPRINTERTURBO_COMPOSE
-  || 'C:/Users/ajhar/code/content-gen/MoneyPrinterTurbo/docker-compose.yml';
+  || path.join(__dirname, 'modules', 'MoneyPrinterTurbo', 'docker-compose.yml');
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS  = 600_000;  // 10 min
@@ -77,9 +77,11 @@ async function pollTaskUntilDone(taskId) {
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
     const { data } = await axios.get(`${MPT_API}/api/v1/tasks/${taskId}`);
-    const { state, progress, files } = data.data || data;
-    if (state === 'completed') return { state, files };
-    if (state === 'failed')    throw new Error(`Task ${taskId} failed: ${data.message || 'unknown error'}`);
+    const taskData = data.data || data;
+    const { state } = taskData;
+    const files = taskData.combined_videos?.length ? taskData.combined_videos : (taskData.videos || []);
+    if (state === 'completed' || state === 'complete' || state === 1) return { state, taskData, files };
+    if (state === 'failed' || state === 'error' || state === -1)      throw new Error(`Task ${taskId} failed: ${data.message || 'unknown error'}`);
   }
   throw new Error(`Task ${taskId} timed out after ${POLL_TIMEOUT_MS / 1000}s`);
 }
@@ -118,8 +120,8 @@ function buildServer() {
       if (!taskId) throw new Error('No task_id returned from MoneyPrinterTurbo');
 
       const result = await pollTaskUntilDone(taskId);
-      const urls = (result.files || []).map(f =>
-        typeof f === 'string' ? f : (f.url || f.path || JSON.stringify(f))
+      const urls = result.files.map(f =>
+        typeof f === 'string' ? `http://localhost:8080${f}` : (f.url || f.path || JSON.stringify(f))
       );
 
       return {
