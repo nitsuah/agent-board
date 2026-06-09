@@ -69,4 +69,8 @@ tools/content-gen/output/
 tools/content-gen/.env
 tools/website/.env
 
+# ai gen
+
 .claude/worktrees/
+tools/content-gen/examples/
+tools/content-gen/modules/

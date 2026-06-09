@@ -1,0 +1,66 @@
+# MoneyPrinterTurbo config — content-gen setup
+# Managed by: C:\Users\ajhar\code\agent-board\tools\content-gen\
+# Copy this to MoneyPrinterTurbo/config.toml then fill in API keys.
+#
+# NOTE: ALL runtime keys must be inside [app] — get_api_key() reads config.app only.
+
+[app]
+# ── Performance ───────────────────────────────────────────────────────────────
+max_concurrent_tasks = 2
+max_queued_tasks = 20
+hide_config = false
+
+# Hardware-accelerated video encoding (comment out if it errors):
+# video_codec = "h264_nvenc"    # NVIDIA
+# video_codec = "h264_amf"      # AMD
+# video_codec = "h264_qsv"      # Intel
+
+# ── LLM PROVIDER  (pick one, comment the others out) ─────────────────────────
+
+# Option A: Gemini Flash — free tier (1500 req/day), excellent for scripts
+#   Get key: https://aistudio.google.com/app/apikey
+llm_provider = "gemini"
+gemini_api_key = "GEMINI_API_KEY_HERE"
+gemini_model_name = "gemini-2.0-flash"
+
+# Option B: DeepSeek — $0.14/1M tokens, very capable
+# llm_provider = "deepseek"
+# deepseek_api_key = "DEEPSEEK_API_KEY_HERE"
+# deepseek_model_name = "deepseek-chat"
+
+# Option C: Ollama — fully local, free, no internet LLM calls
+# llm_provider = "ollama"
+# ollama_base_url = "http://host.docker.internal:11434"
+# ollama_model_name = "llama3.2"
+
+# ── VIDEO SOURCE ──────────────────────────────────────────────────────────────
+
+# Pexels (free API key): https://www.pexels.com/api/
+video_source = "pexels"
+pexels_api_keys = ["PEXELS_API_KEY_HERE"]
+
+# Pixabay alternative (also free):
+# video_source = "pixabay"
+# pixabay_api_keys = ["PIXABAY_API_KEY_HERE"]
+
+# ── VOICE / TTS ───────────────────────────────────────────────────────────────
+
+# Edge TTS — free, no key needed, ~200 voices available
+voice_name = "en-US-AriaNeural"
+
+# Other good English voices:
+#   en-US-GuyNeural          (male)
+#   en-US-JennyNeural        (female, clear)
+#   en-GB-SoniaNeural        (British female)
+#   en-AU-NatashaNeural      (Australian female)
+
+# ── SUBTITLES ─────────────────────────────────────────────────────────────────
+
+# "edge" = fast, uses TTS timing (no GPU needed)
+# "whisper" = accurate, transcribes audio (~3GB model download on first run)
+subtitle_provider = "edge"
+
+# [whisper]
+# model_size = "base"    # tiny/base/small/medium/large-v3
+# device = "cpu"         # cpu or cuda
+# compute_type = "int8"

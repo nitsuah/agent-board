@@ -1,6 +1,6 @@
 # One-time setup for content-gen / MoneyPrinterTurbo
-# Run this once from C:\Users\ajhar\code\content-gen\
-# Keys are read automatically from .env in the same directory.
+# Run this once from C:\Users\ajhar\code\agent-board\tools\content-gen\scripts\
+# Keys are read automatically from .env in the parent directory.
 # CLI params override .env values if both are present.
 param(
     [string]$PexelsKey = "",
@@ -9,8 +9,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$projectDir = $PSScriptRoot
+$projectDir = Split-Path $PSScriptRoot -Parent
 $mptDir = Join-Path $projectDir "MoneyPrinterTurbo"
+
+function Write-Warn { param($msg) Write-Host "  ! $msg" -ForegroundColor Yellow }
 
 Write-Host "`n=== content-gen setup ===" -ForegroundColor Cyan
 
@@ -71,7 +73,7 @@ Write-Host @"
 
 === Next steps ===
 1. Open MoneyPrinterTurbo\config.toml and fill in any remaining API keys.
-   Required: pexels_api_keys, and whichever LLM provider key you chose.
+   Required: pexels_api_keys (inside [app] section), and an LLM provider key.
 2. Run a test generation:
      /content-gen "5 tips for better sleep"
 3. The skill auto-starts Docker and stops it when done.

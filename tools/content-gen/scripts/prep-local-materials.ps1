@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$mptDir = Join-Path $PSScriptRoot "MoneyPrinterTurbo"
+$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "MoneyPrinterTurbo"
 $outputDir = Join-Path $mptDir "storage\local_materials"
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
@@ -90,8 +90,6 @@ foreach ($imgPath in $ImagePaths) {
 Write-Host "`n=== Done: $($created.Count) clip(s) in:" -ForegroundColor Green
 Write-Host "  $outputDir"
 Write-Host ""
-Write-Host "To use these in generation, set in config.toml:"
-Write-Host "  video_source = `"local`""
-Write-Host "  material_directory = `"storage/local_materials`""
+Write-Host "To use these in generation, upload them at http://localhost:8501 (WebUI only)."
 Write-Host ""
 return $created

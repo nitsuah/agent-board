@@ -25,7 +25,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$mptDir = Join-Path $PSScriptRoot "MoneyPrinterTurbo"
+$mptDir = Join-Path (Split-Path $PSScriptRoot -Parent) "MoneyPrinterTurbo"
 $apiBase = "http://localhost:8080"
 $pollInterval = 8   # seconds between status checks
 $startupTimeout = 90  # seconds to wait for container readiness
@@ -53,6 +53,14 @@ function Wait-ForApi {
 function Is-ContainerRunning {
     $running = docker ps --filter "name=moneyprinterturbo-api" --format "{{.Names}}" 2>$null
     return ($running -match "moneyprinterturbo-api")
+}
+
+function Stop-Container {
+    Write-Step "Stopping MoneyPrinterTurbo container..."
+    Push-Location $mptDir
+    docker compose stop 2>&1 | Write-Host
+    Pop-Location
+    Write-Ok "Container stopped."
 }
 
 # ── 1. Ensure Docker is up ────────────────────────────────────────────────────
@@ -119,6 +127,13 @@ while ($true) {
     try {
         $status = Invoke-RestMethod -Uri "$apiBase/api/v1/tasks/$taskId" -TimeoutSec 10
     } catch {
+        $errMsg = $_.ToString()
+        if ($errMsg -match "404|task not found|Not Found") {
+            Write-Host ""
+            Write-Fail "Task $taskId no longer exists (container may have restarted). Re-submit the job."
+            if (-not $KeepRunning) { Stop-Container }
+            exit 1
+        }
         Write-Warn "Poll error (will retry): $_"
         continue
     }
@@ -131,11 +146,11 @@ while ($true) {
     $bar = ("#" * [math]::Floor($progress / 5)).PadRight(20)
     Write-Host "`r  [$bar] $progress%  state=$state   " -NoNewline
 
-    if ($state -eq "complete" -or $state -eq "completed") {
+    if ($state -eq "complete" -or $state -eq "completed" -or $state -eq 1) {
         Write-Host ""   # flush the inline line
         break
     }
-    if ($state -eq "failed" -or $state -eq "error") {
+    if ($state -eq "failed" -or $state -eq "error" -or $state -eq -1) {
         Write-Host ""
         Write-Fail "Generation failed. Raw status:"
         $status | ConvertTo-Json -Depth 5 | Write-Host
@@ -165,14 +180,6 @@ if ($videos -and $videos.Count -gt 0) {
 }
 
 # ── 5. Auto-stop container ────────────────────────────────────────────────────
-
-function Stop-Container {
-    Write-Step "Stopping MoneyPrinterTurbo container..."
-    Push-Location $mptDir
-    docker compose stop 2>&1 | Write-Host
-    Pop-Location
-    Write-Ok "Container stopped."
-}
 
 if (-not $KeepRunning) {
     Stop-Container
