@@ -395,7 +395,12 @@ async function ensureRunnableModelForSession(session) {
     return { adjusted: false, reason: 'non_ollama_endpoint' };
   }
 
-  const availableModels = await getOllamaModelNames(session.llmUrl);
+  let availableModels;
+  try {
+    availableModels = await getOllamaModelNames(session.llmUrl);
+  } catch {
+    return { adjusted: false, reason: 'no_models' };
+  }
   const resolvedModel = chooseRunnableOllamaModel(session.model, availableModels, endpointConfig.defaultModel);
   if (!resolvedModel) {
     return { adjusted: false, reason: 'no_models' };
@@ -1034,6 +1039,14 @@ app.get('/api/docker/status', async (req, res) => {
       ports: '9000:8080',
       backendType: 'sandbox',
       checkType: 'tcp'
+    },
+    {
+      name: 'llm_openllm',
+      label: 'OpenLLM (custom models)',
+      url: `${LLM_CONFIG.openllm.url}/v1/models`,
+      ports: '8082:3000',
+      backendType: 'openllm-container',
+      checkType: 'http'
     }
   ];
 
