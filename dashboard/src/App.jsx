@@ -29,6 +29,7 @@ const ENDPOINT_META = {
   primary:       { model: 'llama2:latest',          label: 'Llama2',        desc: 'Ollama container · 3.8 GB',      backendBadge: 'Ollama' },
   docker_runner: { model: 'ai/qwen3-coder:latest',  label: 'Qwen3-Coder',   desc: 'Docker Model Runner · 16.45 GB', backendBadge: 'Docker Runner' },
   glm_flash:     { model: 'ai/glm-4.7-flash:latest',label: 'GLM-4.7-Flash', desc: 'Docker Model Runner · 16.31 GB', backendBadge: 'Docker Runner' },
+  openllm:       { model: 'custom (OPENLLM_MODEL)', label: 'OpenLLM',       desc: 'Custom/HF model · OpenAI-compatible · port 8082', backendBadge: 'OpenLLM' },
 };
 
 // ── Experience definitions (mirrors server EXPERIENCE_CONFIGS) ─────────────
@@ -39,8 +40,8 @@ const EXPERIENCE_META = {
 };
 
 const EXPERIENCE_ENDPOINTS = {
-  developer: ['primary', 'docker_runner', 'glm_flash'],
-  research: ['primary', 'docker_runner', 'glm_flash'],
+  developer: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
+  research: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
   safechat: ['primary']
 };
 

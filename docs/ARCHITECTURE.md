@@ -168,7 +168,8 @@ LLM_CONFIG = {
   primary:        { url: 'http://llm_qwen_coder:8080', apiStyle: 'ollama', defaultModel: 'llama2:latest' },
   qwen_coder:     { url: 'http://llm_qwen_coder:8080', apiStyle: 'ollama', defaultModel: 'qwen3-coder:latest' },
   docker_runner:  { url: 'http://model-runner.docker.internal/engines/llama.cpp/v1', apiStyle: 'openai', defaultModel: 'ai/qwen3-coder:latest' },
-  glm_flash:      { url: 'http://model-runner.docker.internal/engines/llama.cpp/v1', apiStyle: 'openai', defaultModel: 'ai/glm-4.7-flash:latest' }
+  glm_flash:      { url: 'http://model-runner.docker.internal/engines/llama.cpp/v1', apiStyle: 'openai', defaultModel: 'ai/glm-4.7-flash:latest' },
+  openllm:        { url: 'http://llm_openllm:3000', apiStyle: 'openai', defaultModel: '<OPENLLM_MODEL>' } // opt-in, see AI_STACK_STRATEGY.md
 }
 ```
 

@@ -68,12 +68,24 @@ const LLM_CONFIG = {
     type: 'fast',
     apiStyle: 'openai',
     defaultModel: process.env.GLM_FLASH_MODEL || 'ai/glm-4.7-flash:latest'
+  },
+  openllm: {
+    // OpenLLM (BentoML) — opt-in second OpenAI-compatible endpoint for custom
+    // or fine-tuned HuggingFace models. Enable via the `openllm` compose
+    // profile and OPENLLM_ENABLED=true. See AI_STACK_STRATEGY.md.
+    url: process.env.OPENLLM_URL || 'http://llm_openllm:3000',
+    name: 'OpenLLM (custom models)',
+    backendType: 'openllm-container',
+    type: 'custom',
+    apiStyle: 'openai',
+    defaultModel: process.env.OPENLLM_MODEL || ''
   }
 };
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 const BB_MCP_ENABLED = isTruthyEnv(process.env.BB_MCP_ENABLED);
+const OPENLLM_ENABLED = isTruthyEnv(process.env.OPENLLM_ENABLED);
 const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
   process.env.PRIMARY_LLM_URL_CANDIDATES,
   [
@@ -268,6 +280,18 @@ function getServiceRegistry() {
       probePath: '/health',
       candidates: [BB_MCP_URL],
       disabledReason: BB_MCP_ENABLED ? null : 'BB_MCP_ENABLED=false',
+    },
+    llm_openllm: {
+      key: 'llm_openllm',
+      label: 'OpenLLM (custom models)',
+      backendType: 'openllm-container',
+      composeService: 'llm_openllm',
+      ports: '8082:3000',
+      controllable: OPENLLM_ENABLED,
+      checkType: 'http',
+      probePath: '/v1/models',
+      candidates: [LLM_CONFIG.openllm.url],
+      disabledReason: OPENLLM_ENABLED ? null : 'OPENLLM_ENABLED=false',
     },
   };
 }
@@ -625,7 +649,7 @@ const EXPERIENCE_CONFIGS = {
     description: 'Full model access, standard safety, session history.',
     icon: '💻',
     safetyMode: 'standard',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix: 'You are assisting a software developer. Be precise, prefer code examples.'
   },
   research: {
@@ -633,7 +657,7 @@ const EXPERIENCE_CONFIGS = {
     description: 'Long-form reasoning and document analysis. Slightly looser rails — opt-in.',
     icon: '🔬',
     safetyMode: 'research',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix: 'You are a research assistant. Prioritise depth, cite your reasoning, and flag uncertainties.'
   },
   safechat: {

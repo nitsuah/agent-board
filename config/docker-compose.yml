@@ -48,6 +48,29 @@ services:
   # API style: OpenAI-compatible (/v1/chat/completions, /v1/models)
   # No container needed — Docker Desktop exposes this automatically.
 
+  # OpenLLM (BentoML) — second OpenAI-compatible endpoint, for custom or
+  # fine-tuned HuggingFace models that don't fit Ollama's Modelfile pattern.
+  # Opt-in: set OPENLLM_MODEL and enable the `openllm` profile.
+  # Enable with: OPENLLM_ENABLED=true OPENLLM_MODEL=<hf-repo-id> docker compose --profile openllm up -d llm_openllm
+  # Port: 8082 (host) → 3000 (container)
+  llm_openllm:
+    build:
+      context: ../tools/llm-openllm
+      dockerfile: Dockerfile
+    container_name: llm_openllm
+    restart: unless-stopped
+    profiles:
+      - openllm
+    ports:
+      - "8082:3000"
+    environment:
+      - OPENLLM_MODEL=${OPENLLM_MODEL:-}
+      - PORT=3000
+    volumes:
+      - openllm_data:/root/.cache
+    networks:
+      - agent-network
+
   # ===== SAFETY & SANDBOX =====
   
   nemoclaw:
@@ -122,6 +145,9 @@ services:
       - DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
       - DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest
       - GLM_FLASH_MODEL=ai/glm-4.7-flash:latest
+      - OPENLLM_URL=http://llm_openllm:3000
+      - OPENLLM_MODEL=${OPENLLM_MODEL:-}
+      - OPENLLM_ENABLED=${OPENLLM_ENABLED:-false}
       - NEMOCLAW_URL=http://nemoclaw:8080
       - BB_MCP_URL=http://bb-mcp:3100
       - BB_MCP_ENABLED=${BB_MCP_ENABLED:-false}
@@ -263,6 +289,7 @@ services:
 volumes:
   agent_db_data:
   ollama_data:  # Local Ollama model storage (llama2, etc.)
+  openllm_data:  # OpenLLM/HuggingFace + BentoML model cache
   nemoclaw_data:
   website_output:  # Persistent storage for generated client sites and pitch materials
 

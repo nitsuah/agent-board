@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-08
+Last Updated: 2026-06-09
 
 ## Todo
 
@@ -11,7 +11,13 @@ Last Updated: 2026-06-08
   - Context: CEO flagged stability issues due to container size and memory usage on laptops and low-memory hosts.
   - Acceptance Criteria: `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services (bb-mcp, large models) are gated behind env flags and documented.
   - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
-  - [ ] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.)
+  - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
+
+- [ ] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
+  - Priority: P1
+  - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos (`~/code/kryptos`) currently has no FastAPI/HTTP layer — it's CLI + library only (`src/kryptos/cli/main.py`). Scope includes scaffolding a minimal FastAPI app before wiring in turbovec.
+  - Tracking: implemented via a separate worktree/branch in `~/code/kryptos`, not in this repo.
+  - Acceptance Criteria: kryptos exposes a search/query FastAPI endpoint backed by turbovec over `artifacts/`; documented in kryptos README.
 
 - [ ] **[Q2-CEO] Model loading performance audit** — profile Ollama startup and model load times; identify bottlenecks and optimize for faster readiness.
   - Priority: P1
@@ -113,6 +119,12 @@ Last Updated: 2026-06-08
   - Acceptance Criteria: two agents exchange events in a documented demo path.
 
 ## In Progress
+
+## Done
+
+- [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
+  - Context: AI_STACK_STRATEGY.md priority queue #2.
+  - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.
 
 <!--
 AGENT INSTRUCTIONS:
