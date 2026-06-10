@@ -1,6 +1,7 @@
 # Quick Reference Guide
 
 Fast reference for common operations.
+More detailed instructions can be found in the [[SETUP_INSTRUCTIONS]]
 
 ## Getting Started
 
@@ -230,3 +231,4 @@ docker-compose up -d
 **Status:** ✅ Ready to use  
 **Primary Setup:** Docker Hub models  
 **Fallback Setup:** Legacy custom Ollama
+
