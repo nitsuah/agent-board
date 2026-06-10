@@ -141,3 +141,6 @@ Voiceover:
 - LinkedIn/X feed: 60s cut, subtitles on, 16:9 or 1:1
 - YouTube Shorts/Reels: 60s cut, 9:16 crop focused on center panel
 - Product update post: 75s cut with a brief text intro and PR link
+
+## Related
+- [[AGENT-BOARD-DEMO_VIDEO_SCRIPT|AGENT-BOARD-DEMO_VIDEO_SCRIPT]] — full 2-minute version

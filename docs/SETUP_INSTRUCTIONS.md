@@ -146,7 +146,7 @@ Start-Process "http://localhost:3000"
 ### Why Split into dashboard/?
 
 **Before:** All files at root level (messy)
-```
+```bash
 agent-board/
 ├── index.html
 ├── server.js
@@ -158,7 +158,7 @@ agent-board/
 ```
 
 **After:** Organized by component (clean)
-```
+```bash
 agent-board/
 ├── docker-compose.yml
 ├── docker-compose.legacy.yml
@@ -182,6 +182,7 @@ agent-board/
 ### Files That Can Stay at Root
 
 These can stay at root for convenience:
+
 - `docker-compose.yml` (primary, you use often)
 - `docker-compose.legacy.yml` (fallback)
 - `.env` (configuration)
@@ -190,6 +191,7 @@ These can stay at root for convenience:
 - `stack-manager.ps1` (management script)
 
 These are there for reference/compatibility:
+
 - `Dockerfile` (original, use dashboard/Dockerfile instead)
 - `Dockerfile.ollama` (moved to legacy/)
 - `index.html` (should be in dashboard/)
@@ -207,19 +209,23 @@ The old setup scripts (`setup-docker-stack.ps1`, `stack-manager.ps1`) still work
 ## 🐛 Troubleshooting
 
 ### "Dockerfile not found"
+
 - Make sure `dashboard/Dockerfile` exists
 - Check: `Test-Path C:\Users\$env:USERNAME\code\agent-board\dashboard\Dockerfile`
 
 ### "Cannot find file: index.html"
+
 - Files haven't been copied yet
 - Run the "Automatic Setup" section above
 
 ### "Docker build fails"
+
 - Volumes might be mounted
 - Run: `docker-compose down -v`
 - Then try again: `docker-compose up -d`
 
 ### "Port already in use"
+
 - Stop all containers: `docker-compose down`
 - Check ports: `netstat -ano | findstr :3000`
 
