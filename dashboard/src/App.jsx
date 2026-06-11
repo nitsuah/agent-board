@@ -46,7 +46,7 @@ const EXPERIENCE_ENDPOINTS = {
 };
 
 // ── Safety mode badge colours ──────────────────────────────────────────────
-const SAFETY_COLORS = { strict: '#f44336', standard: '#ff9800', research: '#4caf50' };
+const SAFETY_COLORS = { strict: 'var(--red)', standard: 'var(--yellow)', research: 'var(--green)' };
 
 /**
  * AgentStatusCard — compact card showing a single session's live status.
@@ -111,6 +111,7 @@ function App() {
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
@@ -680,14 +681,6 @@ function App() {
   // ── Derived state ──────────────────────────────────────────────────────────
   const activeSessionData = activeSession ? sessions.find(s => s.id === activeSession) : null;
 
-  const getDockerStatusColor = () => {
-    if (!dockerStatus) return 'gray';
-    const running = Object.values(dockerStatus.containers || {}).filter(c => c.running).length;
-    if (running >= 2) return 'green';
-    if (running >= 1) return 'yellow';
-    return 'red';
-  };
-
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSessionMessages]);
@@ -726,11 +719,11 @@ function App() {
   };
 
   // ── Metrics helpers ────────────────────────────────────────────────────────
-  const renderBar = (value, max, color = '#4caf50') => {
+  const renderBar = (value, max, color = 'var(--green)') => {
     const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
     return (
-      <div style={{ background: '#333', borderRadius: 4, height: 10, flex: 1 }}>
-        <div style={{ width: `${pct}%`, background: color, height: '100%', borderRadius: 4, transition: 'width 0.3s' }} />
+      <div className="metric-bar-track">
+        <div className="metric-bar-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
     );
   };
@@ -738,85 +731,52 @@ function App() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="brand-block">
-            <h1>🤖 Agent Board</h1>
-            <p className="brand-subtitle">Local AI operations cockpit for safe multi-model workflows</p>
-          </div>
-          <div className="header-info">
-            {/* Experience picker */}
-            <select
-              className="experience-select"
-              value={selectedExperience}
-              onChange={e => setSelectedExperience(e.target.value)}
-              title="Switch experience mode"
-              disabled={demoMode.enabled}
-            >
-              {Object.entries(EXPERIENCE_META)
-                .filter(([key]) => !demoMode.enabled || key === 'safechat')
-                .map(([key, exp]) => (
-                <option key={key} value={key}>{exp.icon} {exp.name}</option>
-              ))}
-            </select>
-
-            {/* Top model picker */}
-            <select
-              className="model-select-top"
-              value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
-              onChange={e => handleEndpointSelection(e.target.value)}
-              title="Choose model endpoint"
-              disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
-            >
-              {selectableEndpointKeys.length === 0 ? (
-                <option value="">No models online</option>
-              ) : (
-                selectableEndpointKeys.map((key) => (
-                  <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
-                ))
-              )}
-            </select>
-
-            <span className={`badge docker-status ${getDockerStatusColor()}`}>
-              {(() => {
-                const running = Object.values(dockerStatus?.containers || {}).filter(c => c.running).length;
-                const total = Object.keys(dockerStatus?.containers || {}).length;
-                return total > 0 ? `Services: ${running}/${total}` : 'Services: ...';
-              })()}
-            </span>
-
-            <span className="badge experience-badge">
-              {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-            </span>
-
-            {demoMode.enabled && <span className="badge demo-badge">Public Demo Mode</span>}
-            <span className={`badge ws-badge ${wsConnected ? 'connected' : 'disconnected'}`}>
-              {wsConnected ? 'Live Feed: Connected' : 'Live Feed: Offline'}
-            </span>
-
-            {/* Tab switcher */}
-            <button
-              className={`btn-tab ${activeTab === 'chat' ? 'active' : ''}`}
-              onClick={() => setActiveTab('chat')}
-            >💬 Chat</button>
-            <button
-              className={`btn-tab ${activeTab === 'metrics' ? 'active' : ''}`}
-              onClick={() => setActiveTab('metrics')}
-            >📊 Metrics</button>
-
-            <button className={`btn-system ${showSystemPanel ? 'active' : ''}`} onClick={() => setShowSystemPanel(!showSystemPanel)}>
-              ⚙️ System
-            </button>
-            <button
-              className="btn-theme-toggle"
-              onClick={toggleTheme}
-              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-          </div>
+      <div className="topbar">
+        <div className="topbar-left">
+          <button
+            className="icon-btn"
+            onClick={() => setShowSidebar(prev => !prev)}
+            title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+          >☰</button>
+          <span className="topbar-title">🤖 Agent Board</span>
         </div>
-      </header>
+
+        <div className="topbar-center">
+          {demoMode.enabled && <span className="pill pill-demo">Public Demo Mode</span>}
+          <span className="pill">
+            {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
+          </span>
+          <span className={`pill ${wsConnected ? 'ok' : 'off'}`}>
+            <span className="status-dot" /> {wsConnected ? 'Live feed' : 'Offline'}
+          </span>
+          <span className="pill">
+            {totalServices > 0 ? `Services ${runningServices}/${totalServices}` : 'Services …'}
+          </span>
+        </div>
+
+        <div className="topbar-right">
+          <button
+            className={`icon-btn ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+            title="Chat"
+          >💬</button>
+          <button
+            className={`icon-btn ${activeTab === 'metrics' ? 'active' : ''}`}
+            onClick={() => setActiveTab('metrics')}
+            title="Metrics"
+          >📊</button>
+          <button
+            className={`icon-btn ${showSystemPanel ? 'active' : ''}`}
+            onClick={() => setShowSystemPanel(prev => !prev)}
+            title="System"
+          >⚙️</button>
+          <button
+            className="icon-btn"
+            onClick={toggleTheme}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >{darkMode ? '☀️' : '🌙'}</button>
+        </div>
+      </div>
 
       {showOnboarding && (
         <div className="onboarding-strip">
@@ -829,343 +789,266 @@ function App() {
             </span>
           </div>
           <div className="onboarding-actions">
-            <button className="btn-system-action primary" onClick={createSession}>Create Session</button>
-            <button className="btn-system-action" onClick={dismissOnboarding}>Dismiss</button>
+            <button className="btn-primary" onClick={createSession}>Create Session</button>
+            <button className="btn-secondary" onClick={dismissOnboarding}>Dismiss</button>
           </div>
         </div>
       )}
 
-      <div className="container">
-        {/* System Panel */}
-        {showSystemPanel && (
-          <div className="system-panel-overlay">
-            <div className="system-panel">
-              <div className="system-panel-header">
-                <h2>System Management</h2>
-                <button onClick={() => setShowSystemPanel(false)}>✕</button>
-              </div>
-              <div className="system-info">
-                <div className="system-info-item">
-                  <h3>Stack Status</h3>
-                  <div className={`value ${dockerStatus?.dockerRunning ? '' : 'warning'}`}>
-                    {dockerStatus?.dockerRunning ? 'Healthy' : 'Degraded'}
-                  </div>
-                </div>
-                <div className="system-info-item">
-                  <h3>Active Services</h3>
-                  <div className="value">
-                    {Object.values(dockerStatus?.containers || {}).filter(c => c.running).length}/{Object.keys(dockerStatus?.containers || {}).length}
-                  </div>
-                </div>
-                <div className="system-info-item">
-                  <h3>Server Memory</h3>
-                  <div className="value">{systemInfo?.memory?.rss ? `${Math.round(systemInfo.memory.rss / 1024 / 1024)} MB` : 'N/A'}</div>
-                </div>
-                <div className="system-info-item">
-                  <h3>Uptime</h3>
-                  <div className="value">{systemInfo?.uptime ? `${Math.round(systemInfo.uptime / 60)} min` : 'N/A'}</div>
-                </div>
-              </div>
-              <div className="docker-status">
-                <h3>Services</h3>
-                {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => (
-                  (() => {
-                    const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
-                    const serviceMeta = systemServices?.services?.[serviceKey];
-                    const canControl = !!(systemServices?.dockerControlEnabled && serviceMeta?.controllable);
-                    return (
-                  <div key={name} className="docker-status-item">
-                    <div className="docker-service-info">
-                      <div className="docker-service-name">
-                        {status.label || name}
-                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({status.backendType})</span>
-                      </div>
-                      <div className={`docker-service-status ${status.running ? 'running' : 'stopped'}`}>
-                        {status.running ? '● Live' : '● ' + status.status}
-                      </div>
-                      <div className="docker-service-port">{status.ports}</div>
-                    </div>
-                    <div className="docker-actions">
-                      <button
-                        className="btn-docker-action start"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
-                        onClick={() => runServiceAction(serviceKey, 'start')}
-                      >
-                        Start
-                      </button>
-                      <button
-                        className="btn-docker-action restart"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
-                        onClick={() => runServiceAction(serviceKey, 'restart')}
-                      >
-                        Restart
-                      </button>
-                    </div>
-                  </div>
-                    );
-                  })()
+      <div className="layout">
+        {/* Left drawer: workspace selectors, sessions, tasks */}
+        <aside className={`drawer drawer-left ${showSidebar ? '' : 'collapsed'}`}>
+          <div className="drawer-section">
+            <h3>Workspace</h3>
+            <div className="field">
+              <label className="field-label">Experience</label>
+              <select
+                className="select"
+                value={selectedExperience}
+                onChange={e => setSelectedExperience(e.target.value)}
+                title="Switch experience mode"
+                disabled={demoMode.enabled}
+              >
+                {Object.entries(EXPERIENCE_META)
+                  .filter(([key]) => !demoMode.enabled || key === 'safechat')
+                  .map(([key, exp]) => (
+                  <option key={key} value={key}>{exp.icon} {exp.name}</option>
                 ))}
-                <h3 style={{ marginTop: '1rem' }}>LLM Endpoints</h3>
-                {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
-                  <div key={key} className="docker-status-item">
-                    <div className="docker-service-info">
-                      <div className="docker-service-name">{ep.name}</div>
-                      <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
-                        {ep.live ? '● Live' : '● Offline / Fallback'}
-                      </div>
-                      <div className="docker-service-port" style={{ fontSize: '0.72rem' }}>{ep.model}</div>
-                    </div>
-                  </div>
-                ))}
-                <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#9bb3c9' }}>
-                  <div>
-                    <strong>Primary endpoint resolved:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}
-                  </div>
-                  {Array.isArray(systemServices?.primaryLlm?.candidates) && (
-                    <div>
-                      <strong>Discovery candidates:</strong> {systemServices.primaryLlm.candidates.join(', ')}
-                    </div>
-                  )}
-                  <div>
-                    <strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}
-                  </div>
-                </div>
-                <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
-                  Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br />
-                  Manage stack: <code>stack-manager.ps1</code>
-                </p>
-              </div>
+              </select>
+            </div>
+            <div className="field">
+              <label className="field-label">Model Endpoint</label>
+              <select
+                className="select"
+                value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
+                onChange={e => handleEndpointSelection(e.target.value)}
+                title="Choose model endpoint"
+                disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
+              >
+                {selectableEndpointKeys.length === 0 ? (
+                  <option value="">No models online</option>
+                ) : (
+                  selectableEndpointKeys.map((key) => (
+                    <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
+                  ))
+                )}
+              </select>
             </div>
           </div>
-        )}
 
-        {/* ── Metrics Tab ── */}
-        {activeTab === 'metrics' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              {/* Summary cards */}
-              {[
-                { label: 'Total Sessions', value: metricsSummary?.totalSessions ?? '…' },
-                { label: 'Active Sessions', value: metricsSummary?.activeSessions ?? '…' },
-                { label: 'Total Messages', value: metricsSummary?.totalMessages ?? '…' },
-                { label: 'Avg Msgs / Session', value: metricsSummary?.avgMessagesPerSession ?? '…' },
-                { label: 'Inputs Blocked', value: metricsSafety?.totalBlocked ?? '…' },
-                { label: 'Outputs Filtered', value: metricsSafety?.totalOutputsFiltered ?? '…' },
-                { label: '👍 Positive', value: metricsFeedback?.totalPositive ?? '…' },
-                { label: '👎 Negative', value: metricsFeedback?.totalNegative ?? '…' },
-              ].map(({ label, value }) => (
-                <div key={label} className="metric-card">
-                  <div className="metric-value">{value}</div>
-                  <div className="metric-label">{label}</div>
+          <div className="drawer-section">
+            <h3>Sessions</h3>
+            <button className="btn-primary" onClick={createSession}>+ New Session</button>
+            <div className="sessions-list">
+              {sessions.map(session => {
+                const isActive = activeSession === session.id;
+                return (
+                  <AgentStatusCard
+                    key={session.id}
+                    session={session}
+                    isActive={isActive}
+                    isStreaming={isActive && loading}
+                    onClick={() => setActiveSession(session.id)}
+                    onDelete={deleteSession}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="drawer-section">
+            <h3>Task Queue</h3>
+            <div className="task-summary-row">
+              <span>Total {taskSummary.total || 0}</span>
+              <span>Pending {taskSummary.byStatus?.pending || 0}</span>
+              <span>Active {taskSummary.byStatus?.in_progress || 0}</span>
+            </div>
+
+            <div className="task-create-row">
+              <input
+                type="text"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="Add a task"
+                maxLength={140}
+              />
+              <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="urgent">urgent</option>
+              </select>
+              <button className="btn-primary" onClick={createTask}>Add</button>
+            </div>
+
+            <div className="task-list">
+              {tasks.slice(0, 12).map((task) => (
+                <div key={task.id} className={`task-item status-${task.status}`}>
+                  <div className="task-item-head">
+                    <strong>{task.title}</strong>
+                    <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                  </div>
+                  <div className="task-item-meta">
+                    <span>{task.status.replace('_', ' ')}</span>
+                    <span>{task.assignedSessionName || 'unassigned'}</span>
+                  </div>
+                  <div className="task-item-actions">
+                    <button onClick={() => updateTaskStatus(task.id, 'in_progress')}>Start</button>
+                    <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
+                    <button onClick={() => routeTaskToSession(task.id)} disabled={!activeSession}>Route</button>
+                    <button onClick={() => deleteTask(task.id)}>Delete</button>
+                  </div>
                 </div>
               ))}
+              {tasks.length === 0 && (
+                <div className="task-empty">No tasks yet.</div>
+              )}
             </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-              {/* Model distribution */}
-              <div className="metric-panel">
-                <h3>Model Usage Distribution</h3>
-                {metricsSummary?.modelDistribution && Object.keys(metricsSummary.modelDistribution).length > 0 ? (
-                  Object.entries(metricsSummary.modelDistribution).map(([model, count]) => {
-                    const total = Object.values(metricsSummary.modelDistribution).reduce((a, b) => a + b, 0);
-                    return (
-                      <div key={model} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', width: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#ccc' }}>{model}</span>
-                        {renderBar(count, total, '#2196f3')}
-                        <span style={{ fontSize: '0.78rem', color: '#aaa', minWidth: 30 }}>{count}</span>
-                      </div>
-                    );
-                  })
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No data yet. Send a message to start.</p>}
-              </div>
-
-              {/* Experience distribution */}
-              <div className="metric-panel">
-                <h3>Sessions by Experience</h3>
-                {metricsSummary?.experienceDistribution && Object.keys(metricsSummary.experienceDistribution).length > 0 ? (
-                  Object.entries(metricsSummary.experienceDistribution).map(([exp, count]) => {
-                    const total = Object.values(metricsSummary.experienceDistribution).reduce((a, b) => a + b, 0);
-                    const meta = EXPERIENCE_META[exp] || { icon: '?', name: exp };
-                    return (
-                      <div key={exp} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', width: 140, color: '#ccc' }}>{meta.icon} {meta.name}</span>
-                        {renderBar(count, total, '#9c27b0')}
-                        <span style={{ fontSize: '0.78rem', color: '#aaa', minWidth: 30 }}>{count}</span>
-                      </div>
-                    );
-                  })
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No data yet.</p>}
-              </div>
-
-              {/* Safety breakdown */}
-              <div className="metric-panel">
-                <h3>Input Classification Breakdown</h3>
-                {metricsSafety?.classificationBreakdown ? (
-                  Object.entries(metricsSafety.classificationBreakdown).map(([cat, count]) => {
-                    const total = metricsSafety.totalClassified || 1;
-                    const color = cat === 'blocked' ? '#f44336' : cat === 'sensitive' ? '#ff9800' : '#4caf50';
-                    return (
-                      <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', width: 80, color: '#ccc', textTransform: 'capitalize' }}>{cat}</span>
-                        {renderBar(count, total, color)}
-                        <span style={{ fontSize: '0.78rem', color: '#aaa', minWidth: 30 }}>{count}</span>
-                      </div>
-                    );
-                  })
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No data yet.</p>}
-              </div>
-
-              {/* Feedback by model */}
-              <div className="metric-panel">
-                <h3>Feedback by Model</h3>
-                {metricsFeedback?.byModel && Object.keys(metricsFeedback.byModel).length > 0 ? (
-                  Object.entries(metricsFeedback.byModel).map(([model, fb]) => (
-                    <div key={model} style={{ marginBottom: '0.6rem' }}>
-                      <div style={{ fontSize: '0.78rem', color: '#ccc', marginBottom: '0.2rem' }}>{model}</div>
-                      <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem' }}>
-                        <span style={{ color: '#4caf50' }}>👍 {fb.positive}</span>
-                        <span style={{ color: '#f44336' }}>👎 {fb.negative}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No feedback recorded yet.</p>}
-              </div>
-
-              {/* Error summary */}
-              <div className="metric-panel">
-                <h3>Error Summary</h3>
-                {metricsErrors ? (
-                  <div>
-                    <p style={{ fontSize: '0.85rem', color: '#ccc' }}>
-                      Total errors: <strong>{metricsErrors.total}</strong> &nbsp;|&nbsp;
-                      Rate: <strong>{metricsErrors.errorRatePercent}%</strong> &nbsp;|&nbsp;
-                      Last 5 min: <strong style={{ color: metricsErrors.recentCount > 0 ? '#f44336' : '#4caf50' }}>{metricsErrors.recentCount}</strong>
-                    </p>
-                    {metricsErrors.recent?.length > 0 && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.25rem' }}>Recent errors:</div>
-                        {metricsErrors.recent.slice(-3).map((e, i) => (
-                          <div key={i} style={{ fontSize: '0.73rem', color: '#f44336', marginBottom: '0.2rem' }}>
-                            [{new Date(e.timestamp).toLocaleTimeString()}] {e.model}: {e.error?.slice(0, ERROR_DISPLAY_MAX_LEN)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No data yet.</p>}
-              </div>
-
-              <div className="metric-panel live-event-panel">
-                <h3>Live Event Stream</h3>
-                {liveEvents.length > 0 ? (
-                  <div className="live-events-list">
-                    {liveEvents.slice(0, 12).map((event) => (
-                      <div key={event.event_id} className="live-event-item">
-                        <div className="live-event-meta">
-                          <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                          <strong>{event.event_type}</strong>
-                        </div>
-                        <div className="live-event-detail">
-                          {event.experience || 'unknown'} • {event.endpoint || 'n/a'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p style={{ color: '#666', fontSize: '0.85rem' }}>No live events yet.</p>}
-              </div>
-            </div>
-
-            <button className="btn-primary" style={{ alignSelf: 'flex-start' }} onClick={fetchMetrics}>
-              ↻ Refresh Metrics
-            </button>
           </div>
-        )}
+        </aside>
 
-        {/* ── Chat Tab ── */}
-        {activeTab === 'chat' && (
-          <>
-            {/* Sidebar */}
-            <aside className="sidebar">
-              <section className="section">
-                <h2>Sessions</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <button className="btn-primary" style={{ flex: 1 }} onClick={createSession}>
-                    + New Session
-                  </button>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.75rem' }}>
-                  {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-                </div>
-                <div className="sessions-list">
-                  {sessions.map(session => {
-                    const isActive = activeSession === session.id;
-                    return (
-                      <AgentStatusCard
-                        key={session.id}
-                        session={session}
-                        isActive={isActive}
-                        isStreaming={isActive && loading}
-                        onClick={() => setActiveSession(session.id)}
-                        onDelete={deleteSession}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
+        {/* Main content: chat or metrics */}
+        <div className="content">
+          {activeTab === 'metrics' ? (
+            <div className="metrics-view">
+              <div className="metric-cards">
+                {[
+                  { label: 'Total Sessions', value: metricsSummary?.totalSessions ?? '…' },
+                  { label: 'Active Sessions', value: metricsSummary?.activeSessions ?? '…' },
+                  { label: 'Total Messages', value: metricsSummary?.totalMessages ?? '…' },
+                  { label: 'Avg Msgs / Session', value: metricsSummary?.avgMessagesPerSession ?? '…' },
+                  { label: 'Inputs Blocked', value: metricsSafety?.totalBlocked ?? '…' },
+                  { label: 'Outputs Filtered', value: metricsSafety?.totalOutputsFiltered ?? '…' },
+                  { label: '👍 Positive', value: metricsFeedback?.totalPositive ?? '…' },
+                  { label: '👎 Negative', value: metricsFeedback?.totalNegative ?? '…' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="metric-card">
+                    <div className="metric-value">{value}</div>
+                    <div className="metric-label">{label}</div>
+                  </div>
+                ))}
+              </div>
 
-              <section className="section">
-                <h2>Task Queue</h2>
-                <div className="task-summary-row">
-                  <span>Total {taskSummary.total || 0}</span>
-                  <span>Pending {taskSummary.byStatus?.pending || 0}</span>
-                  <span>Active {taskSummary.byStatus?.in_progress || 0}</span>
-                </div>
-
-                <div className="task-create-row">
-                  <input
-                    type="text"
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="Add a task"
-                    maxLength={140}
-                  />
-                  <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="urgent">urgent</option>
-                  </select>
-                  <button className="btn-primary" onClick={createTask}>Add</button>
+              <div className="metric-grid">
+                {/* Model distribution */}
+                <div className="metric-panel">
+                  <h3>Model Usage Distribution</h3>
+                  {metricsSummary?.modelDistribution && Object.keys(metricsSummary.modelDistribution).length > 0 ? (
+                    Object.entries(metricsSummary.modelDistribution).map(([model, count]) => {
+                      const total = Object.values(metricsSummary.modelDistribution).reduce((a, b) => a + b, 0);
+                      return (
+                        <div key={model} className="metric-row">
+                          <span className="metric-row-label">{model}</span>
+                          {renderBar(count, total, 'var(--accent)')}
+                          <span className="metric-row-value">{count}</span>
+                        </div>
+                      );
+                    })
+                  ) : <p className="task-empty">No data yet. Send a message to start.</p>}
                 </div>
 
-                <div className="task-list">
-                  {tasks.slice(0, 12).map((task) => (
-                    <div key={task.id} className={`task-item status-${task.status}`}>
-                      <div className="task-item-head">
-                        <strong>{task.title}</strong>
-                        <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                {/* Experience distribution */}
+                <div className="metric-panel">
+                  <h3>Sessions by Experience</h3>
+                  {metricsSummary?.experienceDistribution && Object.keys(metricsSummary.experienceDistribution).length > 0 ? (
+                    Object.entries(metricsSummary.experienceDistribution).map(([exp, count]) => {
+                      const total = Object.values(metricsSummary.experienceDistribution).reduce((a, b) => a + b, 0);
+                      const meta = EXPERIENCE_META[exp] || { icon: '?', name: exp };
+                      return (
+                        <div key={exp} className="metric-row">
+                          <span className="metric-row-label">{meta.icon} {meta.name}</span>
+                          {renderBar(count, total, 'var(--purple)')}
+                          <span className="metric-row-value">{count}</span>
+                        </div>
+                      );
+                    })
+                  ) : <p className="task-empty">No data yet.</p>}
+                </div>
+
+                {/* Safety breakdown */}
+                <div className="metric-panel">
+                  <h3>Input Classification Breakdown</h3>
+                  {metricsSafety?.classificationBreakdown ? (
+                    Object.entries(metricsSafety.classificationBreakdown).map(([cat, count]) => {
+                      const total = metricsSafety.totalClassified || 1;
+                      const color = cat === 'blocked' ? 'var(--red)' : cat === 'sensitive' ? 'var(--yellow)' : 'var(--green)';
+                      return (
+                        <div key={cat} className="metric-row">
+                          <span className="metric-row-label" style={{ textTransform: 'capitalize', width: 80 }}>{cat}</span>
+                          {renderBar(count, total, color)}
+                          <span className="metric-row-value">{count}</span>
+                        </div>
+                      );
+                    })
+                  ) : <p className="task-empty">No data yet.</p>}
+                </div>
+
+                {/* Feedback by model */}
+                <div className="metric-panel">
+                  <h3>Feedback by Model</h3>
+                  {metricsFeedback?.byModel && Object.keys(metricsFeedback.byModel).length > 0 ? (
+                    Object.entries(metricsFeedback.byModel).map(([model, fb]) => (
+                      <div key={model} style={{ marginBottom: '0.6rem' }}>
+                        <div className="metric-row-label" style={{ width: 'auto', marginBottom: '0.2rem' }}>{model}</div>
+                        <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem' }}>
+                          <span style={{ color: 'var(--green)' }}>👍 {fb.positive}</span>
+                          <span style={{ color: 'var(--red)' }}>👎 {fb.negative}</span>
+                        </div>
                       </div>
-                      <div className="task-item-meta">
-                        <span>{task.status.replace('_', ' ')}</span>
-                        <span>{task.assignedSessionName || 'unassigned'}</span>
-                      </div>
-                      <div className="task-item-actions">
-                        <button onClick={() => updateTaskStatus(task.id, 'in_progress')}>Start</button>
-                        <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
-                        <button onClick={() => routeTaskToSession(task.id)} disabled={!activeSession}>Route</button>
-                        <button onClick={() => deleteTask(task.id)}>Delete</button>
-                      </div>
+                    ))
+                  ) : <p className="task-empty">No feedback recorded yet.</p>}
+                </div>
+
+                {/* Error summary */}
+                <div className="metric-panel">
+                  <h3>Error Summary</h3>
+                  {metricsErrors ? (
+                    <div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Total errors: <strong style={{ color: 'var(--text)' }}>{metricsErrors.total}</strong> &nbsp;|&nbsp;
+                        Rate: <strong style={{ color: 'var(--text)' }}>{metricsErrors.errorRatePercent}%</strong> &nbsp;|&nbsp;
+                        Last 5 min: <strong style={{ color: metricsErrors.recentCount > 0 ? 'var(--red)' : 'var(--green)' }}>{metricsErrors.recentCount}</strong>
+                      </p>
+                      {metricsErrors.recent?.length > 0 && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-faint)', marginBottom: '0.25rem' }}>Recent errors:</div>
+                          {metricsErrors.recent.slice(-3).map((e, i) => (
+                            <div key={i} style={{ fontSize: '0.73rem', color: 'var(--red)', marginBottom: '0.2rem' }}>
+                              [{new Date(e.timestamp).toLocaleTimeString()}] {e.model}: {e.error?.slice(0, ERROR_DISPLAY_MAX_LEN)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                  {tasks.length === 0 && (
-                    <div className="task-empty">No tasks yet.</div>
-                  )}
+                  ) : <p className="task-empty">No data yet.</p>}
                 </div>
-              </section>
-            </aside>
 
-            {/* Main Chat Area */}
-            <main className="main">
+                <div className="metric-panel live-event-panel">
+                  <h3>Live Event Stream</h3>
+                  {liveEvents.length > 0 ? (
+                    <div className="live-events-list">
+                      {liveEvents.slice(0, 12).map((event) => (
+                        <div key={event.event_id} className="live-event-item">
+                          <div className="live-event-meta">
+                            <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                            <strong>{event.event_type}</strong>
+                          </div>
+                          <div className="live-event-detail">
+                            {event.experience || 'unknown'} • {event.endpoint || 'n/a'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="task-empty">No live events yet.</p>}
+                </div>
+              </div>
+
+              <button className="btn-primary" style={{ alignSelf: 'flex-start' }} onClick={fetchMetrics}>
+                ↻ Refresh Metrics
+              </button>
+            </div>
+          ) : (
+            <div className="chat-column">
               {activeSessionData ? (
                 <>
                   <div className="chat-header">
@@ -1188,7 +1071,7 @@ function App() {
                           <div className="message-content">
                             <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong> {msg.content}
                             {msg.blocked && (
-                              <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#f44336' }}>
+                              <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--red)' }}>
                                 [blocked by safety filter]
                               </span>
                             )}
@@ -1196,7 +1079,7 @@ function App() {
                           {msg.role === 'assistant' && (
                             <div className="message-feedback">
                               {msg.feedback ? (
-                                <span style={{ fontSize: '0.78rem', color: '#9ad', border: '1px solid #446', borderRadius: 4, padding: '0.1rem 0.4rem' }}>
+                                <span className="feedback-saved">
                                   Feedback saved: {msg.feedback === 'up' ? '👍' : '👎'}
                                 </span>
                               ) : (
@@ -1251,7 +1134,7 @@ function App() {
                     />
                     <span className="input-counter">{messageInput.length}/4000</span>
                     <select
-                      className="model-select-inline"
+                      className="select-inline"
                       value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
                       onChange={e => handleEndpointSelection(e.target.value)}
                       title="Choose model endpoint"
@@ -1265,7 +1148,7 @@ function App() {
                         ))
                       )}
                     </select>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: '#aaa', whiteSpace: 'nowrap' }}>
+                    <label className="checkbox-label">
                       <input
                         type="checkbox"
                         checked={useNemoClaw}
@@ -1283,7 +1166,7 @@ function App() {
                   <h2>No session selected</h2>
                   <p>Choose an experience and create a session to get started.</p>
 
-                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                  <div className="experience-options">
                     {Object.entries(EXPERIENCE_META)
                       .filter(([key]) => !demoMode.enabled || key === 'safechat')
                       .map(([key, exp]) => (
@@ -1291,14 +1174,13 @@ function App() {
                         key={key}
                         className={`experience-option ${selectedExperience === key ? 'selected' : ''}`}
                         onClick={() => setSelectedExperience(key)}
-                        style={{ cursor: 'pointer', flex: '1 1 180px' }}
                       >
-                        <span style={{ fontSize: '1.5rem' }}>{exp.icon}</span>
+                        <span className="exp-icon">{exp.icon}</span>
                         <div>
-                          <div style={{ fontWeight: 600 }}>{exp.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#aaa' }}>{exp.description}</div>
+                          <div className="exp-name">{exp.name}</div>
+                          <div className="exp-desc">{exp.description}</div>
                         </div>
-                        {selectedExperience === key && <span style={{ marginLeft: 'auto', color: '#4caf50' }}>✓</span>}
+                        {selectedExperience === key && <span className="exp-check">✓</span>}
                       </div>
                     ))}
                   </div>
@@ -1312,12 +1194,12 @@ function App() {
                     <ul>
                       {Object.entries(ENDPOINT_META)
                         .filter(([key]) => selectableEndpointKeys.includes(key))
-                        .map(([key, { label, desc, model }]) => {
+                        .map(([key, { label, desc }]) => {
                         const ep = dockerStatus?.endpoints?.[key];
                         return (
                           <li key={key}>
                             <strong>{label}</strong> — {desc}
-                            {ep && <span style={{ marginLeft: '0.4rem', color: ep.live ? '#4caf50' : '#aaa' }}>
+                            {ep && <span style={{ marginLeft: '0.4rem', color: ep.live ? 'var(--green)' : 'var(--text-faint)' }}>
                               {ep.live ? '● live' : '● offline'}
                             </span>}
                           </li>
@@ -1327,8 +1209,115 @@ function App() {
                   </div>
                 </div>
               )}
-            </main>
-          </>
+            </div>
+          )}
+        </div>
+
+        {/* Right drawer: system management */}
+        {showSystemPanel && (
+          <aside className="drawer drawer-right">
+            <div className="drawer-header">
+              <h2>System</h2>
+              <button className="icon-btn" onClick={() => setShowSystemPanel(false)} title="Close">✕</button>
+            </div>
+
+            <div className="system-info">
+              <div className="system-info-item">
+                <h3>Stack Status</h3>
+                <div className={`value ${dockerStatus?.dockerRunning ? '' : 'warning'}`}>
+                  {dockerStatus?.dockerRunning ? 'Healthy' : 'Degraded'}
+                </div>
+              </div>
+              <div className="system-info-item">
+                <h3>Active Services</h3>
+                <div className="value">
+                  {runningServices}/{totalServices}
+                </div>
+              </div>
+              <div className="system-info-item">
+                <h3>Server Memory</h3>
+                <div className="value">{systemInfo?.memory?.rss ? `${Math.round(systemInfo.memory.rss / 1024 / 1024)} MB` : 'N/A'}</div>
+              </div>
+              <div className="system-info-item">
+                <h3>Uptime</h3>
+                <div className="value">{systemInfo?.uptime ? `${Math.round(systemInfo.uptime / 60)} min` : 'N/A'}</div>
+              </div>
+            </div>
+
+            <div className="docker-status">
+              <h3>Services</h3>
+              {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => {
+                const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
+                const serviceMeta = systemServices?.services?.[serviceKey];
+                const canControl = !!(systemServices?.dockerControlEnabled && serviceMeta?.controllable);
+                return (
+                  <div key={name} className="docker-status-item">
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">
+                        {status.label || name}
+                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({status.backendType})</span>
+                      </div>
+                      <div className={`docker-service-status ${status.running ? 'running' : 'stopped'}`}>
+                        {status.running ? '● Live' : '● ' + status.status}
+                      </div>
+                      <div className="docker-service-port">{status.ports}</div>
+                      {!canControl && serviceMeta?.disabledReason && (
+                        <div className="docker-service-disabled-reason">{serviceMeta.disabledReason}</div>
+                      )}
+                    </div>
+                    <div className="docker-actions">
+                      <button
+                        className="btn-docker-action"
+                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
+                        onClick={() => runServiceAction(serviceKey, 'start')}
+                      >
+                        Start
+                      </button>
+                      <button
+                        className="btn-docker-action"
+                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
+                        onClick={() => runServiceAction(serviceKey, 'restart')}
+                      >
+                        Restart
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <h3>LLM Endpoints</h3>
+              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
+                <div key={key} className="docker-status-item">
+                  <div className="docker-service-info">
+                    <div className="docker-service-name">{ep.name}</div>
+                    <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
+                      {ep.live ? '● Live' : '● Offline / Fallback'}
+                    </div>
+                    <div className="docker-service-port">{ep.model}</div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="system-meta-text">
+                <div>
+                  <strong>Primary endpoint resolved:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}
+                </div>
+                {Array.isArray(systemServices?.primaryLlm?.candidates) && (
+                  <div>
+                    <strong>Discovery candidates:</strong> {systemServices.primaryLlm.candidates.join(', ')}
+                  </div>
+                )}
+                <div>
+                  <strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}
+                </div>
+              </div>
+
+              <p className="system-meta-text">
+                Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br />
+                Manage stack: <code>stack-manager.ps1</code>
+              </p>
+            </div>
+          </aside>
         )}
       </div>
     </div>
