@@ -492,11 +492,12 @@ function getAvailabilityFallbackEndpoint() {
 /**
  * Pure helper — checks whether a specific model ID exists in the Docker Model Runner
  * models-list response (OpenAI /v1/models format: { data: [{ id, ... }] }).
- * Strips :latest suffix for comparison so both 'ai/foo:latest' and 'ai/foo' match.
+ * Strips the docker.io/ registry prefix and :latest suffix for comparison, so
+ * 'docker.io/ai/foo:latest', 'ai/foo:latest', and 'ai/foo' all match.
  */
 function checkModelInRunnerList(modelsList, modelId) {
   if (!Array.isArray(modelsList) || !modelId) return false;
-  const normalise = (s) => String(s).replace(/:latest$/i, '').toLowerCase();
+  const normalise = (s) => String(s).replace(/^docker\.io\//i, '').replace(/:latest$/i, '').toLowerCase();
   const target = normalise(modelId);
   return modelsList.some((m) => normalise(m.id ?? m.name ?? '') === target);
 }

@@ -82,6 +82,8 @@ function testCheckModelInRunnerList() {
   assert.equal(checkModelInRunnerList(models, 'ai/qwen3-coder:latest'), true);
   // :latest suffix stripped both sides
   assert.equal(checkModelInRunnerList(models, 'ai/qwen3-coder'), true);
+  // docker.io/ registry prefix stripped (real Docker Model Runner /v1/models response format)
+  assert.equal(checkModelInRunnerList([{ id: 'docker.io/ai/qwen3-coder:latest' }], 'ai/qwen3-coder:latest'), true);
   // model not in list
   assert.equal(checkModelInRunnerList(models, 'ai/missing-model:latest'), false);
   // handles models with .name instead of .id
