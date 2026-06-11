@@ -7,4 +7,4 @@ if [ -z "$OPENLLM_MODEL" ]; then
   exit 1
 fi
 
-exec openllm start "$OPENLLM_MODEL" --port "${PORT:-3000}"
+exec openllm serve "$OPENLLM_MODEL" --port "${PORT:-3000}"
