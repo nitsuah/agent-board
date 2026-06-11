@@ -5,6 +5,7 @@
 **Last updated:** June 2026  
 **Author:** nitsuah  
 **Status:** Working doc — evolving with agent-board Q2/Q3 roadmap
+Repos: ![[agent-board]]
 
 ---
 
