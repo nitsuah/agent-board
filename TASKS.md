@@ -154,6 +154,10 @@ Last Updated: 2026-06-12
 
 ## Done
 
+- [x] **[Now] Swap primary Ollama model from llama2 to llama3.2:3b** — llama2-7B on a CPU-only host exceeded the dashboard's 120s chat timeout once conversation context grew; llama3.2:3b (2.0 GB) generates ~4x faster with far better instruction-following.
+  - Context: the Docker Desktop VM has ~7.6 GB RAM, so only one Ollama model can be resident at a time; the default is now env-configurable via `PRIMARY_LLM_MODEL`.
+  - Acceptance Criteria: full e2e-chat suite (all 12 steps) passes against the live stack with the new default; `OLLAMA_KEEP_ALIVE=30m` keeps the model warm between requests.
+
 - [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
   - Context: AI_STACK_STRATEGY.md priority queue #2.
   - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.

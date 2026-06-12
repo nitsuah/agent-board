@@ -49,7 +49,10 @@ const LLM_CONFIG = {
     backendType: 'ollama-container',
     type: 'general',
     apiStyle: 'ollama',
-    defaultModel: 'llama2:latest'
+    // llama3.2:3b generates ~4x faster than llama2 7B on CPU-only hosts and
+    // scores far higher on instruction-following — 7B-class models routinely
+    // exceed the 120s chat timeout here once conversation context grows.
+    defaultModel: process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b'
   },
   docker_runner: {
     url: DOCKER_RUNNER_URL,
@@ -1430,8 +1433,8 @@ app.post('/api/sessions', async (req, res) => {
   const endpoint = resolveSessionEndpoint(experience, requestedEndpoint);
   const endpointWasAdjusted = endpoint !== requestedEndpoint;
   const model = endpointWasAdjusted
-    ? LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest'
-    : coerceModelForEndpoint(endpoint, req.body.model) || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
+    ? LLM_CONFIG[endpoint]?.defaultModel || LLM_CONFIG.primary.defaultModel
+    : coerceModelForEndpoint(endpoint, req.body.model) || LLM_CONFIG[endpoint]?.defaultModel || LLM_CONFIG.primary.defaultModel;
   const resolvedSafetyMode = resolveConfiguredSafetyMode(experience, safetyMode);
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

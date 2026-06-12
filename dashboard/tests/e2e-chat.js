@@ -112,7 +112,10 @@ async function run() {
 
   console.log('8) Verifying session data includes message history');
   const sessionData = await request(`/api/sessions/${session.session.id}`);
-  if (sessionData.session?.messages?.length < 2) {
+  if (!sessionData.success || !Array.isArray(sessionData.session?.messages)) {
+    throw new Error(`failed to fetch session data: ${sessionData.response || 'no messages array'}`);
+  }
+  if (sessionData.session.messages.length < 2) {
     throw new Error('session message history is too short');
   }
   console.log('  ✅ Message history length =', sessionData.session.messages.length);
@@ -170,7 +173,10 @@ async function run() {
 
   console.log('11) Verifying assistant feedback can only be submitted once...');
   const sessionAfterChat = await request(`/api/sessions/${session.session.id}`);
-  const msgs = sessionAfterChat.session?.messages || [];
+  if (!sessionAfterChat.success || !Array.isArray(sessionAfterChat.session?.messages)) {
+    throw new Error(`failed to re-fetch session for feedback test: ${sessionAfterChat.response || 'no messages array'}`);
+  }
+  const msgs = sessionAfterChat.session.messages;
   const assistantIndexes = msgs
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.role === 'assistant')

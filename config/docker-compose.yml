@@ -26,7 +26,9 @@ services:
   # ===== LLM SERVICES =====
 
   # Local Ollama instance — runs models pulled via `docker exec ollama ollama pull <model>`
-  # Default model: llama2:latest  Port: 8081 (host) → 8080 (container)
+  # Default model: llama3.2:3b (small + modern — 7B-class models like llama2 are too
+  # slow on CPU-only hosts and blow past the dashboard's 120s chat timeout).
+  # Port: 8081 (host) → 8080 (container)
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -145,6 +147,7 @@ services:
       - "3000:3000"
     environment:
       - PRIMARY_LLM_URL=http://ollama:8080
+      - PRIMARY_LLM_MODEL=${PRIMARY_LLM_MODEL:-llama3.2:3b}
       # Docker Model Runner: Docker Desktop exposes this host to all containers
       - DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
       - DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest

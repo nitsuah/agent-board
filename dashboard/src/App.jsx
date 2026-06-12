@@ -26,7 +26,7 @@ function shouldShowOnboarding() {
 // Max characters to show for error messages in the metrics UI
 const ERROR_DISPLAY_MAX_LEN = 80;
 const ENDPOINT_META = {
-  primary:       { model: 'llama2:latest',          label: 'Llama2',        desc: 'Ollama container · 3.8 GB',      backendBadge: 'Ollama' },
+  primary:       { model: 'llama3.2:3b',            label: 'Llama 3.2 3B',  desc: 'Ollama container · 2.0 GB',      backendBadge: 'Ollama' },
   docker_runner: { model: 'ai/qwen3-coder:latest',  label: 'Qwen3-Coder',   desc: 'Docker Model Runner · 16.45 GB', backendBadge: 'Docker Runner' },
   glm_flash:     { model: 'ai/glm-4.7-flash:latest',label: 'GLM-4.7-Flash', desc: 'Docker Model Runner · 16.31 GB', backendBadge: 'Docker Runner' },
   openllm:       { model: 'custom (OPENLLM_MODEL)', label: 'OpenLLM',       desc: 'Custom/HF model · OpenAI-compatible · port 8082', backendBadge: 'OpenLLM' },
@@ -100,7 +100,7 @@ function App() {
   const [models, setModels] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [activeSessionMessages, setActiveSessionMessages] = useState([]);
-  const [currentModel, setCurrentModel] = useState('llama2:latest');
+  const [currentModel, setCurrentModel] = useState(ENDPOINT_META.primary.model);
   const [currentEndpoint, setCurrentEndpoint] = useState('primary');
   const [messageInput, setMessageInput] = useState('');
   const [useNemoClaw, setUseNemoClaw] = useState(false);
@@ -701,7 +701,7 @@ function App() {
     if (!endpointPool.includes(currentEndpoint)) {
       const nextEndpoint = endpointPool[0];
       setCurrentEndpoint(nextEndpoint);
-      setCurrentModel(ENDPOINT_META[nextEndpoint]?.model || 'llama2:latest');
+      setCurrentModel(ENDPOINT_META[nextEndpoint]?.model || ENDPOINT_META.primary.model);
     }
   }, [activeSessionData, currentEndpoint, dockerStatus, getAvailableEndpoints, selectedExperience]);
 

@@ -65,8 +65,11 @@ function testMetricsAveraging() {
 }
 
 function testModelCoercion() {
-  assert.equal(coerceModelForEndpoint('primary', 'ai/qwen3-coder:latest'), 'llama2:latest');
-  assert.equal(coerceModelForEndpoint('primary', 'docker.io/ai/glm-4.7-flash:latest'), 'llama2:latest');
+  // Runner-style model names must coerce to the primary endpoint's default
+  // (env-configurable via PRIMARY_LLM_MODEL; llama3.2:3b when unset).
+  const primaryDefault = process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b';
+  assert.equal(coerceModelForEndpoint('primary', 'ai/qwen3-coder:latest'), primaryDefault);
+  assert.equal(coerceModelForEndpoint('primary', 'docker.io/ai/glm-4.7-flash:latest'), primaryDefault);
   assert.equal(coerceModelForEndpoint('docker_runner', 'ai/qwen3-coder:latest'), 'ai/qwen3-coder:latest');
   assert.equal(normalizeOllamaModelName('llama2:latest'), 'llama2');
 }
