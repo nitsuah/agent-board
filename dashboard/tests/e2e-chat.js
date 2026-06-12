@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:3000';
 const TIMEOUT = 30000;
+// Chat messages that reach the LLM can take longer on CPU-only hosts (matches
+// server.js's 120000ms upstream timeout for /api/sessions/:id/message).
+const LLM_TIMEOUT = 130000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -80,7 +83,8 @@ async function run() {
   console.log('7) Sending a chat message to the session...');
   const send = await request(`/api/sessions/${session.session.id}/message`, {
     method: 'POST',
-    data: { message: 'Hello from E2E test', useSafeMode: false }
+    data: { message: 'Hello from E2E test', useSafeMode: false },
+    timeout: LLM_TIMEOUT
   });
 
   if (send.success) {
@@ -94,10 +98,7 @@ async function run() {
       msg.includes('Request failed with status code 500') ||
       msg.includes('ENOTFOUND') ||
       msg.includes('ECONNREFUSED') ||
-      msg.includes('Could not reach LLM') ||
-      // Cold local CPU inference (e.g. llama2 reloading after Ollama's keep_alive
-      // expiry) can exceed the server's 60s upstream timeout on slower hosts.
-      msg.includes('timeout of') && msg.includes('ms exceeded');
+      msg.includes('Could not reach LLM');
 
     if (isKnownModelIssue) {
       console.warn('  ⚠️ Chat response returned expected model issue:', msg);
@@ -119,7 +120,8 @@ async function run() {
   console.log('9) Verifying safe mode routes to the session endpoint (not NemoClaw)...');
   const safeSend = await request(`/api/sessions/${session.session.id}/message`, {
     method: 'POST',
-    data: { message: 'Hello safe mode test', useSafeMode: true }
+    data: { message: 'Hello safe mode test', useSafeMode: true },
+    timeout: LLM_TIMEOUT
   });
   // Safe mode must not produce an error like "Could not reach NemoClaw" — it should
   // behave exactly like a normal send (safety enforced by system prompts, not URL routing).

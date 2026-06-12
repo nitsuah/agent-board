@@ -1667,13 +1667,15 @@ const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
       response = await axios.post(
         `${llmUrl}/chat/completions`,
         { model: session.model, messages: msgs, stream: false },
-        { timeout: 60000 }
+        // CPU-bound generation under strict safety prompts (longer disclaimers)
+        // can take 45-60s+ on this host; match the streaming timeout below.
+        { timeout: 120000 }
       );
     } else {
       response = await axios.post(
         `${llmUrl}/api/chat`,
         { model: session.model, messages: msgs, stream: false },
-        { timeout: 60000 }
+        { timeout: 120000 }
       );
     }
 
