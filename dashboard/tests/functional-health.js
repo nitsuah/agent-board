@@ -115,6 +115,26 @@ async function testDockerStatusModelLoadedField() {
   console.log('  ✅ /api/docker/status modelLoaded field check passed');
 }
 
+async function testDockerStatusOpenllmAlignedWithContainer() {
+  const data = await get('/api/docker/status');
+
+  const openllmEndpoint = data.endpoints['openllm'];
+  assert.ok(openllmEndpoint !== undefined, 'endpoints.openllm should be present');
+  assert.equal(typeof openllmEndpoint.live, 'boolean', 'endpoints.openllm.live should be boolean');
+  assert.equal(typeof openllmEndpoint.fallback, 'boolean', 'endpoints.openllm.fallback should be boolean');
+  assert.equal(openllmEndpoint.fallback, !openllmEndpoint.live,
+    'endpoints.openllm.fallback should be the inverse of live');
+
+  // The 'openllm' LLM_CONFIG entry is served by the 'llm_openllm' container — its
+  // live status must track the actual container, not a hardcoded value (regression:
+  // previously always reported live:false/fallback:true regardless of container state).
+  const containerUp = data.containers['llm_openllm']?.running ?? false;
+  assert.equal(openllmEndpoint.live, containerUp,
+    `endpoints.openllm.live (${openllmEndpoint.live}) should match containers.llm_openllm.running (${containerUp})`);
+
+  console.log(`  ✅ endpoints.openllm (live=${openllmEndpoint.live}) matches containers.llm_openllm (running=${containerUp})`);
+}
+
 async function testDockerStatusOllamaAlignedWithHealth() {
   const [status, health] = await Promise.all([
     get('/api/docker/status'),
@@ -144,6 +164,7 @@ async function run() {
   console.log('--- /api/docker/status ---');
   await testDockerStatusShape();
   await testDockerStatusModelLoadedField();
+  await testDockerStatusOpenllmAlignedWithContainer();
   await testDockerStatusOllamaAlignedWithHealth();
   console.log('Functional health tests passed.');
 }

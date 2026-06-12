@@ -94,7 +94,10 @@ async function run() {
       msg.includes('Request failed with status code 500') ||
       msg.includes('ENOTFOUND') ||
       msg.includes('ECONNREFUSED') ||
-      msg.includes('Could not reach LLM');
+      msg.includes('Could not reach LLM') ||
+      // Cold local CPU inference (e.g. llama2 reloading after Ollama's keep_alive
+      // expiry) can exceed the server's 60s upstream timeout on slower hosts.
+      msg.includes('timeout of') && msg.includes('ms exceeded');
 
     if (isKnownModelIssue) {
       console.warn('  ⚠️ Chat response returned expected model issue:', msg);

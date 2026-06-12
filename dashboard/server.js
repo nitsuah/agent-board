@@ -1102,6 +1102,9 @@ app.get('/api/docker/status', async (req, res) => {
     } else if (config.backendType === 'docker-runner') {
       const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+    } else if (config.backendType === 'openllm-container') {
+      const openllmUp = containers['llm_openllm']?.running ?? false;
+      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
     } else {
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: false, fallback: true };
     }
