@@ -1,0 +1,28 @@
+# Opt-in overlay: grants the agent-dashboard container real control over the
+# Docker stack (start/stop/restart services, pull models) via the Services
+# panel and ToolWorkbench "Start" buttons.
+#
+# This is intentionally NOT part of docker-compose.yml — by default the
+# dashboard has no Docker CLI and no socket access (see the comments in
+# docker-compose.yml). Apply this overlay only in trusted local/dev setups:
+# mounting the Docker socket gives the dashboard container root-equivalent
+# control over the host Docker daemon.
+#
+# Usage:
+#   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
+#     --project-directory . up -d --build agent-dashboard
+#
+# This builds the dashboard image with the Docker CLI installed
+# (INSTALL_DOCKER_CLI=true), mounts the host Docker socket read-write, and
+# enables AGENT_BOARD_ENABLE_DOCKER_CONTROL so the service action endpoints
+# (start/stop/restart) and model-pull endpoints actually execute.
+
+services:
+  agent-dashboard:
+    build:
+      args:
+        INSTALL_DOCKER_CLI: "true"
+    environment:
+      - AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

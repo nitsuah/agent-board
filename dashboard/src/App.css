@@ -1155,6 +1155,22 @@ body {
   cursor: not-allowed;
 }
 
+.docker-service-error {
+  flex-basis: 100%;
+  font-size: 0.7rem;
+  color: var(--red);
+  word-break: break-word;
+}
+
+.docker-service-pull-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.docker-service-pull-status.pulling { color: var(--yellow); }
+.docker-service-pull-status.completed { color: var(--green); }
+.docker-service-pull-status.failed { color: var(--red); }
+
 .system-meta-text {
   font-size: 0.76rem;
   color: var(--text-muted);

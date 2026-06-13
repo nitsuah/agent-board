@@ -1,5 +1,11 @@
 FROM node:26-slim AS base
 
+# Raise libuv's threadpool size (default 4) so concurrent DNS lookups in
+# /api/system/services don't starve each other: slow lookups for down hosts
+# (e.g. nemoclaw, llm_openllm) were delaying lookups for healthy hosts past
+# their own axios timeout, misreporting them as unavailable.
+ENV UV_THREADPOOL_SIZE=16
+
 # Docker CLI is opt-in. Build with --build-arg INSTALL_DOCKER_CLI=true only in
 # trusted dev/CI environments where Docker socket access is explicitly required.
 ARG INSTALL_DOCKER_CLI=false

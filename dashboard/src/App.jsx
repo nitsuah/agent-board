@@ -361,6 +361,8 @@ function App() {
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
+  const [serviceActionErrors, setServiceActionErrors] = useState({});
+  const [modelPulls, setModelPulls] = useState({});
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -463,16 +465,19 @@ function App() {
     fetchSystemServices();
     fetchSystemInfo();
     fetchDemoMode();
+    fetchModelPullStatus();
 
     const sessionInterval = setInterval(fetchSessions, 5000);
     const taskInterval = setInterval(fetchTasks, 7000);
     const dockerInterval = setInterval(fetchDockerStatus, 10000);
     const servicesInterval = setInterval(fetchSystemServices, 10000);
+    const pullStatusInterval = setInterval(fetchModelPullStatus, 10000);
     return () => {
       clearInterval(sessionInterval);
       clearInterval(taskInterval);
       clearInterval(dockerInterval);
       clearInterval(servicesInterval);
+      clearInterval(pullStatusInterval);
     };
   }, []);
 
@@ -527,6 +532,7 @@ function App() {
   const runServiceAction = async (serviceKey, action) => {
     const actionId = `${serviceKey}:${action}`;
     setServiceActionsInFlight(prev => ({ ...prev, [actionId]: true }));
+    setServiceActionErrors(prev => ({ ...prev, [serviceKey]: null }));
     try {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, {
         method: 'POST'
@@ -534,10 +540,43 @@ function App() {
       const data = await res.json();
       if (!data.success) {
         console.error('Service action failed:', data.error || 'Unknown error');
+        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
       }
       await Promise.all([fetchDockerStatus(), fetchSystemServices()]);
     } catch (error) {
       console.error('Service action failed:', error);
+      setServiceActionErrors(prev => ({ ...prev, [serviceKey]: error.message }));
+    } finally {
+      setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
+    }
+  };
+
+  const fetchModelPullStatus = async () => {
+    try {
+      const res = await fetch('/api/models/pull-status');
+      const data = await res.json();
+      if (data.success) setModelPulls(data.pulls || {});
+    } catch (error) { console.error('Error fetching model pull status:', error); }
+  };
+
+  const pullModel = async (endpoint, model) => {
+    const pullKey = `${endpoint}:${model}`;
+    const actionId = `pull:${pullKey}`;
+    setServiceActionsInFlight(prev => ({ ...prev, [actionId]: true }));
+    setServiceActionErrors(prev => ({ ...prev, [actionId]: null }));
+    try {
+      const res = await fetch('/api/models/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint, model })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setServiceActionErrors(prev => ({ ...prev, [actionId]: data.error || 'Pull failed' }));
+      }
+      await fetchModelPullStatus();
+    } catch (error) {
+      setServiceActionErrors(prev => ({ ...prev, [actionId]: error.message }));
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
     }
@@ -610,6 +649,12 @@ function App() {
         }
 
         setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
+
+        const { event_type: eventType, endpoint, model, metadata } = payload.event;
+        if (eventType?.startsWith('model_pull_') && endpoint && model) {
+          const pullKey = `${endpoint}:${model}`;
+          setModelPulls((prev) => ({ ...prev, [pullKey]: { endpoint, model, ...metadata } }));
+        }
       } catch {
         // Ignore malformed payloads.
       }
@@ -1505,25 +1550,25 @@ function App() {
               </div>
             </div>
 
-            <div className="docker-status">
-              <h3>Services</h3>
-              {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => {
-                const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
-                const serviceMeta = systemServices?.services?.[serviceKey];
-                const canControl = !!(systemServices?.dockerControlEnabled && serviceMeta?.controllable);
+            {(() => {
+              const renderServiceRow = (serviceKey, info) => {
+                const canControl = !!(systemServices?.dockerControlEnabled && info.controllable);
                 return (
-                  <div key={name} className="docker-status-item">
+                  <div key={serviceKey} className="docker-status-item">
                     <div className="docker-service-info">
                       <div className="docker-service-name">
-                        {status.label || name}
-                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({status.backendType})</span>
+                        {info.label}
+                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({info.backendType})</span>
                       </div>
-                      <div className={`docker-service-status ${status.running ? 'running' : 'stopped'}`}>
-                        {status.running ? '● Live' : '● ' + status.status}
+                      <div className={`docker-service-status ${info.running ? 'running' : 'stopped'}`}>
+                        {info.running ? '● Live' : '● ' + info.status}
                       </div>
-                      <div className="docker-service-port">{status.ports}</div>
-                      {!canControl && serviceMeta?.disabledReason && (
-                        <div className="docker-service-disabled-reason">{serviceMeta.disabledReason}</div>
+                      <div className="docker-service-port">{info.ports}</div>
+                      {!canControl && info.disabledReason && (
+                        <div className="docker-service-disabled-reason">{info.disabledReason}</div>
+                      )}
+                      {serviceActionErrors[serviceKey] && (
+                        <div className="docker-service-error">{serviceActionErrors[serviceKey]}</div>
                       )}
                     </div>
                     <div className="docker-actions">
@@ -1532,19 +1577,56 @@ function App() {
                         disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
                         onClick={() => runServiceAction(serviceKey, 'start')}
                       >
-                        Start
+                        {serviceActionsInFlight[`${serviceKey}:start`] ? 'Starting…' : 'Start'}
+                      </button>
+                      <button
+                        className="btn-docker-action"
+                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:stop`]}
+                        onClick={() => runServiceAction(serviceKey, 'stop')}
+                      >
+                        {serviceActionsInFlight[`${serviceKey}:stop`] ? 'Stopping…' : 'Stop'}
                       </button>
                       <button
                         className="btn-docker-action"
                         disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
                         onClick={() => runServiceAction(serviceKey, 'restart')}
                       >
-                        Restart
+                        {serviceActionsInFlight[`${serviceKey}:restart`] ? 'Restarting…' : 'Restart'}
                       </button>
                     </div>
                   </div>
                 );
+              };
+
+              return (
+            <div className="docker-status">
+              <h3>Services</h3>
+              {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => {
+                const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
+                const serviceMeta = systemServices?.services?.[serviceKey];
+                return renderServiceRow(serviceKey, {
+                  label: status.label || name,
+                  backendType: status.backendType,
+                  running: status.running,
+                  status: status.status,
+                  ports: status.ports,
+                  controllable: serviceMeta?.controllable,
+                  disabledReason: serviceMeta?.disabledReason,
+                });
               })}
+              {/* Tool/MCP servers (e.g. content-gen, website) and other registry-only
+                  services aren't part of dockerStatus.containers, so render them here too. */}
+              {systemServices?.services && Object.entries(systemServices.services)
+                .filter(([key]) => !(key in (dockerStatus?.containers || {})))
+                .map(([key, meta]) => renderServiceRow(key, {
+                  label: meta.label,
+                  backendType: meta.backendType,
+                  running: meta.running,
+                  status: meta.status,
+                  ports: meta.ports,
+                  controllable: meta.controllable,
+                  disabledReason: meta.disabledReason,
+                }))}
 
               <h3>LLM Endpoints</h3>
               {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
@@ -1558,6 +1640,47 @@ function App() {
                   </div>
                 </div>
               ))}
+
+              <h3>Models</h3>
+              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints)
+                .filter(([, ep]) => ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner')
+                .map(([key, ep]) => {
+                  const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
+                  const pullKey = `${key}:${ep.model}`;
+                  const actionId = `pull:${pullKey}`;
+                  const pull = modelPulls[pullKey];
+                  const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
+                  return (
+                    <div key={key} className="docker-status-item">
+                      <div className="docker-service-info">
+                        <div className="docker-service-name">{ep.name}</div>
+                        <div className="docker-service-port">{ep.model || 'no model configured'}</div>
+                        <div className={`docker-service-status ${installed ? 'running' : 'stopped'}`}>
+                          {installed ? '● Installed' : '● Not pulled'}
+                        </div>
+                        {pull && (
+                          <div className={`docker-service-pull-status ${pull.status}`}>
+                            {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
+                            {pull.status === 'completed' && '✓ Pull complete'}
+                            {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
+                          </div>
+                        )}
+                        {serviceActionErrors[actionId] && (
+                          <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
+                        )}
+                      </div>
+                      <div className="docker-actions">
+                        <button
+                          className="btn-docker-action"
+                          disabled={pulling || installed === true || !ep.model}
+                          onClick={() => pullModel(key, ep.model)}
+                        >
+                          {pulling ? 'Pulling…' : installed ? 'Installed' : 'Pull'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
 
               <div className="system-meta-text">
                 <div>
@@ -1578,6 +1701,8 @@ function App() {
                 Manage stack: <code>stack-manager.ps1</code>
               </p>
             </div>
+              );
+            })()}
           </aside>
         )}
       </div>

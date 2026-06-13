@@ -130,6 +130,10 @@ const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
 const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
 
+// Model pulls (Ollama `ollama pull` / Docker Model Runner `docker model pull`)
+// can take many minutes for multi-GB models on slow connections.
+const MODEL_PULL_TIMEOUT_MS = Number(process.env.MODEL_PULL_TIMEOUT_MS || 20 * 60_000);
+
 function isTruthyEnv(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
@@ -183,6 +187,9 @@ const tasks = new Map();
 let taskCounter = 0;
 const TASK_STATUSES = new Set(['pending', 'in_progress', 'blocked', 'completed']);
 const TASK_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
+
+// Model pull status, keyed by `${endpoint}:${model}`.
+const pullStatus = new Map();
 
 function logStructured(level, eventType, data = {}) {
   const payload = JSON.stringify({
@@ -561,6 +568,12 @@ function checkModelInRunnerList(modelsList, modelId) {
 async function fetchDockerRunnerModels(baseUrl, timeoutMs = 4000) {
   const response = await axios.get(`${baseUrl}/models`, { timeout: timeoutMs });
   return response.data?.data || [];
+}
+
+/** Fetches the Ollama /api/tags list and returns the model name array. */
+async function fetchOllamaModels(baseUrl, timeoutMs = 4000) {
+  const response = await axios.get(`${baseUrl}/api/tags`, { timeout: timeoutMs });
+  return (response.data?.models || []).map((m) => m.name).filter(Boolean);
 }
 
 // ============ EVENT BUS ============
@@ -1173,11 +1186,21 @@ app.get('/api/docker/status', async (req, res) => {
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
     if (config.backendType === 'ollama-container') {
       const ollamaUp = containers['ollama']?.running ?? false;
+      let modelInstalled = false;
+      if (ollamaUp) {
+        try {
+          const ollamaModels = await fetchOllamaModels(primaryResolution.url);
+          modelInstalled = ollamaModels.some(
+            (name) => normalizeOllamaModelName(name) === normalizeOllamaModelName(config.defaultModel)
+          );
+        } catch { /* ollama up but tags unavailable */ }
+      }
       endpoints[key] = {
         name: config.name,
         model: config.defaultModel,
         backendType: config.backendType,
         live: ollamaUp,
+        modelInstalled,
         fallback: !ollamaUp,
         resolvedUrl: primaryResolution.url,
         discovered: primaryResolution.discovered,
@@ -1337,6 +1360,151 @@ app.post('/api/system/services/:serviceKey/:action', async (req, res) => {
     });
     res.status(500).json({ success: false, error: `Service action failed: ${error.message}` });
   }
+});
+
+/**
+ * Streams an Ollama `/api/pull` request, relaying progress via the event bus
+ * (`model_pull_progress`) and recording the latest status in `pullStatus`.
+ */
+async function startOllamaPull(endpoint, modelName, pullKey) {
+  const startedAt = new Date().toISOString();
+  pullStatus.set(pullKey, { endpoint, model: modelName, status: 'pulling', percent: null, message: 'starting', startedAt });
+  eventBus.emit('model_pull_started', { endpoint, model: modelName, metadata: { status: 'pulling', message: 'starting' } });
+
+  try {
+    const primaryResolution = await resolvePrimaryLlmUrl();
+    const response = await axios.post(
+      `${primaryResolution.url}/api/pull`,
+      { name: modelName, stream: true },
+      { responseType: 'stream', timeout: MODEL_PULL_TIMEOUT_MS }
+    );
+
+    let buffer = '';
+    let lastEmittedPercent = -1;
+    let pullError = null;
+
+    await new Promise((resolve, reject) => {
+      response.data.on('data', (chunk) => {
+        buffer += chunk.toString('utf8');
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line) continue;
+
+          let parsed;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (parsed.error) {
+            pullError = parsed.error;
+            continue;
+          }
+
+          const percent = parsed.total ? Math.round((parsed.completed / parsed.total) * 100) : null;
+          const current = { endpoint, model: modelName, status: 'pulling', percent, message: parsed.status || '', startedAt };
+          pullStatus.set(pullKey, current);
+
+          if (percent === null || percent !== lastEmittedPercent) {
+            lastEmittedPercent = percent ?? lastEmittedPercent;
+            eventBus.emit('model_pull_progress', { endpoint, model: modelName, metadata: current });
+          }
+        }
+      });
+      response.data.on('end', resolve);
+      response.data.on('error', reject);
+    });
+
+    if (pullError) {
+      throw new Error(pullError);
+    }
+
+    const completed = { endpoint, model: modelName, status: 'completed', percent: 100, message: 'success', startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, completed);
+    eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
+  } catch (error) {
+    const failed = { endpoint, model: modelName, status: 'failed', error: error.message, startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, failed);
+    eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
+    logStructured('error', 'model_pull_failed', { endpoint, model: modelName, error: error.message });
+  }
+}
+
+/**
+ * Runs `docker model pull <model>` for Docker Model Runner endpoints.
+ * Requires Docker CLI + socket access (AGENT_BOARD_ENABLE_DOCKER_CONTROL).
+ */
+async function startDockerModelPull(endpoint, modelName, pullKey) {
+  const startedAt = new Date().toISOString();
+  pullStatus.set(pullKey, { endpoint, model: modelName, status: 'pulling', percent: null, message: 'docker model pull starting', startedAt });
+  eventBus.emit('model_pull_started', { endpoint, model: modelName, metadata: { status: 'pulling', message: 'docker model pull starting' } });
+
+  try {
+    await execFileAsync('docker', ['model', 'pull', modelName], { timeout: MODEL_PULL_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
+    const completed = { endpoint, model: modelName, status: 'completed', percent: 100, message: 'success', startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, completed);
+    eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
+  } catch (error) {
+    const details = `${error.message || ''}\n${error.stderr || ''}`.trim();
+    const failed = { endpoint, model: modelName, status: 'failed', error: details, startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, failed);
+    eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
+    logStructured('error', 'model_pull_failed', { endpoint, model: modelName, error: details });
+  }
+}
+
+/**
+ * Pull a model for an LLM endpoint.
+ * - `primary` (Ollama): streams progress from `/api/pull` via the event bus.
+ * - `docker_runner`/`glm_flash` (Docker Model Runner): runs `docker model pull`,
+ *   gated by AGENT_BOARD_ENABLE_DOCKER_CONTROL (requires Docker CLI + socket).
+ * - `openllm`: not supported — its model is fixed at container build time.
+ */
+app.post('/api/models/pull', async (req, res) => {
+  const { endpoint, model } = req.body || {};
+  const config = LLM_CONFIG[endpoint];
+  if (!config) {
+    return res.status(400).json({ success: false, error: `Unknown endpoint: ${endpoint}` });
+  }
+
+  const modelName = model || config.defaultModel;
+  if (!modelName) {
+    return res.status(400).json({ success: false, error: 'No model specified and the endpoint has no default model configured.' });
+  }
+
+  const pullKey = `${endpoint}:${modelName}`;
+  const existing = pullStatus.get(pullKey);
+  if (existing?.status === 'pulling') {
+    return res.json({ success: true, pullKey, ...existing });
+  }
+
+  if (config.backendType === 'ollama-container') {
+    startOllamaPull(endpoint, modelName, pullKey);
+    return res.status(202).json({ success: true, pullKey, endpoint, model: modelName, status: 'pulling' });
+  }
+
+  if (config.backendType === 'docker-runner') {
+    if (!DOCKER_CONTROL_ENABLED) {
+      return res.status(501).json({
+        success: false,
+        error: `Pulling Docker Model Runner models from the dashboard requires AGENT_BOARD_ENABLE_DOCKER_CONTROL=true and Docker CLI/socket access. Until then, run on the host: docker model pull ${modelName}`,
+      });
+    }
+    startDockerModelPull(endpoint, modelName, pullKey);
+    return res.status(202).json({ success: true, pullKey, endpoint, model: modelName, status: 'pulling' });
+  }
+
+  return res.status(400).json({ success: false, error: `Pull is not supported for endpoint "${endpoint}" (${config.backendType}).` });
+});
+
+/**
+ * Status of in-progress/last-known model pulls, keyed by `${endpoint}:${model}`.
+ */
+app.get('/api/models/pull-status', (req, res) => {
+  res.json({ success: true, pulls: Object.fromEntries(pullStatus) });
 });
 
 /**

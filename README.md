@@ -165,6 +165,32 @@ button when `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`). The dashboard talks to th
 servers via `POST /api/tools/:toolKey/call`, which proxies MCP `tools/call` over
 Streamable HTTP — no MCP client is needed in the browser.
 
+### Docker control & model pulls (opt-in)
+
+By default the dashboard container has no Docker CLI and no socket access, so the
+Services panel can show status but the Start/Stop/Restart buttons and the Models
+panel's Pull buttons return a 501 explaining how to run the equivalent command on the
+host. To let the dashboard actually drive the stack, apply the
+`docker-compose.docker-control.yml` overlay:
+
+```powershell
+docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml `
+  --project-directory . up -d --build agent-dashboard
+```
+
+This builds the dashboard with the Docker CLI installed, mounts the host Docker socket
+read-write, and sets `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`. Mounting the Docker
+socket gives the dashboard container root-equivalent control over the host Docker
+daemon — only use this overlay in trusted local/dev environments.
+
+With the overlay applied:
+- The **Services** panel's Start/Stop/Restart buttons run real
+  `docker compose up -d|stop|restart <service>` commands.
+- The **Models** panel's Pull buttons download the configured model for each LLM
+  endpoint — `ollama pull` (streamed, with live progress) for the `primary` endpoint,
+  and `docker model pull` for Docker Model Runner endpoints (`docker_runner`,
+  `glm_flash`).
+
 ## API
 
 ### Sessions
@@ -191,9 +217,14 @@ Streamable HTTP — no MCP client is needed in the browser.
 ### System
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
-- `GET /api/docker/status` — Container status
+- `GET /api/docker/status` — Container status (includes `endpoints[*].modelInstalled`/`modelLoaded`)
 - `GET /api/system/services` — Service discovery catalog (resolved URLs, candidates, controllability)
 - `POST /api/system/services/:serviceKey/:action` — Service action API (`start|stop|restart`, gated)
+- `POST /api/models/pull` — Pull a model for an LLM endpoint (`{ endpoint, model? }`, defaults to the
+  endpoint's configured model). Ollama pulls stream progress via `/ws/events`
+  (`model_pull_progress`); Docker Model Runner pulls (`docker_runner`/`glm_flash`) require
+  `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true` and the [docker-control overlay](#docker-control-and-model-pulls-opt-in).
+- `GET /api/models/pull-status` — In-progress/last-known pull status per `endpoint:model`
 - `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
 - `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
 
