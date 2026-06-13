@@ -52,7 +52,7 @@ Open these endpoints:
 - Dashboard: http://localhost:3000
 - Jaeger UI: http://localhost:16686
 - Ollama API: http://localhost:8081
-- NemoClaw: http://localhost:9000
+- NemoClaw: http://localhost:9000 (currently crash-loops on Windows builds — see TASKS.md "Unblock NemoClaw sandbox container")
 - OpenLLM API (opt-in, see [OpenLLM (optional)](#openllm-optional)): http://localhost:8082
 
 ## What You Can Do In 2 Minutes
