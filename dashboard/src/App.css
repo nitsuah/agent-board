@@ -1247,3 +1247,150 @@ code {
     flex: 1;
   }
 }
+
+/* ── Tool workbench (Content Studio / Website Agent experiences) ─────────── */
+.tool-workbench {
+  margin: 0.6rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card, rgba(128, 128, 128, 0.06));
+  font-size: 0.85rem;
+}
+
+.tool-workbench-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-workbench-status {
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
+.tool-workbench-toggle {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.tool-workbench-body {
+  padding: 0 0.75rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.tool-workbench-offline p {
+  margin: 0 0 0.4rem;
+}
+
+.tool-workbench-offline code {
+  display: block;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.74rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.tool-entry {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.tool-entry-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+
+.tool-entry-desc {
+  font-size: 0.72rem;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-entry.open .tool-entry-desc {
+  white-space: normal;
+}
+
+.tool-entry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.tool-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tool-field input[type='text'],
+.tool-field input[type='number'] {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.tool-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tool-field-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.tool-field-desc {
+  font-weight: 400;
+  opacity: 0.65;
+}
+
+.tool-result {
+  border: 1px solid var(--green, #3fb950);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+}
+
+.tool-result.error {
+  border-color: var(--red, #f85149);
+}
+
+.tool-result-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.tool-result-header .icon-btn {
+  margin-left: auto;
+}
+
+.tool-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.76rem;
+  max-height: 200px;
+  overflow-y: auto;
+}

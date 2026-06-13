@@ -89,6 +89,36 @@ const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 const BB_MCP_ENABLED = isTruthyEnv(process.env.BB_MCP_ENABLED);
 const OPENLLM_ENABLED = isTruthyEnv(process.env.OPENLLM_ENABLED);
+
+// MCP tool servers backing the tool-driven experiences (content_gen, website).
+// Both run behind the `tools` compose profile and speak Streamable HTTP MCP on /mcp.
+const TOOL_CONTENT_GEN_URL = process.env.TOOL_CONTENT_GEN_URL || 'http://tool-content-gen:3200';
+const TOOL_WEBSITE_URL = process.env.TOOL_WEBSITE_URL || 'http://tool-website:3201';
+
+const TOOL_SERVERS = {
+  content_gen: {
+    key: 'content_gen',
+    name: 'Content Gen (AI video)',
+    description: 'Wraps MoneyPrinterTurbo — generate AI short videos from a topic.',
+    url: TOOL_CONTENT_GEN_URL,
+    serviceKey: 'tool_content_gen',
+    composeService: 'tool-content-gen',
+    ports: '3200:3200',
+  },
+  website: {
+    key: 'website',
+    name: 'Website Agent (B2B sites)',
+    description: 'Lead discovery, client site generation, Netlify deploys, invoicing.',
+    url: TOOL_WEBSITE_URL,
+    serviceKey: 'tool_website',
+    composeService: 'tool-website',
+    ports: '3201:3201',
+  },
+};
+
+// generate_video polls MoneyPrinterTurbo for up to 10 minutes server-side, so
+// tool calls need a much longer budget than chat requests.
+const TOOL_CALL_TIMEOUT_MS = Number(process.env.TOOL_CALL_TIMEOUT_MS || 11 * 60_000);
 const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
   process.env.PRIMARY_LLM_URL_CANDIDATES,
   [
@@ -295,6 +325,28 @@ function getServiceRegistry() {
       probePath: '/v1/models',
       candidates: [LLM_CONFIG.openllm.url],
       disabledReason: OPENLLM_ENABLED ? null : 'OPENLLM_ENABLED=false',
+    },
+    tool_content_gen: {
+      key: 'tool_content_gen',
+      label: 'Content Gen (MCP tool)',
+      backendType: 'mcp',
+      composeService: TOOL_SERVERS.content_gen.composeService,
+      ports: TOOL_SERVERS.content_gen.ports,
+      controllable: true,
+      checkType: 'http',
+      probePath: '/health',
+      candidates: [TOOL_SERVERS.content_gen.url],
+    },
+    tool_website: {
+      key: 'tool_website',
+      label: 'Website Agent (MCP tool)',
+      backendType: 'mcp',
+      composeService: TOOL_SERVERS.website.composeService,
+      ports: TOOL_SERVERS.website.ports,
+      controllable: true,
+      checkType: 'http',
+      probePath: '/health',
+      candidates: [TOOL_SERVERS.website.url],
     },
   };
 }
@@ -676,6 +728,31 @@ const EXPERIENCE_CONFIGS = {
     safetyMode: 'strict',
     availableEndpoints: ['primary'],
     systemPromptSuffix: 'You are a friendly, safe assistant helping everyday users.'
+  },
+  // Tool-driven experiences: chat is paired with a workbench panel that lists
+  // and executes the tool server's MCP tools (see /api/tools routes). The
+  // `tool` key must match an entry in TOOL_SERVERS.
+  content_gen: {
+    name: 'Content Studio',
+    description: 'Generate AI short videos via the content-gen tool server (MoneyPrinterTurbo).',
+    icon: '🎬',
+    safetyMode: 'standard',
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
+    systemPromptSuffix:
+      'You are helping the user plan and produce short-form AI videos. Suggest concrete video topics, ' +
+      'hooks, and scripts. The user can execute generation through the Content Gen tool panel.',
+    tool: 'content_gen'
+  },
+  website: {
+    name: 'Website Agent',
+    description: 'Discover local-business leads and generate/deploy B2B client sites via the website tool server.',
+    icon: '🌐',
+    safetyMode: 'standard',
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
+    systemPromptSuffix:
+      'You are helping the user run a B2B website agency workflow: lead discovery, pitch copy, ' +
+      'site content, and invoicing. The user can execute external actions through the Website Agent tool panel.',
+    tool: 'website'
   }
 };
 
@@ -1065,19 +1142,23 @@ app.get('/api/docker/status', async (req, res) => {
     });
   }
 
-  const containers = {};
-  for (const { name, label, url, ports, backendType, checkType } of serviceChecks) {
-    try {
-      if (checkType === 'tcp') {
-        await checkTcpService(url, 3000);
-      } else {
-        await checkHttpService(url, 3000);
+  // Probe in parallel — sequential 3s timeouts against down services stack up
+  // fast enough to blow client budgets once a few services are offline.
+  const containerEntries = await Promise.all(
+    serviceChecks.map(async ({ name, label, url, ports, backendType, checkType }) => {
+      try {
+        if (checkType === 'tcp') {
+          await checkTcpService(url, 3000);
+        } else {
+          await checkHttpService(url, 3000);
+        }
+        return [name, { running: true, status: 'healthy', ports, backendType, label }];
+      } catch {
+        return [name, { running: false, status: 'unavailable', ports, backendType, label }];
       }
-      containers[name] = { running: true, status: 'healthy', ports, backendType, label };
-    } catch {
-      containers[name] = { running: false, status: 'unavailable', ports, backendType, label };
-    }
-  }
+    })
+  );
+  const containers = Object.fromEntries(containerEntries);
 
   // Per-endpoint LLM status — derived from the service checks above
   const runnerLive = containers['docker-runner']?.running ?? false;
@@ -2570,6 +2651,167 @@ app.get('/api/experiences', (req, res) => {
 });
 
 /**
+ * Tool servers (MCP) — back the content_gen / website experiences.
+ *
+ * GET  /api/tools                 → reachability of each tool server
+ * GET  /api/tools/:toolKey/tools  → MCP tools/list proxied to the tool server
+ * POST /api/tools/:toolKey/call   → MCP tools/call (body: { name, arguments })
+ *
+ * Start/stop of the underlying containers goes through the existing
+ * /api/system/services/:serviceKey/:action routes (tool_content_gen, tool_website).
+ */
+
+// Streamable HTTP MCP responses arrive either as plain JSON or as an SSE
+// stream with the JSON-RPC payload in `data:` lines. Returns the parsed
+// JSON-RPC message carrying a result/error, or null if unparseable.
+function parseMcpRpcResponse(rawBody, contentType = '') {
+  const body = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody ?? '');
+  if (String(contentType).includes('text/event-stream')) {
+    const messages = body
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter(Boolean)
+      .map((chunk) => {
+        try { return JSON.parse(chunk); } catch { return null; }
+      })
+      .filter(Boolean);
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].result !== undefined || messages[i].error !== undefined) {
+        return messages[i];
+      }
+    }
+    return null;
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+async function mcpRequest(baseUrl, method, params = {}, timeoutMs = 15000) {
+  const response = await axios.post(
+    `${baseUrl}/mcp`,
+    { jsonrpc: '2.0', id: randomUUID(), method, params },
+    {
+      timeout: timeoutMs,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      responseType: 'text',
+      transformResponse: [(data) => data],
+      validateStatus: () => true,
+    }
+  );
+
+  if (response.status >= 400) {
+    throw new Error(`tool server responded ${response.status} for ${method}`);
+  }
+  const rpc = parseMcpRpcResponse(response.data, response.headers?.['content-type']);
+  if (!rpc) {
+    throw new Error(`tool server returned an unparseable MCP response for ${method}`);
+  }
+  if (rpc.error) {
+    throw new Error(rpc.error.message || `MCP error for ${method}`);
+  }
+  return rpc.result;
+}
+
+app.get('/api/tools', async (req, res) => {
+  const tools = await Promise.all(
+    Object.values(TOOL_SERVERS).map(async (tool) => {
+      let running = false;
+      let health = null;
+      try {
+        const probe = await axios.get(`${tool.url}/health`, { timeout: 3000 });
+        running = true;
+        health = probe.data || null;
+      } catch {
+        running = false;
+      }
+      return {
+        key: tool.key,
+        name: tool.name,
+        description: tool.description,
+        url: tool.url,
+        serviceKey: tool.serviceKey,
+        composeService: tool.composeService,
+        ports: tool.ports,
+        running,
+        status: running ? 'healthy' : 'unavailable',
+        health,
+      };
+    })
+  );
+
+  res.json({ success: true, dockerControlEnabled: DOCKER_CONTROL_ENABLED, tools });
+});
+
+app.get('/api/tools/:toolKey/tools', async (req, res) => {
+  const tool = TOOL_SERVERS[req.params.toolKey];
+  if (!tool) {
+    return res.status(404).json({ success: false, error: `Unknown tool server: ${req.params.toolKey}` });
+  }
+
+  try {
+    const result = await mcpRequest(tool.url, 'tools/list');
+    res.json({ success: true, tools: result?.tools || [] });
+  } catch (error) {
+    logStructured('error', 'tool_list_failed', { tool: tool.key, error: error.message });
+    res.status(502).json({ success: false, error: `Tool server unreachable: ${error.message}` });
+  }
+});
+
+app.post('/api/tools/:toolKey/call', async (req, res) => {
+  const tool = TOOL_SERVERS[req.params.toolKey];
+  if (!tool) {
+    return res.status(404).json({ success: false, error: `Unknown tool server: ${req.params.toolKey}` });
+  }
+
+  const { name, arguments: toolArgs } = req.body || {};
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ success: false, error: 'Tool name is required' });
+  }
+
+  eventBus.emit('tool_call', {
+    toolServer: tool.key,
+    tool: name,
+    experience: null,
+    endpoint: null,
+  });
+
+  try {
+    const result = await mcpRequest(tool.url, 'tools/call', {
+      name,
+      arguments: toolArgs && typeof toolArgs === 'object' ? toolArgs : {},
+    }, TOOL_CALL_TIMEOUT_MS);
+
+    const textContent = (result?.content || [])
+      .filter((item) => item?.type === 'text')
+      .map((item) => item.text)
+      .join('\n');
+
+    eventBus.emit('tool_call_completed', {
+      toolServer: tool.key,
+      tool: name,
+      experience: null,
+      endpoint: null,
+    });
+
+    res.json({ success: true, tool: name, isError: !!result?.isError, content: textContent, raw: result });
+  } catch (error) {
+    logStructured('error', 'tool_call_failed', { tool: tool.key, name, error: error.message });
+    eventBus.emit('tool_call_failed', {
+      toolServer: tool.key,
+      tool: name,
+      experience: null,
+      endpoint: null,
+      metadata: { error: error.message },
+    });
+    res.status(502).json({ success: false, error: `Tool call failed: ${error.message}` });
+  }
+});
+
+/**
  * MCP Connectors — load connector definitions from config/connectors.json
  */
 const CONNECTORS_PATH = join(__dirname, '..', 'config', 'connectors.json');
@@ -2733,10 +2975,13 @@ export {
   detectPII,
   filterResponse,
   getAllowedEndpoints,
+  getExperienceConfig,
   isEndpointAllowed,
   normalizePromptText,
   normalizeOllamaModelName,
   normalizeTaskPriority,
+  parseMcpRpcResponse,
+  TOOL_SERVERS,
   normalizeTaskStatus,
   redactSensitiveText,
   resolveConfiguredSafetyMode,

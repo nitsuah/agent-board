@@ -158,6 +158,10 @@ services:
       - NEMOCLAW_URL=http://nemoclaw:8080
       - BB_MCP_URL=http://bb-mcp:3100
       - BB_MCP_ENABLED=${BB_MCP_ENABLED:-false}
+      # MCP tool servers backing the Content Studio / Website Agent experiences
+      # (profile `tools` — see tool-content-gen / tool-website below)
+      - TOOL_CONTENT_GEN_URL=http://tool-content-gen:3200
+      - TOOL_WEBSITE_URL=http://tool-website:3201
       - AGENT_BOARD_ENABLE_DOCKER_CONTROL=${AGENT_BOARD_ENABLE_DOCKER_CONTROL:-false}
       - PORT=3000
       - DATABASE_URL=postgresql://agent:agent@agent-db:5432/agent_board
@@ -213,7 +217,8 @@ services:
   # Enable with:  docker compose --profile tools up tool-content-gen
   tool-content-gen:
     build:
-      context: ../tools/content-gen
+      # Relative to the project directory (compose is run with --project-directory .)
+      context: ./tools/content-gen
       dockerfile: Dockerfile
     container_name: tool-content-gen
     restart: unless-stopped
@@ -248,7 +253,8 @@ services:
   # Enable with:  docker compose --profile tools up tool-website
   tool-website:
     build:
-      context: ../tools/website
+      # Relative to the project directory (compose is run with --project-directory .)
+      context: ./tools/website
       dockerfile: Dockerfile
     container_name: tool-website
     restart: unless-stopped
@@ -271,7 +277,8 @@ services:
     volumes:
       # /app/output matches $PSScriptRoot/../output inside the container scripts
       - website_output:/app/output
-      - ../tools/website/templates:/app/templates:ro
+      # Relative to the project directory (compose is run with --project-directory .)
+      - ./tools/website/templates:/app/templates:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

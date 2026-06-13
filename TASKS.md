@@ -154,6 +154,10 @@ Last Updated: 2026-06-12
 
 ## Done
 
+- [x] **[Now] Hook up content-gen & website tool servers as agent experiences** — 🎬 Content Studio and 🌐 Website Agent are selectable experiences whose chat sessions are paired with a tool workbench panel.
+  - Context: the MCP servers under `tools/` (ports 3200/3201, compose profile `tools`) had no dashboard integration; the workbench lists each server's MCP tools, generates forms from their input schemas, and executes them via the new `/api/tools` proxy routes (Streamable HTTP MCP, stateless).
+  - Acceptance Criteria: `/api/tools`, `/api/tools/:toolKey/tools`, `/api/tools/:toolKey/call` work against the live tool containers; both containers appear in the system services registry (start/stop gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`); unit + integration tests cover experience wiring, MCP response parsing, and route guards.
+
 - [x] **[Now] Swap primary Ollama model from llama2 to llama3.2:3b** — llama2-7B on a CPU-only host exceeded the dashboard's 120s chat timeout once conversation context grew; llama3.2:3b (2.0 GB) generates ~4x faster with far better instruction-following.
   - Context: the Docker Desktop VM has ~7.6 GB RAM, so only one Ollama model can be resident at a time; the default is now env-configurable via `PRIMARY_LLM_MODEL`.
   - Acceptance Criteria: full e2e-chat suite (all 12 steps) passes against the live stack with the new default; `OLLAMA_KEEP_ALIVE=30m` keeps the model warm between requests.

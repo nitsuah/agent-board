@@ -142,6 +142,29 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 
 The container serves on port `3000` internally (`http://localhost:8082` on the host) and caches model weights in the `openllm_data` volume.
 
+### Tool experiences: Content Studio & Website Agent (optional)
+
+Two MCP tool servers under `tools/` are wired in as selectable **experiences**: pick
+🎬 **Content Studio** or 🌐 **Website Agent** in the sidebar and the chat session is
+paired with a tool workbench panel that lists the server's MCP tools and executes them
+(forms are generated from each tool's input schema).
+
+- **Content Studio** (`tools/content-gen`, port 3200) wraps MoneyPrinterTurbo for AI
+  short-video generation (`generate_video`, `get_video_status`, container controls).
+- **Website Agent** (`tools/website`, port 3201) drives the B2B website workflow:
+  `discover_leads`, `save_file`/`read_file`, `deploy_site` (Netlify), `create_invoice`.
+
+Both are gated behind the `tools` compose profile:
+
+```powershell
+docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d --build tool-content-gen tool-website
+```
+
+If a tool server is offline, the workbench shows the exact start command (and a Start
+button when `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`). The dashboard talks to the
+servers via `POST /api/tools/:toolKey/call`, which proxies MCP `tools/call` over
+Streamable HTTP — no MCP client is needed in the browser.
+
 ## API
 
 ### Sessions
@@ -157,6 +180,9 @@ The container serves on port `3000` internally (`http://localhost:8082` on the h
 
 ### Product Surface
 - `GET /api/experiences` — List available experience configs
+- `GET /api/tools` — Tool server reachability (content_gen, website)
+- `GET /api/tools/:toolKey/tools` — List a tool server's MCP tools
+- `POST /api/tools/:toolKey/call` — Execute an MCP tool (`{ name, arguments }`)
 - `GET /api/metrics/summary` — Session/message totals, model distribution, experience distribution
 - `GET /api/metrics/safety` — Input classifications, blocked prompts, filtered outputs
 - `GET /api/metrics/feedback` — Positive/negative feedback by model and experience
@@ -180,6 +206,9 @@ The container serves on port `3000` internally (`http://localhost:8082` on the h
 - `OPENLLM_ENABLED` — Set `true` to mark the OpenLLM endpoint as controllable from the system panel.
 - `OPENLLM_MODEL` — HuggingFace model repo id served by the `llm_openllm` container.
 - `OPENLLM_URL` — Override the OpenLLM endpoint URL (default `http://llm_openllm:3000`).
+- `TOOL_CONTENT_GEN_URL` — Override the content-gen tool server URL (default `http://tool-content-gen:3200`).
+- `TOOL_WEBSITE_URL` — Override the website tool server URL (default `http://tool-website:3201`).
+- `TOOL_CALL_TIMEOUT_MS` — Budget for MCP tool calls (default 660000; video generation is slow).
 
 ## Architecture
 
