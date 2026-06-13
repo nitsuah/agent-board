@@ -53,6 +53,7 @@ Open these endpoints:
 - Jaeger UI: http://localhost:16686
 - Ollama API: http://localhost:8081
 - NemoClaw: http://localhost:9000
+- OpenLLM API (opt-in, see [OpenLLM (optional)](#openllm-optional)): http://localhost:8082
 
 ## What You Can Do In 2 Minutes
 
@@ -64,7 +65,7 @@ Open these endpoints:
 
 ## Features
 
-- **Multi-model support**: Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash
+- **Multi-model support**: Llama2, Qwen3-Coder (Ollama), Docker Model Runner, GLM-Flash, OpenLLM (opt-in)
 - **Agent sessions**: persistent session management with full message history
 - **Safety sandbox**: NemoClaw integration for policy-enforced safe mode
 - **Experience modes**: server-enforced endpoint and safety rules per experience
@@ -128,6 +129,68 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 1. Docker Desktop → Settings → Features in development → **Enable Docker Model Runner** + **Host-side TCP support**
 2. Select "Docker Runner" in the dashboard sidebar
 
+### OpenLLM (optional)
+
+[OpenLLM](https://github.com/bentoml/OpenLLM) is a second OpenAI-compatible endpoint (`openllm`) for running custom or fine-tuned HuggingFace models that don't fit Ollama's Modelfile pattern — it runs alongside Ollama, not instead of it. It's opt-in and gated behind the `openllm` compose profile so it never starts by default. To enable it:
+
+1. Set `OPENLLM_MODEL` to a HuggingFace model repo id (e.g. `HuggingFaceTB/SmolLM2-1.7B-Instruct`) and `OPENLLM_ENABLED=true` in `.env`.
+2. Start the service:
+   ```powershell
+   docker compose -f config/docker-compose.yml --profile openllm up -d llm_openllm
+   ```
+3. Select "OpenLLM" in the dashboard sidebar (Developer or Research experience).
+
+The container serves on port `3000` internally (`http://localhost:8082` on the host) and caches model weights in the `openllm_data` volume.
+
+### Tool experiences: Content Studio & Website Agent (optional)
+
+Two MCP tool servers under `tools/` are wired in as selectable **experiences**: pick
+🎬 **Content Studio** or 🌐 **Website Agent** in the sidebar and the chat session is
+paired with a tool workbench panel that lists the server's MCP tools and executes them
+(forms are generated from each tool's input schema).
+
+- **Content Studio** (`tools/content-gen`, port 3200) wraps MoneyPrinterTurbo for AI
+  short-video generation (`generate_video`, `get_video_status`, container controls).
+- **Website Agent** (`tools/website`, port 3201) drives the B2B website workflow:
+  `discover_leads`, `save_file`/`read_file`, `deploy_site` (Netlify), `create_invoice`.
+
+Both are gated behind the `tools` compose profile:
+
+```powershell
+docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d --build tool-content-gen tool-website
+```
+
+If a tool server is offline, the workbench shows the exact start command (and a Start
+button when `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`). The dashboard talks to the
+servers via `POST /api/tools/:toolKey/call`, which proxies MCP `tools/call` over
+Streamable HTTP — no MCP client is needed in the browser.
+
+### Docker control & model pulls (opt-in)
+
+By default the dashboard container has no Docker CLI and no socket access, so the
+Services panel can show status but the Start/Stop/Restart buttons and the Models
+panel's Pull buttons return a 501 explaining how to run the equivalent command on the
+host. To let the dashboard actually drive the stack, apply the
+`docker-compose.docker-control.yml` overlay:
+
+```powershell
+docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml `
+  --project-directory . up -d --build agent-dashboard
+```
+
+This builds the dashboard with the Docker CLI installed, mounts the host Docker socket
+read-write, and sets `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`. Mounting the Docker
+socket gives the dashboard container root-equivalent control over the host Docker
+daemon — only use this overlay in trusted local/dev environments.
+
+With the overlay applied:
+- The **Services** panel's Start/Stop/Restart buttons run real
+  `docker compose up -d|stop|restart <service>` commands.
+- The **Models** panel's Pull buttons download the configured model for each LLM
+  endpoint — `ollama pull` (streamed, with live progress) for the `primary` endpoint,
+  and `docker model pull` for Docker Model Runner endpoints (`docker_runner`,
+  `glm_flash`).
+
 ## API
 
 ### Sessions
@@ -143,6 +206,9 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 
 ### Product Surface
 - `GET /api/experiences` — List available experience configs
+- `GET /api/tools` — Tool server reachability (content_gen, website)
+- `GET /api/tools/:toolKey/tools` — List a tool server's MCP tools
+- `POST /api/tools/:toolKey/call` — Execute an MCP tool (`{ name, arguments }`)
 - `GET /api/metrics/summary` — Session/message totals, model distribution, experience distribution
 - `GET /api/metrics/safety` — Input classifications, blocked prompts, filtered outputs
 - `GET /api/metrics/feedback` — Positive/negative feedback by model and experience
@@ -151,9 +217,14 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 ### System
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
-- `GET /api/docker/status` — Container status
+- `GET /api/docker/status` — Container status (includes `endpoints[*].modelInstalled`/`modelLoaded`)
 - `GET /api/system/services` — Service discovery catalog (resolved URLs, candidates, controllability)
 - `POST /api/system/services/:serviceKey/:action` — Service action API (`start|stop|restart`, gated)
+- `POST /api/models/pull` — Pull a model for an LLM endpoint (`{ endpoint, model? }`, defaults to the
+  endpoint's configured model). Ollama pulls stream progress via `/ws/events`
+  (`model_pull_progress`); Docker Model Runner pulls (`docker_runner`/`glm_flash`) require
+  `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true` and the [docker-control overlay](#docker-control-and-model-pulls-opt-in).
+- `GET /api/models/pull-status` — In-progress/last-known pull status per `endpoint:model`
 - `GET /api/persistence/status` — Postgres persistence status (configured/enabled)
 - `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
 
@@ -163,6 +234,12 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 - `AGENT_BOARD_ENABLE_DOCKER_CONTROL` — Set `true` to enable service action API endpoints.
 - `DOCKER_COMPOSE_FILE` — Optional compose-file override for service actions.
 - `DOCKER_PROJECT_DIR` — Optional compose project-directory override for service actions.
+- `OPENLLM_ENABLED` — Set `true` to mark the OpenLLM endpoint as controllable from the system panel.
+- `OPENLLM_MODEL` — HuggingFace model repo id served by the `llm_openllm` container.
+- `OPENLLM_URL` — Override the OpenLLM endpoint URL (default `http://llm_openllm:3000`).
+- `TOOL_CONTENT_GEN_URL` — Override the content-gen tool server URL (default `http://tool-content-gen:3200`).
+- `TOOL_WEBSITE_URL` — Override the website tool server URL (default `http://tool-website:3201`).
+- `TOOL_CALL_TIMEOUT_MS` — Budget for MCP tool calls (default 660000; video generation is slow).
 
 ## Architecture
 

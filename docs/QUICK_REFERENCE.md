@@ -133,6 +133,7 @@ docker exec llm_qwen_coder ollama pull llama3.2:latest
 | `qwen_coder` | llm_qwen_coder:8080 | ollama | qwen3-coder:latest |
 | `docker_runner` | model-runner.docker.internal | openai | ai/qwen3-coder:latest |
 | `glm_flash` | model-runner.docker.internal | openai | ai/glm-4.7-flash:latest |
+| `openllm` | llm_openllm:3000 (host 8082, opt-in) | openai | `$OPENLLM_MODEL` |
 
 ## 🔐 Safe Mode
 

@@ -49,7 +49,10 @@ const LLM_CONFIG = {
     backendType: 'ollama-container',
     type: 'general',
     apiStyle: 'ollama',
-    defaultModel: 'llama2:latest'
+    // llama3.2:3b generates ~4x faster than llama2 7B on CPU-only hosts and
+    // scores far higher on instruction-following — 7B-class models routinely
+    // exceed the 120s chat timeout here once conversation context grows.
+    defaultModel: process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b'
   },
   docker_runner: {
     url: DOCKER_RUNNER_URL,
@@ -68,12 +71,54 @@ const LLM_CONFIG = {
     type: 'fast',
     apiStyle: 'openai',
     defaultModel: process.env.GLM_FLASH_MODEL || 'ai/glm-4.7-flash:latest'
+  },
+  openllm: {
+    // OpenLLM (BentoML) — opt-in second OpenAI-compatible endpoint for custom
+    // or fine-tuned HuggingFace models. Enable via the `openllm` compose
+    // profile and OPENLLM_ENABLED=true. See AI_STACK_STRATEGY.md.
+    url: process.env.OPENLLM_URL || 'http://llm_openllm:3000',
+    name: 'OpenLLM (custom models)',
+    backendType: 'openllm-container',
+    type: 'custom',
+    apiStyle: 'openai',
+    defaultModel: process.env.OPENLLM_MODEL || ''
   }
 };
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
 const BB_MCP_ENABLED = isTruthyEnv(process.env.BB_MCP_ENABLED);
+const OPENLLM_ENABLED = isTruthyEnv(process.env.OPENLLM_ENABLED);
+
+// MCP tool servers backing the tool-driven experiences (content_gen, website).
+// Both run behind the `tools` compose profile and speak Streamable HTTP MCP on /mcp.
+const TOOL_CONTENT_GEN_URL = process.env.TOOL_CONTENT_GEN_URL || 'http://tool-content-gen:3200';
+const TOOL_WEBSITE_URL = process.env.TOOL_WEBSITE_URL || 'http://tool-website:3201';
+
+const TOOL_SERVERS = {
+  content_gen: {
+    key: 'content_gen',
+    name: 'Content Gen (AI video)',
+    description: 'Wraps MoneyPrinterTurbo — generate AI short videos from a topic.',
+    url: TOOL_CONTENT_GEN_URL,
+    serviceKey: 'tool_content_gen',
+    composeService: 'tool-content-gen',
+    ports: '3200:3200',
+  },
+  website: {
+    key: 'website',
+    name: 'Website Agent (B2B sites)',
+    description: 'Lead discovery, client site generation, Netlify deploys, invoicing.',
+    url: TOOL_WEBSITE_URL,
+    serviceKey: 'tool_website',
+    composeService: 'tool-website',
+    ports: '3201:3201',
+  },
+};
+
+// generate_video polls MoneyPrinterTurbo for up to 10 minutes server-side, so
+// tool calls need a much longer budget than chat requests.
+const TOOL_CALL_TIMEOUT_MS = Number(process.env.TOOL_CALL_TIMEOUT_MS || 11 * 60_000);
 const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
   process.env.PRIMARY_LLM_URL_CANDIDATES,
   [
@@ -84,6 +129,10 @@ const PRIMARY_LLM_URL_CANDIDATES = parseUrlListEnv(
 );
 const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 4000);
 const MAX_OUTPUT_CHARS = Number(process.env.MAX_OUTPUT_CHARS || 5000);
+
+// Model pulls (Ollama `ollama pull` / Docker Model Runner `docker model pull`)
+// can take many minutes for multi-GB models on slow connections.
+const MODEL_PULL_TIMEOUT_MS = Number(process.env.MODEL_PULL_TIMEOUT_MS || 20 * 60_000);
 
 function isTruthyEnv(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
@@ -138,6 +187,9 @@ const tasks = new Map();
 let taskCounter = 0;
 const TASK_STATUSES = new Set(['pending', 'in_progress', 'blocked', 'completed']);
 const TASK_PRIORITIES = new Set(['low', 'medium', 'high', 'urgent']);
+
+// Model pull status, keyed by `${endpoint}:${model}`.
+const pullStatus = new Map();
 
 function logStructured(level, eventType, data = {}) {
   const payload = JSON.stringify({
@@ -269,6 +321,40 @@ function getServiceRegistry() {
       candidates: [BB_MCP_URL],
       disabledReason: BB_MCP_ENABLED ? null : 'BB_MCP_ENABLED=false',
     },
+    llm_openllm: {
+      key: 'llm_openllm',
+      label: 'OpenLLM (custom models)',
+      backendType: 'openllm-container',
+      composeService: 'llm_openllm',
+      ports: '8082:3000',
+      controllable: OPENLLM_ENABLED,
+      checkType: 'http',
+      probePath: '/v1/models',
+      candidates: [LLM_CONFIG.openllm.url],
+      disabledReason: OPENLLM_ENABLED ? null : 'OPENLLM_ENABLED=false',
+    },
+    tool_content_gen: {
+      key: 'tool_content_gen',
+      label: 'Content Gen (MCP tool)',
+      backendType: 'mcp',
+      composeService: TOOL_SERVERS.content_gen.composeService,
+      ports: TOOL_SERVERS.content_gen.ports,
+      controllable: true,
+      checkType: 'http',
+      probePath: '/health',
+      candidates: [TOOL_SERVERS.content_gen.url],
+    },
+    tool_website: {
+      key: 'tool_website',
+      label: 'Website Agent (MCP tool)',
+      backendType: 'mcp',
+      composeService: TOOL_SERVERS.website.composeService,
+      ports: TOOL_SERVERS.website.ports,
+      controllable: true,
+      checkType: 'http',
+      probePath: '/health',
+      candidates: [TOOL_SERVERS.website.url],
+    },
   };
 }
 
@@ -371,7 +457,12 @@ async function ensureRunnableModelForSession(session) {
     return { adjusted: false, reason: 'non_ollama_endpoint' };
   }
 
-  const availableModels = await getOllamaModelNames(session.llmUrl);
+  let availableModels;
+  try {
+    availableModels = await getOllamaModelNames(session.llmUrl);
+  } catch {
+    return { adjusted: false, reason: 'no_models' };
+  }
   const resolvedModel = chooseRunnableOllamaModel(session.model, availableModels, endpointConfig.defaultModel);
   if (!resolvedModel) {
     return { adjusted: false, reason: 'no_models' };
@@ -463,11 +554,12 @@ function getAvailabilityFallbackEndpoint() {
 /**
  * Pure helper — checks whether a specific model ID exists in the Docker Model Runner
  * models-list response (OpenAI /v1/models format: { data: [{ id, ... }] }).
- * Strips :latest suffix for comparison so both 'ai/foo:latest' and 'ai/foo' match.
+ * Strips the docker.io/ registry prefix and :latest suffix for comparison, so
+ * 'docker.io/ai/foo:latest', 'ai/foo:latest', and 'ai/foo' all match.
  */
 function checkModelInRunnerList(modelsList, modelId) {
   if (!Array.isArray(modelsList) || !modelId) return false;
-  const normalise = (s) => String(s).replace(/:latest$/i, '').toLowerCase();
+  const normalise = (s) => String(s).replace(/^docker\.io\//i, '').replace(/:latest$/i, '').toLowerCase();
   const target = normalise(modelId);
   return modelsList.some((m) => normalise(m.id ?? m.name ?? '') === target);
 }
@@ -476,6 +568,12 @@ function checkModelInRunnerList(modelsList, modelId) {
 async function fetchDockerRunnerModels(baseUrl, timeoutMs = 4000) {
   const response = await axios.get(`${baseUrl}/models`, { timeout: timeoutMs });
   return response.data?.data || [];
+}
+
+/** Fetches the Ollama /api/tags list and returns the model name array. */
+async function fetchOllamaModels(baseUrl, timeoutMs = 4000) {
+  const response = await axios.get(`${baseUrl}/api/tags`, { timeout: timeoutMs });
+  return (response.data?.models || []).map((m) => m.name).filter(Boolean);
 }
 
 // ============ EVENT BUS ============
@@ -625,7 +723,7 @@ const EXPERIENCE_CONFIGS = {
     description: 'Full model access, standard safety, session history.',
     icon: '💻',
     safetyMode: 'standard',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix: 'You are assisting a software developer. Be precise, prefer code examples.'
   },
   research: {
@@ -633,7 +731,7 @@ const EXPERIENCE_CONFIGS = {
     description: 'Long-form reasoning and document analysis. Slightly looser rails — opt-in.',
     icon: '🔬',
     safetyMode: 'research',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix: 'You are a research assistant. Prioritise depth, cite your reasoning, and flag uncertainties.'
   },
   safechat: {
@@ -643,6 +741,31 @@ const EXPERIENCE_CONFIGS = {
     safetyMode: 'strict',
     availableEndpoints: ['primary'],
     systemPromptSuffix: 'You are a friendly, safe assistant helping everyday users.'
+  },
+  // Tool-driven experiences: chat is paired with a workbench panel that lists
+  // and executes the tool server's MCP tools (see /api/tools routes). The
+  // `tool` key must match an entry in TOOL_SERVERS.
+  content_gen: {
+    name: 'Content Studio',
+    description: 'Generate AI short videos via the content-gen tool server (MoneyPrinterTurbo).',
+    icon: '🎬',
+    safetyMode: 'standard',
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
+    systemPromptSuffix:
+      'You are helping the user plan and produce short-form AI videos. Suggest concrete video topics, ' +
+      'hooks, and scripts. The user can execute generation through the Content Gen tool panel.',
+    tool: 'content_gen'
+  },
+  website: {
+    name: 'Website Agent',
+    description: 'Discover local-business leads and generate/deploy B2B client sites via the website tool server.',
+    icon: '🌐',
+    safetyMode: 'standard',
+    availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
+    systemPromptSuffix:
+      'You are helping the user run a B2B website agency workflow: lead discovery, pitch copy, ' +
+      'site content, and invoicing. The user can execute external actions through the Website Agent tool panel.',
+    tool: 'website'
   }
 };
 
@@ -1010,6 +1133,14 @@ app.get('/api/docker/status', async (req, res) => {
       ports: '9000:8080',
       backendType: 'sandbox',
       checkType: 'tcp'
+    },
+    {
+      name: 'llm_openllm',
+      label: 'OpenLLM (custom models)',
+      url: `${LLM_CONFIG.openllm.url}/v1/models`,
+      ports: '8082:3000',
+      backendType: 'openllm-container',
+      checkType: 'http'
     }
   ];
 
@@ -1024,19 +1155,23 @@ app.get('/api/docker/status', async (req, res) => {
     });
   }
 
-  const containers = {};
-  for (const { name, label, url, ports, backendType, checkType } of serviceChecks) {
-    try {
-      if (checkType === 'tcp') {
-        await checkTcpService(url, 3000);
-      } else {
-        await checkHttpService(url, 3000);
+  // Probe in parallel — sequential 3s timeouts against down services stack up
+  // fast enough to blow client budgets once a few services are offline.
+  const containerEntries = await Promise.all(
+    serviceChecks.map(async ({ name, label, url, ports, backendType, checkType }) => {
+      try {
+        if (checkType === 'tcp') {
+          await checkTcpService(url, 3000);
+        } else {
+          await checkHttpService(url, 3000);
+        }
+        return [name, { running: true, status: 'healthy', ports, backendType, label }];
+      } catch {
+        return [name, { running: false, status: 'unavailable', ports, backendType, label }];
       }
-      containers[name] = { running: true, status: 'healthy', ports, backendType, label };
-    } catch {
-      containers[name] = { running: false, status: 'unavailable', ports, backendType, label };
-    }
-  }
+    })
+  );
+  const containers = Object.fromEntries(containerEntries);
 
   // Per-endpoint LLM status — derived from the service checks above
   const runnerLive = containers['docker-runner']?.running ?? false;
@@ -1051,11 +1186,21 @@ app.get('/api/docker/status', async (req, res) => {
   for (const [key, config] of Object.entries(LLM_CONFIG)) {
     if (config.backendType === 'ollama-container') {
       const ollamaUp = containers['ollama']?.running ?? false;
+      let modelInstalled = false;
+      if (ollamaUp) {
+        try {
+          const ollamaModels = await fetchOllamaModels(primaryResolution.url);
+          modelInstalled = ollamaModels.some(
+            (name) => normalizeOllamaModelName(name) === normalizeOllamaModelName(config.defaultModel)
+          );
+        } catch { /* ollama up but tags unavailable */ }
+      }
       endpoints[key] = {
         name: config.name,
         model: config.defaultModel,
         backendType: config.backendType,
         live: ollamaUp,
+        modelInstalled,
         fallback: !ollamaUp,
         resolvedUrl: primaryResolution.url,
         discovered: primaryResolution.discovered,
@@ -1064,6 +1209,9 @@ app.get('/api/docker/status', async (req, res) => {
     } else if (config.backendType === 'docker-runner') {
       const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+    } else if (config.backendType === 'openllm-container') {
+      const openllmUp = containers['llm_openllm']?.running ?? false;
+      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
     } else {
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: false, fallback: true };
     }
@@ -1212,6 +1360,151 @@ app.post('/api/system/services/:serviceKey/:action', async (req, res) => {
     });
     res.status(500).json({ success: false, error: `Service action failed: ${error.message}` });
   }
+});
+
+/**
+ * Streams an Ollama `/api/pull` request, relaying progress via the event bus
+ * (`model_pull_progress`) and recording the latest status in `pullStatus`.
+ */
+async function startOllamaPull(endpoint, modelName, pullKey) {
+  const startedAt = new Date().toISOString();
+  pullStatus.set(pullKey, { endpoint, model: modelName, status: 'pulling', percent: null, message: 'starting', startedAt });
+  eventBus.emit('model_pull_started', { endpoint, model: modelName, metadata: { status: 'pulling', message: 'starting' } });
+
+  try {
+    const primaryResolution = await resolvePrimaryLlmUrl();
+    const response = await axios.post(
+      `${primaryResolution.url}/api/pull`,
+      { name: modelName, stream: true },
+      { responseType: 'stream', timeout: MODEL_PULL_TIMEOUT_MS }
+    );
+
+    let buffer = '';
+    let lastEmittedPercent = -1;
+    let pullError = null;
+
+    await new Promise((resolve, reject) => {
+      response.data.on('data', (chunk) => {
+        buffer += chunk.toString('utf8');
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line) continue;
+
+          let parsed;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (parsed.error) {
+            pullError = parsed.error;
+            continue;
+          }
+
+          const percent = parsed.total ? Math.round((parsed.completed / parsed.total) * 100) : null;
+          const current = { endpoint, model: modelName, status: 'pulling', percent, message: parsed.status || '', startedAt };
+          pullStatus.set(pullKey, current);
+
+          if (percent === null || percent !== lastEmittedPercent) {
+            lastEmittedPercent = percent ?? lastEmittedPercent;
+            eventBus.emit('model_pull_progress', { endpoint, model: modelName, metadata: current });
+          }
+        }
+      });
+      response.data.on('end', resolve);
+      response.data.on('error', reject);
+    });
+
+    if (pullError) {
+      throw new Error(pullError);
+    }
+
+    const completed = { endpoint, model: modelName, status: 'completed', percent: 100, message: 'success', startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, completed);
+    eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
+  } catch (error) {
+    const failed = { endpoint, model: modelName, status: 'failed', error: error.message, startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, failed);
+    eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
+    logStructured('error', 'model_pull_failed', { endpoint, model: modelName, error: error.message });
+  }
+}
+
+/**
+ * Runs `docker model pull <model>` for Docker Model Runner endpoints.
+ * Requires Docker CLI + socket access (AGENT_BOARD_ENABLE_DOCKER_CONTROL).
+ */
+async function startDockerModelPull(endpoint, modelName, pullKey) {
+  const startedAt = new Date().toISOString();
+  pullStatus.set(pullKey, { endpoint, model: modelName, status: 'pulling', percent: null, message: 'docker model pull starting', startedAt });
+  eventBus.emit('model_pull_started', { endpoint, model: modelName, metadata: { status: 'pulling', message: 'docker model pull starting' } });
+
+  try {
+    await execFileAsync('docker', ['model', 'pull', modelName], { timeout: MODEL_PULL_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
+    const completed = { endpoint, model: modelName, status: 'completed', percent: 100, message: 'success', startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, completed);
+    eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
+  } catch (error) {
+    const details = `${error.message || ''}\n${error.stderr || ''}`.trim();
+    const failed = { endpoint, model: modelName, status: 'failed', error: details, startedAt, completedAt: new Date().toISOString() };
+    pullStatus.set(pullKey, failed);
+    eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
+    logStructured('error', 'model_pull_failed', { endpoint, model: modelName, error: details });
+  }
+}
+
+/**
+ * Pull a model for an LLM endpoint.
+ * - `primary` (Ollama): streams progress from `/api/pull` via the event bus.
+ * - `docker_runner`/`glm_flash` (Docker Model Runner): runs `docker model pull`,
+ *   gated by AGENT_BOARD_ENABLE_DOCKER_CONTROL (requires Docker CLI + socket).
+ * - `openllm`: not supported — its model is fixed at container build time.
+ */
+app.post('/api/models/pull', async (req, res) => {
+  const { endpoint, model } = req.body || {};
+  const config = LLM_CONFIG[endpoint];
+  if (!config) {
+    return res.status(400).json({ success: false, error: `Unknown endpoint: ${endpoint}` });
+  }
+
+  const modelName = model || config.defaultModel;
+  if (!modelName) {
+    return res.status(400).json({ success: false, error: 'No model specified and the endpoint has no default model configured.' });
+  }
+
+  const pullKey = `${endpoint}:${modelName}`;
+  const existing = pullStatus.get(pullKey);
+  if (existing?.status === 'pulling') {
+    return res.json({ success: true, pullKey, ...existing });
+  }
+
+  if (config.backendType === 'ollama-container') {
+    startOllamaPull(endpoint, modelName, pullKey);
+    return res.status(202).json({ success: true, pullKey, endpoint, model: modelName, status: 'pulling' });
+  }
+
+  if (config.backendType === 'docker-runner') {
+    if (!DOCKER_CONTROL_ENABLED) {
+      return res.status(501).json({
+        success: false,
+        error: `Pulling Docker Model Runner models from the dashboard requires AGENT_BOARD_ENABLE_DOCKER_CONTROL=true and Docker CLI/socket access. Until then, run on the host: docker model pull ${modelName}`,
+      });
+    }
+    startDockerModelPull(endpoint, modelName, pullKey);
+    return res.status(202).json({ success: true, pullKey, endpoint, model: modelName, status: 'pulling' });
+  }
+
+  return res.status(400).json({ success: false, error: `Pull is not supported for endpoint "${endpoint}" (${config.backendType}).` });
+});
+
+/**
+ * Status of in-progress/last-known model pulls, keyed by `${endpoint}:${model}`.
+ */
+app.get('/api/models/pull-status', (req, res) => {
+  res.json({ success: true, pulls: Object.fromEntries(pullStatus) });
 });
 
 /**
@@ -1389,8 +1682,8 @@ app.post('/api/sessions', async (req, res) => {
   const endpoint = resolveSessionEndpoint(experience, requestedEndpoint);
   const endpointWasAdjusted = endpoint !== requestedEndpoint;
   const model = endpointWasAdjusted
-    ? LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest'
-    : coerceModelForEndpoint(endpoint, req.body.model) || LLM_CONFIG[endpoint]?.defaultModel || 'llama2:latest';
+    ? LLM_CONFIG[endpoint]?.defaultModel || LLM_CONFIG.primary.defaultModel
+    : coerceModelForEndpoint(endpoint, req.body.model) || LLM_CONFIG[endpoint]?.defaultModel || LLM_CONFIG.primary.defaultModel;
   const resolvedSafetyMode = resolveConfiguredSafetyMode(experience, safetyMode);
 
   const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1626,13 +1919,15 @@ const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
       response = await axios.post(
         `${llmUrl}/chat/completions`,
         { model: session.model, messages: msgs, stream: false },
-        { timeout: 60000 }
+        // CPU-bound generation under strict safety prompts (longer disclaimers)
+        // can take 45-60s+ on this host; match the streaming timeout below.
+        { timeout: 120000 }
       );
     } else {
       response = await axios.post(
         `${llmUrl}/api/chat`,
         { model: session.model, messages: msgs, stream: false },
-        { timeout: 60000 }
+        { timeout: 120000 }
       );
     }
 
@@ -2524,6 +2819,167 @@ app.get('/api/experiences', (req, res) => {
 });
 
 /**
+ * Tool servers (MCP) — back the content_gen / website experiences.
+ *
+ * GET  /api/tools                 → reachability of each tool server
+ * GET  /api/tools/:toolKey/tools  → MCP tools/list proxied to the tool server
+ * POST /api/tools/:toolKey/call   → MCP tools/call (body: { name, arguments })
+ *
+ * Start/stop of the underlying containers goes through the existing
+ * /api/system/services/:serviceKey/:action routes (tool_content_gen, tool_website).
+ */
+
+// Streamable HTTP MCP responses arrive either as plain JSON or as an SSE
+// stream with the JSON-RPC payload in `data:` lines. Returns the parsed
+// JSON-RPC message carrying a result/error, or null if unparseable.
+function parseMcpRpcResponse(rawBody, contentType = '') {
+  const body = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody ?? '');
+  if (String(contentType).includes('text/event-stream')) {
+    const messages = body
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trim())
+      .filter(Boolean)
+      .map((chunk) => {
+        try { return JSON.parse(chunk); } catch { return null; }
+      })
+      .filter(Boolean);
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].result !== undefined || messages[i].error !== undefined) {
+        return messages[i];
+      }
+    }
+    return null;
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+async function mcpRequest(baseUrl, method, params = {}, timeoutMs = 15000) {
+  const response = await axios.post(
+    `${baseUrl}/mcp`,
+    { jsonrpc: '2.0', id: randomUUID(), method, params },
+    {
+      timeout: timeoutMs,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      responseType: 'text',
+      transformResponse: [(data) => data],
+      validateStatus: () => true,
+    }
+  );
+
+  if (response.status >= 400) {
+    throw new Error(`tool server responded ${response.status} for ${method}`);
+  }
+  const rpc = parseMcpRpcResponse(response.data, response.headers?.['content-type']);
+  if (!rpc) {
+    throw new Error(`tool server returned an unparseable MCP response for ${method}`);
+  }
+  if (rpc.error) {
+    throw new Error(rpc.error.message || `MCP error for ${method}`);
+  }
+  return rpc.result;
+}
+
+app.get('/api/tools', async (req, res) => {
+  const tools = await Promise.all(
+    Object.values(TOOL_SERVERS).map(async (tool) => {
+      let running = false;
+      let health = null;
+      try {
+        const probe = await axios.get(`${tool.url}/health`, { timeout: 3000 });
+        running = true;
+        health = probe.data || null;
+      } catch {
+        running = false;
+      }
+      return {
+        key: tool.key,
+        name: tool.name,
+        description: tool.description,
+        url: tool.url,
+        serviceKey: tool.serviceKey,
+        composeService: tool.composeService,
+        ports: tool.ports,
+        running,
+        status: running ? 'healthy' : 'unavailable',
+        health,
+      };
+    })
+  );
+
+  res.json({ success: true, dockerControlEnabled: DOCKER_CONTROL_ENABLED, tools });
+});
+
+app.get('/api/tools/:toolKey/tools', async (req, res) => {
+  const tool = TOOL_SERVERS[req.params.toolKey];
+  if (!tool) {
+    return res.status(404).json({ success: false, error: `Unknown tool server: ${req.params.toolKey}` });
+  }
+
+  try {
+    const result = await mcpRequest(tool.url, 'tools/list');
+    res.json({ success: true, tools: result?.tools || [] });
+  } catch (error) {
+    logStructured('error', 'tool_list_failed', { tool: tool.key, error: error.message });
+    res.status(502).json({ success: false, error: `Tool server unreachable: ${error.message}` });
+  }
+});
+
+app.post('/api/tools/:toolKey/call', async (req, res) => {
+  const tool = TOOL_SERVERS[req.params.toolKey];
+  if (!tool) {
+    return res.status(404).json({ success: false, error: `Unknown tool server: ${req.params.toolKey}` });
+  }
+
+  const { name, arguments: toolArgs } = req.body || {};
+  if (!name || typeof name !== 'string') {
+    return res.status(400).json({ success: false, error: 'Tool name is required' });
+  }
+
+  eventBus.emit('tool_call', {
+    toolServer: tool.key,
+    tool: name,
+    experience: null,
+    endpoint: null,
+  });
+
+  try {
+    const result = await mcpRequest(tool.url, 'tools/call', {
+      name,
+      arguments: toolArgs && typeof toolArgs === 'object' ? toolArgs : {},
+    }, TOOL_CALL_TIMEOUT_MS);
+
+    const textContent = (result?.content || [])
+      .filter((item) => item?.type === 'text')
+      .map((item) => item.text)
+      .join('\n');
+
+    eventBus.emit('tool_call_completed', {
+      toolServer: tool.key,
+      tool: name,
+      experience: null,
+      endpoint: null,
+    });
+
+    res.json({ success: true, tool: name, isError: !!result?.isError, content: textContent, raw: result });
+  } catch (error) {
+    logStructured('error', 'tool_call_failed', { tool: tool.key, name, error: error.message });
+    eventBus.emit('tool_call_failed', {
+      toolServer: tool.key,
+      tool: name,
+      experience: null,
+      endpoint: null,
+      metadata: { error: error.message },
+    });
+    res.status(502).json({ success: false, error: `Tool call failed: ${error.message}` });
+  }
+});
+
+/**
  * MCP Connectors — load connector definitions from config/connectors.json
  */
 const CONNECTORS_PATH = join(__dirname, '..', 'config', 'connectors.json');
@@ -2687,10 +3143,13 @@ export {
   detectPII,
   filterResponse,
   getAllowedEndpoints,
+  getExperienceConfig,
   isEndpointAllowed,
   normalizePromptText,
   normalizeOllamaModelName,
   normalizeTaskPriority,
+  parseMcpRpcResponse,
+  TOOL_SERVERS,
   normalizeTaskStatus,
   redactSensitiveText,
   resolveConfiguredSafetyMode,

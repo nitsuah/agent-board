@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-06-08
+Last Updated: 2026-06-12
 
 ## 2026 Q1 - Foundation and Dashboard ✅
 
@@ -19,6 +19,8 @@ Last Updated: 2026-06-08
 - [ ] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
+- [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint) and find a working
+  OpenLLM or replacement custom-model endpoint (`OPENLLM_ENABLED=false` pending). See TASKS.md.
 
 ## 2026 Q4 - Extensibility Foundations
 

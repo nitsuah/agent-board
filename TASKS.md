@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-08
+Last Updated: 2026-06-12
 
 ## Todo
 
@@ -11,7 +11,13 @@ Last Updated: 2026-06-08
   - Context: CEO flagged stability issues due to container size and memory usage on laptops and low-memory hosts.
   - Acceptance Criteria: `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services (bb-mcp, large models) are gated behind env flags and documented.
   - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
-  - [ ] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.)
+  - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
+
+- [ ] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
+  - Priority: P1
+  - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos (`~/code/kryptos`) currently has no FastAPI/HTTP layer — it's CLI + library only (`src/kryptos/cli/main.py`). Scope includes scaffolding a minimal FastAPI app before wiring in turbovec.
+  - Tracking: implemented via a separate worktree/branch in `~/code/kryptos`, not in this repo.
+  - Acceptance Criteria: kryptos exposes a search/query FastAPI endpoint backed by turbovec over `artifacts/`; documented in kryptos README.
 
 - [ ] **[Q2-CEO] Model loading performance audit** — profile Ollama startup and model load times; identify bottlenecks and optimize for faster readiness.
   - Priority: P1
@@ -49,6 +55,38 @@ Last Updated: 2026-06-08
   - Acceptance Criteria: the Ollama service is configured for CUDA, GPU detection is validated, and setup prerequisites are documented.
 
 ### P2 - Medium
+
+- [ ] **[Now] Unblock NemoClaw sandbox container** — `nemoclaw:latest` builds (1.92GB) but the container crash-loops.
+  - Priority: P2
+  - Context: Built via `scripts/setup-nemoclaw.ps1` (NVIDIA/NemoClaw). The image's entrypoint
+    `/usr/local/bin/nemoclaw-start` and `/usr/local/lib/nemoclaw/sandbox-init.sh` come out of the
+    Docker-Desktop-on-Windows build with CRLF line endings despite clean LF sources in the upstream
+    repo (`env: 'bash\r': No such file or directory`) — a systemic Windows build-environment issue,
+    not a one-file fix. Separately, `config/docker-compose.yml`'s `nemoclaw` service execs
+    `/usr/local/bin/nemoclaw-wrapper.sh`, which doesn't exist in the current upstream image (the real
+    entrypoint is `nemoclaw-start`) — the compose service command is stale vs. upstream's current
+    image layout. No `nvidia/nemoclaw` image exists on Docker Hub as a fallback (`docker pull
+    nvidia/nemoclaw:latest` 404s).
+  - Acceptance Criteria: `docker compose up -d nemoclaw` produces a running, non-crash-looping
+    container reachable on `9000:8080` — either by building on native Linux/WSL (avoids CRLF
+    corruption), patching the built image's scripts to LF post-build, or rewriting the compose
+    service's command to match the current upstream entrypoint.
+
+- [ ] **[Now] Find a working OpenLLM (or replacement) custom-model endpoint** — `OPENLLM_ENABLED=false` until resolved.
+  - Priority: P2
+  - Context: AI_STACK_STRATEGY.md priority queue #2 added the `llm_openllm` compose service
+    (port 8082, opt-in `openllm` profile). `openllm` 0.6.30 removed the `start` subcommand (fixed in
+    `tools/llm-openllm/entrypoint.sh` to use `serve`, this PR), but `openllm serve` only accepts
+    model names from its own GPU-sized catalog (24G-80Gx8 VRAM: llama3.1/3.2, qwen2.5, mistral,
+    phi4, etc.) — not arbitrary HuggingFace repo ids as `OPENLLM_MODEL`/`.env.example` document.
+    Catalog-only, GPU-only serving is fundamentally incompatible with arbitrary CPU-friendly
+    custom models on this CLI version.
+  - Acceptance Criteria: either (a) pin an older `openllm` version whose CLI accepts arbitrary HF
+    repo ids, (b) replace `tools/llm-openllm` with a CPU-friendly serving stack (e.g. llama.cpp
+    server, text-generation-inference) that can load `OPENLLM_MODEL`, or (c) drop the `openllm`
+    endpoint from `LLM_CONFIG`/compose/docs if no viable option is found. Whichever path is chosen,
+    flip `OPENLLM_ENABLED=true` and verify `/api/docker/status` reports
+    `endpoints.openllm.live: true`.
 
 - [ ] Add a GPU-oriented model portfolio after CUDA is enabled.
   - Priority: P2
@@ -113,6 +151,25 @@ Last Updated: 2026-06-08
   - Acceptance Criteria: two agents exchange events in a documented demo path.
 
 ## In Progress
+
+## Done
+
+- [x] **[Now] Real container control + model pulls from the Services panel** — Start/Stop/Restart now hit the live `docker compose` CLI (gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`, activated via the opt-in `config/docker-compose.docker-control.yml` overlay), and a new Models section lets the user pull each configured LLM endpoint's model (`ollama pull` for `primary`, streamed with live progress over `/ws/events`; `docker model pull` for the Docker Model Runner endpoints).
+  - Context: the system panel previously only displayed start commands as text (e.g. "Start it on the host: docker compose ... up -d tool-content-gen") without a way to run them, and models had to be pulled manually outside the dashboard.
+  - Acceptance Criteria: `POST /api/system/services/:serviceKey/:action` and the new `POST /api/models/pull` / `GET /api/models/pull-status` work against the live stack when the docker-control overlay is applied; Services panel shows Start/Stop/Restart with inline error feedback; Models panel shows install status and pull progress; unit + integration tests cover the new endpoints and route guards.
+  - Follow-up: the Services panel previously only rendered the 4 `/api/docker/status` containers (ollama, docker-runner, nemoclaw, llm_openllm); it now also renders the `tool_content_gen`, `tool_website`, and `bb_mcp` entries from `/api/system/services` with the same Start/Stop/Restart controls. Also fixed `tool_content_gen`/`tool_website` intermittently reporting `unavailable` despite being healthy — concurrent DNS lookups for down hosts (nemoclaw, llm_openllm) were starving Node's libuv threadpool (default `UV_THREADPOOL_SIZE=4`) and delaying lookups for the healthy tool containers past their axios timeout; fixed via `ENV UV_THREADPOOL_SIZE=16` in `dashboard/Dockerfile`.
+
+- [x] **[Now] Hook up content-gen & website tool servers as agent experiences** — 🎬 Content Studio and 🌐 Website Agent are selectable experiences whose chat sessions are paired with a tool workbench panel.
+  - Context: the MCP servers under `tools/` (ports 3200/3201, compose profile `tools`) had no dashboard integration; the workbench lists each server's MCP tools, generates forms from their input schemas, and executes them via the new `/api/tools` proxy routes (Streamable HTTP MCP, stateless).
+  - Acceptance Criteria: `/api/tools`, `/api/tools/:toolKey/tools`, `/api/tools/:toolKey/call` work against the live tool containers; both containers appear in the system services registry (start/stop gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`); unit + integration tests cover experience wiring, MCP response parsing, and route guards.
+
+- [x] **[Now] Swap primary Ollama model from llama2 to llama3.2:3b** — llama2-7B on a CPU-only host exceeded the dashboard's 120s chat timeout once conversation context grew; llama3.2:3b (2.0 GB) generates ~4x faster with far better instruction-following.
+  - Context: the Docker Desktop VM has ~7.6 GB RAM, so only one Ollama model can be resident at a time; the default is now env-configurable via `PRIMARY_LLM_MODEL`.
+  - Acceptance Criteria: full e2e-chat suite (all 12 steps) passes against the live stack with the new default; `OLLAMA_KEEP_ALIVE=30m` keeps the model warm between requests.
+
+- [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
+  - Context: AI_STACK_STRATEGY.md priority queue #2.
+  - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.
 
 <!--
 AGENT INSTRUCTIONS:

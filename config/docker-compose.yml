@@ -26,7 +26,9 @@ services:
   # ===== LLM SERVICES =====
 
   # Local Ollama instance — runs models pulled via `docker exec ollama ollama pull <model>`
-  # Default model: llama2:latest  Port: 8081 (host) → 8080 (container)
+  # Default model: llama3.2:3b (small + modern — 7B-class models like llama2 are too
+  # slow on CPU-only hosts and blow past the dashboard's 120s chat timeout).
+  # Port: 8081 (host) → 8080 (container)
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -35,6 +37,10 @@ services:
       - "8081:8080"
     environment:
       - OLLAMA_HOST=0.0.0.0:8080
+      # Default keep_alive (5m) unloads the model between requests; on CPU-only
+      # hosts reloading a 7B model from disk can exceed the dashboard's chat
+      # timeout. Keep it resident for 30m of inactivity instead.
+      - OLLAMA_KEEP_ALIVE=30m
     volumes:
       - ollama_data:/root/.ollama
     networks:
@@ -47,6 +53,29 @@ services:
   # Endpoint (from inside containers): http://model-runner.docker.internal/engines/llama.cpp/v1
   # API style: OpenAI-compatible (/v1/chat/completions, /v1/models)
   # No container needed — Docker Desktop exposes this automatically.
+
+  # OpenLLM (BentoML) — second OpenAI-compatible endpoint, for custom or
+  # fine-tuned HuggingFace models that don't fit Ollama's Modelfile pattern.
+  # Opt-in: set OPENLLM_MODEL and enable the `openllm` profile.
+  # Enable with: OPENLLM_ENABLED=true OPENLLM_MODEL=<hf-repo-id> docker compose --profile openllm up -d llm_openllm
+  # Port: 8082 (host) → 3000 (container)
+  llm_openllm:
+    build:
+      context: ../tools/llm-openllm
+      dockerfile: Dockerfile
+    container_name: llm_openllm
+    restart: unless-stopped
+    profiles:
+      - openllm
+    ports:
+      - "8082:3000"
+    environment:
+      - OPENLLM_MODEL=${OPENLLM_MODEL:-}
+      - PORT=3000
+    volumes:
+      - openllm_data:/root/.cache
+    networks:
+      - agent-network
 
   # ===== SAFETY & SANDBOX =====
   
@@ -118,13 +147,21 @@ services:
       - "3000:3000"
     environment:
       - PRIMARY_LLM_URL=http://ollama:8080
+      - PRIMARY_LLM_MODEL=${PRIMARY_LLM_MODEL:-llama3.2:3b}
       # Docker Model Runner: Docker Desktop exposes this host to all containers
       - DOCKER_RUNNER_URL=http://model-runner.docker.internal/engines/llama.cpp/v1
       - DOCKER_RUNNER_MODEL=ai/qwen3-coder:latest
       - GLM_FLASH_MODEL=ai/glm-4.7-flash:latest
+      - OPENLLM_URL=http://llm_openllm:3000
+      - OPENLLM_MODEL=${OPENLLM_MODEL:-}
+      - OPENLLM_ENABLED=${OPENLLM_ENABLED:-false}
       - NEMOCLAW_URL=http://nemoclaw:8080
       - BB_MCP_URL=http://bb-mcp:3100
       - BB_MCP_ENABLED=${BB_MCP_ENABLED:-false}
+      # MCP tool servers backing the Content Studio / Website Agent experiences
+      # (profile `tools` — see tool-content-gen / tool-website below)
+      - TOOL_CONTENT_GEN_URL=http://tool-content-gen:3200
+      - TOOL_WEBSITE_URL=http://tool-website:3201
       - AGENT_BOARD_ENABLE_DOCKER_CONTROL=${AGENT_BOARD_ENABLE_DOCKER_CONTROL:-false}
       - PORT=3000
       - DATABASE_URL=postgresql://agent:agent@agent-db:5432/agent_board
@@ -180,7 +217,8 @@ services:
   # Enable with:  docker compose --profile tools up tool-content-gen
   tool-content-gen:
     build:
-      context: ../tools/content-gen
+      # Relative to the project directory (compose is run with --project-directory .)
+      context: ./tools/content-gen
       dockerfile: Dockerfile
     container_name: tool-content-gen
     restart: unless-stopped
@@ -215,7 +253,8 @@ services:
   # Enable with:  docker compose --profile tools up tool-website
   tool-website:
     build:
-      context: ../tools/website
+      # Relative to the project directory (compose is run with --project-directory .)
+      context: ./tools/website
       dockerfile: Dockerfile
     container_name: tool-website
     restart: unless-stopped
@@ -238,7 +277,8 @@ services:
     volumes:
       # /app/output matches $PSScriptRoot/../output inside the container scripts
       - website_output:/app/output
-      - ../tools/website/templates:/app/templates:ro
+      # Relative to the project directory (compose is run with --project-directory .)
+      - ./tools/website/templates:/app/templates:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -263,6 +303,7 @@ services:
 volumes:
   agent_db_data:
   ollama_data:  # Local Ollama model storage (llama2, etc.)
+  openllm_data:  # OpenLLM/HuggingFace + BentoML model cache
   nemoclaw_data:
   website_output:  # Persistent storage for generated client sites and pitch materials
 

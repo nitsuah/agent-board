@@ -2,6 +2,9 @@ import axios from 'axios';
 
 const DASHBOARD_URL = process.env.DASHBOARD_URL || 'http://localhost:3000';
 const TIMEOUT = 30000;
+// Chat messages that reach the LLM can take longer on CPU-only hosts (matches
+// server.js's 120000ms upstream timeout for /api/sessions/:id/message).
+const LLM_TIMEOUT = 130000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -80,7 +83,8 @@ async function run() {
   console.log('7) Sending a chat message to the session...');
   const send = await request(`/api/sessions/${session.session.id}/message`, {
     method: 'POST',
-    data: { message: 'Hello from E2E test', useSafeMode: false }
+    data: { message: 'Hello from E2E test', useSafeMode: false },
+    timeout: LLM_TIMEOUT
   });
 
   if (send.success) {
@@ -108,7 +112,10 @@ async function run() {
 
   console.log('8) Verifying session data includes message history');
   const sessionData = await request(`/api/sessions/${session.session.id}`);
-  if (sessionData.session?.messages?.length < 2) {
+  if (!sessionData.success || !Array.isArray(sessionData.session?.messages)) {
+    throw new Error(`failed to fetch session data: ${sessionData.response || 'no messages array'}`);
+  }
+  if (sessionData.session.messages.length < 2) {
     throw new Error('session message history is too short');
   }
   console.log('  ✅ Message history length =', sessionData.session.messages.length);
@@ -116,7 +123,8 @@ async function run() {
   console.log('9) Verifying safe mode routes to the session endpoint (not NemoClaw)...');
   const safeSend = await request(`/api/sessions/${session.session.id}/message`, {
     method: 'POST',
-    data: { message: 'Hello safe mode test', useSafeMode: true }
+    data: { message: 'Hello safe mode test', useSafeMode: true },
+    timeout: LLM_TIMEOUT
   });
   // Safe mode must not produce an error like "Could not reach NemoClaw" — it should
   // behave exactly like a normal send (safety enforced by system prompts, not URL routing).
@@ -165,7 +173,10 @@ async function run() {
 
   console.log('11) Verifying assistant feedback can only be submitted once...');
   const sessionAfterChat = await request(`/api/sessions/${session.session.id}`);
-  const msgs = sessionAfterChat.session?.messages || [];
+  if (!sessionAfterChat.success || !Array.isArray(sessionAfterChat.session?.messages)) {
+    throw new Error(`failed to re-fetch session for feedback test: ${sessionAfterChat.response || 'no messages array'}`);
+  }
+  const msgs = sessionAfterChat.session.messages;
   const assistantIndexes = msgs
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.role === 'assistant')

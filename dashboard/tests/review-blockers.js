@@ -9,13 +9,16 @@ const {
   chooseRunnableOllamaModel,
   classifyInput,
   coerceModelForEndpoint,
+  getExperienceConfig,
   isEndpointAllowed,
   normalizePromptText,
   normalizeOllamaModelName,
+  parseMcpRpcResponse,
   resolveConfiguredSafetyMode,
   resolveEffectiveSafetyMode,
   resolveSessionEndpoint,
-  sanitizeResponse
+  sanitizeResponse,
+  TOOL_SERVERS
 } = await import('../server.js');
 
 function testExperienceRestrictions() {
@@ -65,8 +68,11 @@ function testMetricsAveraging() {
 }
 
 function testModelCoercion() {
-  assert.equal(coerceModelForEndpoint('primary', 'ai/qwen3-coder:latest'), 'llama2:latest');
-  assert.equal(coerceModelForEndpoint('primary', 'docker.io/ai/glm-4.7-flash:latest'), 'llama2:latest');
+  // Runner-style model names must coerce to the primary endpoint's default
+  // (env-configurable via PRIMARY_LLM_MODEL; llama3.2:3b when unset).
+  const primaryDefault = process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b';
+  assert.equal(coerceModelForEndpoint('primary', 'ai/qwen3-coder:latest'), primaryDefault);
+  assert.equal(coerceModelForEndpoint('primary', 'docker.io/ai/glm-4.7-flash:latest'), primaryDefault);
   assert.equal(coerceModelForEndpoint('docker_runner', 'ai/qwen3-coder:latest'), 'ai/qwen3-coder:latest');
   assert.equal(normalizeOllamaModelName('llama2:latest'), 'llama2');
 }
@@ -82,6 +88,8 @@ function testCheckModelInRunnerList() {
   assert.equal(checkModelInRunnerList(models, 'ai/qwen3-coder:latest'), true);
   // :latest suffix stripped both sides
   assert.equal(checkModelInRunnerList(models, 'ai/qwen3-coder'), true);
+  // docker.io/ registry prefix stripped (real Docker Model Runner /v1/models response format)
+  assert.equal(checkModelInRunnerList([{ id: 'docker.io/ai/qwen3-coder:latest' }], 'ai/qwen3-coder:latest'), true);
   // model not in list
   assert.equal(checkModelInRunnerList(models, 'ai/missing-model:latest'), false);
   // handles models with .name instead of .id
@@ -134,7 +142,7 @@ function testExperienceSelectorMeta() {
   // The experience picker now uses a native <select> driven by EXPERIENCE_META on the
   // client side, but the server exposes the same experience names via session creation.
   // Ensure that the endpoint-allowlist function covers all public experience keys.
-  for (const exp of ['developer', 'research', 'safechat']) {
+  for (const exp of ['developer', 'research', 'safechat', 'content_gen', 'website']) {
     // resolveSessionEndpoint should return a string for each
     const resolved = resolveSessionEndpoint(exp, 'primary');
     assert.equal(typeof resolved, 'string');
@@ -143,6 +151,45 @@ function testExperienceSelectorMeta() {
   // safechat should never allow docker_runner
   assert.equal(isEndpointAllowed('safechat', 'docker_runner'), false);
   assert.equal(isEndpointAllowed('safechat', 'glm_flash'), false);
+}
+
+function testToolExperienceWiring() {
+  // Every tool-backed experience must point at a defined tool server, and the
+  // tool servers must expose the fields the /api/tools routes and UI rely on.
+  for (const exp of ['content_gen', 'website']) {
+    const config = getExperienceConfig(exp);
+    assert.equal(config.tool, exp, `experience '${exp}' should declare tool '${exp}'`);
+    const toolServer = TOOL_SERVERS[config.tool];
+    assert.ok(toolServer, `TOOL_SERVERS is missing entry '${config.tool}'`);
+    assert.ok(toolServer.url.startsWith('http'), `tool server '${exp}' should have an http url`);
+    assert.ok(toolServer.serviceKey, `tool server '${exp}' should map to a service registry key`);
+    assert.ok(toolServer.composeService, `tool server '${exp}' should map to a compose service`);
+  }
+}
+
+function testParseMcpRpcResponse() {
+  // Plain JSON body
+  const json = parseMcpRpcResponse('{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', 'application/json');
+  assert.deepEqual(json.result, { tools: [] });
+
+  // SSE body — payload arrives in `data:` lines; the result-bearing message wins
+  const sse = [
+    'event: message',
+    'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}',
+    '',
+    'event: message',
+    'data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok"}]}}',
+    ''
+  ].join('\n');
+  const parsed = parseMcpRpcResponse(sse, 'text/event-stream');
+  assert.equal(parsed.result.content[0].text, 'ok');
+
+  // JSON-RPC errors are surfaced, not swallowed
+  const errBody = parseMcpRpcResponse('data: {"jsonrpc":"2.0","id":1,"error":{"message":"boom"}}\n', 'text/event-stream');
+  assert.equal(errBody.error.message, 'boom');
+
+  // Garbage → null (callers treat as unreachable/unparseable)
+  assert.equal(parseMcpRpcResponse('not json', 'application/json'), null);
 }
 
 function testPromptNormalization() {
@@ -173,6 +220,8 @@ try {
   testChooseRunnableOllamaModel();
   testSafeModeDoesNotAlterEndpointRouting();
   testExperienceSelectorMeta();
+  testToolExperienceWiring();
+  testParseMcpRpcResponse();
   testPromptNormalization();
   testOutputControls();
   console.log('Review blocker regression tests passed.');
