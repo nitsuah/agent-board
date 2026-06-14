@@ -44,11 +44,6 @@ Last Updated: 2026-06-12
   - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that have not been revalidated together.
   - Acceptance Criteria: `docker compose up` completes cleanly and the documented local endpoints respond.
 
-- [ ] Expand safety-layer coverage and add adversarial prompt cases.
-  - Priority: P1
-  - Context: baseline safety tests pass, but edge-case coverage for prompt injection and mixed-content payloads remains thin.
-  - Acceptance Criteria: new test cases for prompt injection and mixed PII payloads are added and pass in Docker.
-
 - [ ] Enable Ollama GPU acceleration for the RTX 4080.
   - Priority: P1
   - Context: the local stack is still CPU-bound even though the host has a 24 GB GPU available.
@@ -153,6 +148,10 @@ Last Updated: 2026-06-12
 ## In Progress
 
 ## Done
+
+- [x] **Expand safety-layer coverage and add adversarial prompt cases.**
+  - Context: baseline safety tests passed, but edge-case coverage for prompt injection and mixed-content payloads was thin.
+  - Acceptance Criteria: added `dashboard/tests/safety-layer.js` tests for whitespace/tab/newline-split and zero-width-character (U+200B) evasion of `blockedPatterns`/`sensitivePatterns`/`outputHarmKeywords`, mixed multi-type PII payloads (JSON-embedded, space-separated credit cards, all four PII types in one message), prompt-injection-over-PII classification priority, and mixed harmful-content+PII response sanitization. Fixed the underlying gap in `classifyInput`/`filterResponse` (`dashboard/server.js`) via a new `normalizeForMatching()` helper that strips zero-width characters and collapses whitespace runs before pattern matching. Full unit suite (`npm run test:unit`) and integration suite (`npm run test:integration`, all 12 e2e steps) pass in Docker against the rebuilt `agent-dashboard` image.
 
 - [x] **[Now] Real container control + model pulls from the Services panel** — Start/Stop/Restart now hit the live `docker compose` CLI (gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`, activated via the opt-in `config/docker-compose.docker-control.yml` overlay), and a new Models section lets the user pull each configured LLM endpoint's model (`ollama pull` for `primary`, streamed with live progress over `/ws/events`; `docker model pull` for the Docker Model Runner endpoints).
   - Context: the system panel previously only displayed start commands as text (e.g. "Start it on the host: docker compose ... up -d tool-content-gen") without a way to run them, and models had to be pulled manually outside the dashboard.

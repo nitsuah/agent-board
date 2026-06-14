@@ -829,8 +829,20 @@ function resolveEffectiveSafetyMode(session, useSafeMode = false) {
 
 // ============ INPUT CLASSIFICATION ============
 
+// Strip zero-width characters and collapse whitespace runs (spaces, tabs,
+// newlines) before pattern matching, so adversarial inputs that split a
+// blocked/sensitive phrase with invisible characters or extra whitespace
+// (e.g. inserting U+200B mid-word, or "ignore all previous\ninstructions")
+// can't evade the substring checks below.
+function normalizeForMatching(text) {
+  return text
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
 function classifyInput(text) {
-  const lower = text.toLowerCase();
+  const lower = normalizeForMatching(text);
   const safety = SAFETY_CONFIGS.strict; // use broadest pattern set for classification
 
   if (safety.blockedPatterns.some(p => lower.includes(p))) {
@@ -907,7 +919,7 @@ function filterResponse(text, safetyMode = 'standard') {
     }
   }
 
-  const lowerText = text.toLowerCase();
+  const lowerText = normalizeForMatching(text);
   if ((safety.outputHarmKeywords || []).some(k => lowerText.includes(k))) {
     flags.push({ type: 'harmful_content' });
   }
