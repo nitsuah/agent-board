@@ -39,11 +39,6 @@ Last Updated: 2026-06-12
   - Context: agents currently have no path to actually write to codebases or commit changes; this is a core capability gap.
   - Acceptance Criteria: agent can read a file, modify content, write it back, and run `git commit` within a declared workspace folder; folder path is user-configured; sandbox boundary is documented.
 
-- [ ] Validate dashboard and Docker initialization.
-  - Priority: P1
-  - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that have not been revalidated together.
-  - Acceptance Criteria: `docker compose up` completes cleanly and the documented local endpoints respond.
-
 - [ ] Enable Ollama GPU acceleration for the RTX 4080.
   - Priority: P1
   - Context: the local stack is still CPU-bound even though the host has a 24 GB GPU available.
@@ -152,6 +147,10 @@ Last Updated: 2026-06-12
 - [x] **Expand safety-layer coverage and add adversarial prompt cases.**
   - Context: baseline safety tests passed, but edge-case coverage for prompt injection and mixed-content payloads was thin.
   - Acceptance Criteria: added `dashboard/tests/safety-layer.js` tests for whitespace/tab/newline-split and zero-width-character (U+200B) evasion of `blockedPatterns`/`sensitivePatterns`/`outputHarmKeywords`, mixed multi-type PII payloads (JSON-embedded, space-separated credit cards, all four PII types in one message), prompt-injection-over-PII classification priority, and mixed harmful-content+PII response sanitization. Fixed the underlying gap in `classifyInput`/`filterResponse` (`dashboard/server.js`) via a new `normalizeForMatching()` helper that strips zero-width characters and collapses whitespace runs before pattern matching. Full unit suite (`npm run test:unit`) and integration suite (`npm run test:integration`, all 12 e2e steps) pass in Docker against the rebuilt `agent-dashboard` image.
+
+- [x] **Validate dashboard and Docker initialization.**
+  - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that had not been revalidated together.
+  - Acceptance Criteria: `docker compose up` completes cleanly and the documented local endpoints respond. Verified: dashboard (`/api/health` → 200), Jaeger UI (16686 → 200), Ollama API (8081/api/tags → 200), tool-content-gen (3200/health → 200), tool-website (3201/health → 200) all respond. NemoClaw (9000) does not respond — already tracked as a known crash-loop (P2 "Unblock NemoClaw sandbox container"); README's Quick Start endpoint list now notes this. OpenLLM (8082) does not respond — opt-in profile, disabled by default (P2 "Find a working OpenLLM endpoint"), already noted as opt-in in README.
 
 - [x] **[Now] Real container control + model pulls from the Services panel** — Start/Stop/Restart now hit the live `docker compose` CLI (gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`, activated via the opt-in `config/docker-compose.docker-control.yml` overlay), and a new Models section lets the user pull each configured LLM endpoint's model (`ollama pull` for `primary`, streamed with live progress over `/ws/events`; `docker model pull` for the Docker Model Runner endpoints).
   - Context: the system panel previously only displayed start commands as text (e.g. "Start it on the host: docker compose ... up -d tool-content-gen") without a way to run them, and models had to be pulled manually outside the dashboard.
