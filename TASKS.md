@@ -39,11 +39,6 @@ Last Updated: 2026-06-12
   - Context: agents currently have no path to actually write to codebases or commit changes; this is a core capability gap.
   - Acceptance Criteria: agent can read a file, modify content, write it back, and run `git commit` within a declared workspace folder; folder path is user-configured; sandbox boundary is documented.
 
-- [ ] Expand safety-layer coverage and add adversarial prompt cases.
-  - Priority: P1
-  - Context: baseline safety tests pass, but edge-case coverage for prompt injection and mixed-content payloads remains thin.
-  - Acceptance Criteria: new test cases for prompt injection and mixed PII payloads are added and pass in Docker.
-
 - [ ] Enable Ollama GPU acceleration for the RTX 4080.
   - Priority: P1
   - Context: the local stack is still CPU-bound even though the host has a 24 GB GPU available.
@@ -148,6 +143,10 @@ Last Updated: 2026-06-12
 ## In Progress
 
 ## Done
+
+- [x] **Expand safety-layer coverage and add adversarial prompt cases.**
+  - Context: baseline safety tests passed, but edge-case coverage for prompt injection and mixed-content payloads was thin.
+  - Acceptance Criteria: added `dashboard/tests/safety-layer.js` tests for whitespace/tab/newline-split and zero-width-character (U+200B) evasion of `blockedPatterns`/`sensitivePatterns`/`outputHarmKeywords`, mixed multi-type PII payloads (JSON-embedded, space-separated credit cards, all four PII types in one message), prompt-injection-over-PII classification priority, and mixed harmful-content+PII response sanitization. Fixed the underlying gap in `classifyInput`/`filterResponse` (`dashboard/server.js`) via a new `normalizeForMatching()` helper that strips zero-width characters and collapses whitespace runs before pattern matching. Full unit suite (`npm run test:unit`) and integration suite (`npm run test:integration`, all 12 e2e steps) pass in Docker against the rebuilt `agent-dashboard` image.
 
 - [x] **Validate dashboard and Docker initialization.**
   - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that had not been revalidated together.
