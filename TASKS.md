@@ -13,10 +13,7 @@ Last Updated: 2026-06-16
   - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
   - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
 
-- [ ] **[Q2-CEO] File I/O and workspace mount** — add an agent capability to read/write files within a user-selected folder; support git commit/push via a workspace-scoped tool.
-  - Priority: P1
-  - Context: agents currently have no path to actually write to codebases or commit changes; this is a core capability gap.
-  - Acceptance Criteria: agent can read a file, modify content, write it back, and run `git commit` within a declared workspace folder; folder path is user-configured; sandbox boundary is documented.
+- [ ] **[Q2-CEO] File I/O and workspace mount** — ✅ In this PR. See Done section.
 
 ### P2 - Medium
 
@@ -146,6 +143,10 @@ Last Updated: 2026-06-16
 - [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
   - Context: AI_STACK_STRATEGY.md priority queue #2.
   - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.
+
+- [x] **[Q2-CEO] File I/O and workspace mount** — agent-dashboard can read, write, and git-commit/push files in a host-mounted workspace folder.
+  - Context: agents had no path to write to codebases or commit changes. Added `/api/workspace/*` routes (ls, read, write, git/status, git/commit, git/push) sandboxed to `WORKSPACE_ROOT`; compose overlay mounts any host folder via `WORKSPACE_PATH`; System panel file browser + git controls.
+  - Acceptance Criteria: `/api/workspace/read` and `/api/workspace/write` are path-traversal-sandboxed; `POST /api/workspace/git/commit` stages and commits; `POST /api/workspace/git/push` pushes; System panel shows file browser, changed files, commit message input, Commit + Push buttons; "Not configured" state shown when `WORKSPACE_ROOT` not set. ✅ Shipped.
 
 - [x] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
   - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos had no FastAPI/HTTP layer; new `kryptos serve` CLI command starts a FastAPI app with turbovec-backed semantic search over `artifacts/`. Implemented in `~/code/kryptos` (separate repo/branch, PR #113 merged 2026-06-16).

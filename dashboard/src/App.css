@@ -1410,3 +1410,103 @@ code {
   max-height: 200px;
   overflow-y: auto;
 }
+
+/* ── Workspace panel ──────────────────────────────────────────────────────── */
+.workspace-browser {
+  margin: 0.4rem 0 0.5rem;
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.workspace-breadcrumb {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  background: rgba(0,0,0,0.15);
+}
+
+.workspace-path-seg {
+  color: var(--accent, #4493f8);
+}
+
+.workspace-path-seg:hover {
+  text-decoration: underline;
+}
+
+.workspace-entries {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.workspace-entry {
+  padding: 0.22rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.workspace-entry:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.workspace-file-view {
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+
+.workspace-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0,0,0,0.15);
+}
+
+.workspace-file-content {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.workspace-git-section {
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+
+.workspace-changed-files {
+  margin-bottom: 0.4rem;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.workspace-changed-file {
+  font-size: 0.78rem;
+  padding: 0.1rem 0;
+  word-break: break-all;
+}
+
+.workspace-commit-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.workspace-commit-msg {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: 1px solid var(--border, rgba(255,255,255,0.2));
+  background: var(--bg-input, rgba(0,0,0,0.25));
+  color: inherit;
+}
+
+.workspace-commit-msg:focus {
+  outline: none;
+  border-color: var(--accent, #4493f8);
+}
