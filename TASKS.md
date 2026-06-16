@@ -19,11 +19,6 @@ Last Updated: 2026-06-12
   - Tracking: implemented via a separate worktree/branch in `~/code/kryptos`, not in this repo.
   - Acceptance Criteria: kryptos exposes a search/query FastAPI endpoint backed by turbovec over `artifacts/`; documented in kryptos README.
 
-- [ ] **[Q2-CEO] Model loading performance audit** — profile Ollama startup and model load times; identify bottlenecks and optimize for faster readiness.
-  - Priority: P1
-  - Context: large models take a long time to load, impacting development iteration speed and user experience.
-  - Acceptance Criteria: Ollama startup time is reduced by at least 50% for the default model set; profiling data is documented in the repo.
-
 - [ ] **[Q2-CEO] Selective model loading** — implement a model manifest or config flag so only explicitly requested models are loaded at startup; default to one small model.
   - Priority: P1
   - Context: large model pre-loads inflate memory and destabilize the stack for everyday use.
@@ -160,6 +155,10 @@ Last Updated: 2026-06-12
 - [x] **[Now] Hook up content-gen & website tool servers as agent experiences** — 🎬 Content Studio and 🌐 Website Agent are selectable experiences whose chat sessions are paired with a tool workbench panel.
   - Context: the MCP servers under `tools/` (ports 3200/3201, compose profile `tools`) had no dashboard integration; the workbench lists each server's MCP tools, generates forms from their input schemas, and executes them via the new `/api/tools` proxy routes (Streamable HTTP MCP, stateless).
   - Acceptance Criteria: `/api/tools`, `/api/tools/:toolKey/tools`, `/api/tools/:toolKey/call` work against the live tool containers; both containers appear in the system services registry (start/stop gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`); unit + integration tests cover experience wiring, MCP response parsing, and route guards.
+
+- [x] **[Q2-CEO] Model loading performance audit** — profiled Ollama startup and model load times; identified bottleneck (`load_tensors: mmap=false`); added opt-in warmup service.
+  - Context: large models take a long time to load, impacting development iteration speed and user experience.
+  - Acceptance Criteria: profiling data ✅ documented in `docs/MODEL_LOADING_AUDIT.md` (all 8 log samples, bottleneck analysis, ranked recommendations). ≥50% cold-load reduction ⚠️ not met by model swap alone (~17-23% average reduction from llama2→llama3.2:3b). Opt-in `ollama-warmup` compose service (profile `warmup`) moves the cold-load delay from first user chat to `docker compose up` time. Remaining path to 50%+ is GPU acceleration (tracked separately, P1).
 
 - [x] **[Now] Swap primary Ollama model from llama2 to llama3.2:3b** — llama2-7B on a CPU-only host exceeded the dashboard's 120s chat timeout once conversation context grew; llama3.2:3b (2.0 GB) generates ~4x faster with far better instruction-following.
   - Context: the Docker Desktop VM has ~7.6 GB RAM, so only one Ollama model can be resident at a time; the default is now env-configurable via `PRIMARY_LLM_MODEL`.

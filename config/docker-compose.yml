@@ -46,6 +46,35 @@ services:
     networks:
       - agent-network
 
+  # Opt-in: pre-loads PRIMARY_LLM_MODEL into the running `ollama` service right
+  # after the stack starts, so the ~15-25s cold model load (see
+  # docs/MODEL_LOADING_AUDIT.md) happens during `docker compose up` instead of on
+  # a user's first chat message. Purely additive — does not modify or restart the
+  # `ollama` service. Enable with:
+  #   docker compose --profile warmup up ollama-warmup
+  ollama-warmup:
+    image: ollama/ollama:latest
+    container_name: ollama-warmup
+    profiles:
+      - warmup
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      - OLLAMA_HOST=http://ollama:8080
+      - PRIMARY_LLM_MODEL=${PRIMARY_LLM_MODEL:-llama3.2:3b}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          ollama list >/dev/null 2>&1 && break
+          sleep 2
+        done
+        ollama run "$$PRIMARY_LLM_MODEL" "" || true
+    restart: "no"
+    networks:
+      - agent-network
+
   # Docker Model Runner (docker.io/ai/* models) — NOT a container.
   # This is Docker Desktop's built-in model runner feature.
   # Pull models on the host with:  docker model pull ai/glm-4.7-flash:latest
