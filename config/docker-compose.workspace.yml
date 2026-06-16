@@ -1,0 +1,40 @@
+# Workspace overlay — mounts a host folder into the agent-dashboard container so
+# agents can read, write, and git-commit files in a user-declared workspace.
+#
+# Usage:
+#   docker compose \
+#     -f config/docker-compose.yml \
+#     -f config/docker-compose.workspace.yml \
+#     --project-directory . up -d
+#
+# Prerequisites:
+#   1. Set WORKSPACE_PATH in .env to the absolute host path you want to mount:
+#        WORKSPACE_PATH=C:/Users/you/code/my-project    # Windows
+#        WORKSPACE_PATH=/home/you/code/my-project       # Linux/macOS
+#   2. The dashboard's git binary must be present in the container for git
+#      operations to work. The base image includes git; verify with:
+#        docker exec agent-dashboard git --version
+#
+# What this adds to the `agent-dashboard` service:
+#   - Bind-mounts ${WORKSPACE_PATH} (host) → /workspace (container, read-write)
+#   - Sets WORKSPACE_ROOT=/workspace so server.js knows where to look
+#
+# Security boundary:
+#   - All /api/workspace/* routes reject paths that escape /workspace (path traversal guard).
+#   - Git commits run as the container user (root by default in the base image) — set
+#     GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL env vars if you want attributed commits.
+#   - The mount is read-write; the agent can create and overwrite files. Keep the
+#     workspace path narrowly scoped (one project, not your entire home directory).
+
+services:
+  agent-dashboard:
+    environment:
+      - WORKSPACE_ROOT=/workspace
+      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-agent-board}
+      - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-agent@board.local}
+      - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-agent-board}
+      - GIT_COMMITTER_EMAIL=${GIT_COMMITTER_EMAIL:-agent@board.local}
+    volumes:
+      - type: bind
+        source: ${WORKSPACE_PATH:?WORKSPACE_PATH must be set in .env}
+        target: /workspace

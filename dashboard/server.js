@@ -3,8 +3,9 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve as resolvePath, relative as relativePath } from 'path';
 import { createReadStream, existsSync, readFileSync } from 'fs';
+import { readdir, readFile, writeFile, mkdir, stat } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
@@ -36,6 +37,11 @@ const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
 const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'config', 'docker-compose.yml');
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
+
+// Workspace file I/O — user-mounted directory the agent can read/write/git-commit.
+// Set WORKSPACE_ROOT to the path inside the container (default /workspace).
+// Apply config/docker-compose.workspace.yml overlay to mount a host folder there.
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || null;
 
 // LLM Configuration - Support multiple endpoints
 // apiStyle: 'ollama' uses /api/chat + /api/tags; 'openai' uses /v1/chat/completions + /v1/models
@@ -1311,6 +1317,7 @@ app.get('/api/docker/status', async (req, res) => {
     volumes: {},
     errors: [],
     deviceProfile: { name: DEVICE_PROFILE, models: activeProfile.models, gpu: activeProfile.gpu },
+    workspace: { configured: !!WORKSPACE_ROOT, root: WORKSPACE_ROOT || null },
   });
 });
 
@@ -3219,6 +3226,162 @@ app.get('/api/health', async (req, res) => {
   }
 
   res.json(health);
+});
+
+// ── Workspace file I/O ────────────────────────────────────────────────────────
+// All workspace routes are sandboxed: resolved paths must stay inside WORKSPACE_ROOT.
+// Apply config/docker-compose.workspace.yml to mount a host folder at /workspace.
+
+function resolveWorkspacePath(reqPath) {
+  if (!WORKSPACE_ROOT) return null;
+  const safe = reqPath ? reqPath.replace(/\\/g, '/').replace(/^\/+/, '') : '';
+  const abs = resolvePath(WORKSPACE_ROOT, safe);
+  // Prevent path traversal
+  if (abs !== WORKSPACE_ROOT && !abs.startsWith(WORKSPACE_ROOT + '/')) return null;
+  return abs;
+}
+
+async function gitInWorkspace(...args) {
+  const { stdout } = await execAsync(['git', ...args].join(' '), { cwd: WORKSPACE_ROOT });
+  return stdout.trim();
+}
+
+app.get('/api/workspace/status', async (req, res) => {
+  if (!WORKSPACE_ROOT) {
+    return res.json({ configured: false });
+  }
+  try {
+    await stat(WORKSPACE_ROOT);
+  } catch {
+    return res.json({ configured: false, error: 'WORKSPACE_ROOT path does not exist' });
+  }
+
+  let git = { repo: false };
+  try {
+    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    const dirtyOut = await gitInWorkspace('status', '--porcelain');
+    let ahead = 0;
+    try {
+      const aheadOut = await gitInWorkspace('rev-list', '--count', '@{u}..HEAD');
+      ahead = parseInt(aheadOut, 10) || 0;
+    } catch { /* no upstream */ }
+    git = { repo: true, branch, dirty: dirtyOut.length > 0, ahead };
+  } catch { /* not a git repo */ }
+
+  res.json({ configured: true, root: WORKSPACE_ROOT, git });
+});
+
+app.get('/api/workspace/ls', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const abs = resolveWorkspacePath(req.query.path || '');
+  if (!abs) return res.status(400).json({ error: 'Invalid path' });
+
+  try {
+    const entries = await readdir(abs, { withFileTypes: true });
+    const result = await Promise.all(entries.map(async (e) => {
+      const info = { name: e.name, type: e.isDirectory() ? 'dir' : 'file' };
+      if (!e.isDirectory()) {
+        try {
+          const s = await stat(resolvePath(abs, e.name));
+          info.size = s.size;
+          info.modified = s.mtime.toISOString();
+        } catch { /* ignore */ }
+      }
+      return info;
+    }));
+    result.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    res.json({ path: relativePath(WORKSPACE_ROOT, abs) || '.', entries: result });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.get('/api/workspace/read', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const abs = resolveWorkspacePath(req.query.path || '');
+  if (!abs) return res.status(400).json({ error: 'Invalid path' });
+
+  try {
+    const s = await stat(abs);
+    if (s.isDirectory()) return res.status(400).json({ error: 'Path is a directory' });
+    if (s.size > 1024 * 1024) return res.status(413).json({ error: 'File too large (> 1 MB)' });
+    const content = await readFile(abs, 'utf8');
+    res.json({ path: relativePath(WORKSPACE_ROOT, abs), content });
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.post('/api/workspace/write', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { path: reqPath, content } = req.body || {};
+  if (!reqPath || content === undefined) {
+    return res.status(400).json({ error: 'path and content are required' });
+  }
+  const abs = resolveWorkspacePath(reqPath);
+  if (!abs) return res.status(400).json({ error: 'Invalid path' });
+
+  try {
+    await mkdir(resolvePath(abs, '..'), { recursive: true });
+    await writeFile(abs, content, 'utf8');
+    res.json({ path: relativePath(WORKSPACE_ROOT, abs), bytes: Buffer.byteLength(content, 'utf8') });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/workspace/git/status', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  try {
+    const porcelain = await gitInWorkspace('status', '--porcelain');
+    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    const files = porcelain.split('\n').filter(Boolean).map(line => ({
+      status: line.slice(0, 2).trim(),
+      file: line.slice(3),
+    }));
+    res.json({ branch, files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/workspace/git/commit', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { message, files } = req.body || {};
+  if (!message) return res.status(400).json({ error: 'message is required' });
+
+  try {
+    if (Array.isArray(files) && files.length > 0) {
+      for (const f of files) {
+        const abs = resolveWorkspacePath(f);
+        if (!abs) return res.status(400).json({ error: `Invalid path: ${f}` });
+        await execAsync(`git add "${abs.replace(/"/g, '\\"')}"`, { cwd: WORKSPACE_ROOT });
+      }
+    } else {
+      await execAsync('git add -A', { cwd: WORKSPACE_ROOT });
+    }
+    const safeMsg = message.replace(/"/g, '\\"');
+    await execAsync(`git commit -m "${safeMsg}"`, { cwd: WORKSPACE_ROOT });
+    const sha = await gitInWorkspace('rev-parse', '--short', 'HEAD');
+    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    res.json({ sha, branch, message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/workspace/git/push', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  try {
+    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    await execAsync('git push', { cwd: WORKSPACE_ROOT });
+    res.json({ branch });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Serve SPA

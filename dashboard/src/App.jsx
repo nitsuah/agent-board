@@ -370,6 +370,14 @@ function App() {
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
 
+  // Workspace file I/O
+  const [workspacePath, setWorkspacePath] = useState('');
+  const [workspaceLs, setWorkspaceLs] = useState(null);
+  const [workspaceFileView, setWorkspaceFileView] = useState(null);
+  const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
+  const [workspaceCommitMsg, setWorkspaceCommitMsg] = useState('');
+  const [workspaceActions, setWorkspaceActions] = useState({ committing: false, pushing: false, error: null });
+
   // Theme toggle (dark default)
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('agent_board_theme');
@@ -550,6 +558,72 @@ function App() {
     } catch (error) {
       console.error('Error fetching system services:', error);
       setSystemServices(null);
+    }
+  };
+
+  const browseWorkspace = async (path) => {
+    try {
+      const res = await fetch(`/api/workspace/ls?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (!data.error) {
+        setWorkspacePath(path);
+        setWorkspaceLs(data);
+        setWorkspaceFileView(null);
+      }
+    } catch (err) { console.error('Workspace ls failed:', err); }
+  };
+
+  const openWorkspaceFile = async (path) => {
+    try {
+      const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      if (!data.error) setWorkspaceFileView(data);
+    } catch (err) { console.error('Workspace read failed:', err); }
+  };
+
+  const refreshWorkspaceGit = async () => {
+    try {
+      const res = await fetch('/api/workspace/git/status');
+      const data = await res.json();
+      if (!data.error) setWorkspaceGitStatus(data);
+    } catch (err) { console.error('Workspace git status failed:', err); }
+  };
+
+  const commitWorkspace = async () => {
+    if (!workspaceCommitMsg) return;
+    setWorkspaceActions(p => ({ ...p, committing: true, error: null }));
+    try {
+      const res = await fetch('/api/workspace/git/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: workspaceCommitMsg }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setWorkspaceActions(p => ({ ...p, committing: false, error: data.error }));
+      } else {
+        setWorkspaceCommitMsg('');
+        setWorkspaceActions(p => ({ ...p, committing: false, error: null }));
+        refreshWorkspaceGit();
+      }
+    } catch (err) {
+      setWorkspaceActions(p => ({ ...p, committing: false, error: err.message }));
+    }
+  };
+
+  const pushWorkspace = async () => {
+    setWorkspaceActions(p => ({ ...p, pushing: true, error: null }));
+    try {
+      const res = await fetch('/api/workspace/git/push', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) {
+        setWorkspaceActions(p => ({ ...p, pushing: false, error: data.error }));
+      } else {
+        setWorkspaceActions(p => ({ ...p, pushing: false, error: null }));
+        refreshWorkspaceGit();
+      }
+    } catch (err) {
+      setWorkspaceActions(p => ({ ...p, pushing: false, error: err.message }));
     }
   };
 
@@ -1088,7 +1162,16 @@ function App() {
           >📊</button>
           <button
             className={`icon-btn ${showSystemPanel ? 'active' : ''}`}
-            onClick={() => setShowSystemPanel(prev => !prev)}
+            onClick={() => {
+              setShowSystemPanel(prev => {
+                const next = !prev;
+                if (next && dockerStatus?.workspace?.configured) {
+                  browseWorkspace('');
+                  refreshWorkspaceGit();
+                }
+                return next;
+              });
+            }}
             title="System"
           >⚙️</button>
           <button
@@ -1667,6 +1750,119 @@ function App() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              <h3>Workspace</h3>
+              {!dockerStatus?.workspace?.configured ? (
+                <div className="docker-status-item">
+                  <div className="docker-service-info">
+                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Not configured</div>
+                    <div className="docker-service-port" style={{ fontSize: '0.72rem' }}>
+                      Set WORKSPACE_PATH in .env and apply docker-compose.workspace.yml
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="docker-status-item">
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">{dockerStatus.workspace.root}</div>
+                      {workspaceGitStatus && (
+                        <div className={`docker-service-status ${workspaceGitStatus.dirty ? 'stopped' : 'running'}`}>
+                          ● {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' (uncommitted changes)' : ' (clean)'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="docker-actions">
+                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); }}>Refresh</button>
+                    </div>
+                  </div>
+
+                  <div className="workspace-browser">
+                    <div className="workspace-breadcrumb">
+                      <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace('')}>root</span>
+                      {workspacePath.split('/').filter(Boolean).map((seg, i, arr) => (
+                        <span key={i}>
+                          {' / '}
+                          <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace(arr.slice(0, i + 1).join('/'))}>
+                            {seg}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="workspace-entries">
+                      {workspaceLs?.entries?.map(e => (
+                        <div
+                          key={e.name}
+                          className="workspace-entry"
+                          onClick={() => {
+                            const p = workspacePath ? `${workspacePath}/${e.name}` : e.name;
+                            if (e.type === 'dir') browseWorkspace(p); else openWorkspaceFile(p);
+                          }}
+                        >
+                          {e.type === 'dir' ? '📁' : '📄'} {e.name}
+                          {e.size != null && <span style={{ opacity: 0.45, fontSize: '0.72rem' }}> ({(e.size / 1024).toFixed(1)} KB)</span>}
+                        </div>
+                      ))}
+                      {workspaceLs?.entries?.length === 0 && <div style={{ opacity: 0.4, fontSize: '0.8rem' }}>(empty)</div>}
+                    </div>
+                    {workspaceFileView && (
+                      <div className="workspace-file-view">
+                        <div className="workspace-file-header">
+                          <span style={{ fontSize: '0.78rem', opacity: 0.7 }}>{workspaceFileView.path}</span>
+                          <button className="icon-btn" onClick={() => setWorkspaceFileView(null)} title="Close">✕</button>
+                        </div>
+                        <pre className="workspace-file-content">{workspaceFileView.content}</pre>
+                      </div>
+                    )}
+                  </div>
+
+                  {workspaceGitStatus && (
+                    <div className="workspace-git-section">
+                      {workspaceGitStatus.files.length > 0 ? (
+                        <>
+                          <div className="workspace-changed-files">
+                            {workspaceGitStatus.files.map(f => (
+                              <div key={f.file} className="workspace-changed-file">
+                                <code style={{ fontSize: '0.7rem', opacity: 0.7 }}>{f.status}</code> {f.file}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="workspace-commit-row">
+                            <input
+                              className="workspace-commit-msg"
+                              type="text"
+                              placeholder="Commit message…"
+                              value={workspaceCommitMsg}
+                              onChange={e => setWorkspaceCommitMsg(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && commitWorkspace()}
+                            />
+                            <button
+                              className="btn-docker-action"
+                              disabled={!workspaceCommitMsg || workspaceActions.committing}
+                              onClick={commitWorkspace}
+                            >
+                              {workspaceActions.committing ? 'Committing…' : 'Commit'}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '0.78rem', opacity: 0.5, padding: '0.25rem 0' }}>Working tree clean</div>
+                      )}
+                      <button
+                        className="btn-docker-action"
+                        disabled={workspaceActions.pushing}
+                        onClick={pushWorkspace}
+                        style={{ marginTop: '0.25rem' }}
+                      >
+                        {workspaceActions.pushing ? 'Pushing…' : 'Push'}
+                      </button>
+                      {workspaceActions.error && (
+                        <div className="docker-service-error">{workspaceActions.error}</div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
               <h3>LLM Endpoints</h3>
