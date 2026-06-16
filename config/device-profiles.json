@@ -1,0 +1,43 @@
+{
+  "profiles": {
+    "minimal": {
+      "description": "CPU-only or low-VRAM host (< 4 GB VRAM). Conservative defaults.",
+      "detection": { "vram_mb_min": 0, "ram_gb_min": 0 },
+      "gpu": false,
+      "models": {
+        "general": "llama3.2:1b",
+        "coding":  "llama3.2:1b",
+        "fast":    "llama3.2:1b"
+      }
+    },
+    "laptop": {
+      "description": "Mid-range GPU, 8–20 GB VRAM (e.g. RTX 3070 TPD-locked), 12–20 GB RAM.",
+      "detection": { "vram_mb_min": 4000, "ram_gb_min": 12 },
+      "gpu": true,
+      "models": {
+        "general": "llama3.2:3b",
+        "coding":  "qwen2.5-coder:7b",
+        "fast":    "llama3.2:1b"
+      }
+    },
+    "desktop": {
+      "description": "High-end GPU, 16+ GB VRAM (e.g. RTX 4080 24 GB), 24+ GB RAM.",
+      "detection": { "vram_mb_min": 16000, "ram_gb_min": 24 },
+      "gpu": true,
+      "models": {
+        "general": "llama3.1:8b",
+        "coding":  "qwen2.5-coder:14b",
+        "fast":    "llama3.2:3b"
+      }
+    }
+  },
+  "task_type_to_endpoint": {
+    "general": "primary",
+    "coding":  "primary",
+    "fast":    "primary"
+  },
+  "detection": {
+    "auto_select": true,
+    "fallback":    "minimal"
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
 
 // ── Anonymous user identity ────────────────────────────────────────────────
@@ -62,7 +62,7 @@ const SAFETY_COLORS = { strict: 'var(--red)', standard: 'var(--yellow)', researc
 /**
  * AgentStatusCard — compact card showing a single session's live status.
  */
-function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete }) {
+function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, endpointLabel }) {
   const ago = (date) => {
     const secs = Math.floor((Date.now() - new Date(date)) / 1000);
     if (secs < 60) return `${secs}s ago`;
@@ -91,7 +91,7 @@ function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete }) 
         >✕</button>
       </div>
       <div className="agent-card-meta">
-        <span className="agent-card-endpoint">{ENDPOINT_META[session.endpoint]?.label || session.endpoint}</span>
+        <span className="agent-card-endpoint">{endpointLabel || session.endpoint}</span>
         <span className="agent-card-msgs">{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
         <span className="agent-card-time">{ago(session.updatedAt || session.createdAt)}</span>
       </div>
@@ -407,15 +407,39 @@ function App() {
   const chatBottomRef = useRef(null);
   const activeStreamRef = useRef(null);
 
+  // Merge static ENDPOINT_META with any custom endpoints reported by the server.
+  // Custom endpoints (backendType: 'custom') are dynamically registered via
+  // CUSTOM_LLM_ENDPOINTS and won't be in the static map.
+  const allEndpointMeta = useMemo(() => {
+    const result = { ...ENDPOINT_META };
+    if (!dockerStatus?.endpoints) return result;
+    for (const [key, ep] of Object.entries(dockerStatus.endpoints)) {
+      if (!result[key]) {
+        result[key] = {
+          model: ep.model || '',
+          label: ep.name || key,
+          desc: ep.hasApiKey ? `${ep.type || 'custom'} · API key set` : (ep.backendType || 'custom'),
+          backendBadge: ep.type === 'cloud' ? 'Cloud API' : 'Custom',
+        };
+      }
+    }
+    return result;
+  }, [dockerStatus]);
+
   const getAvailableEndpoints = useCallback((experienceKey) => {
     if (demoMode.enabled) {
       return ['primary'];
     }
-    return EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
-  }, [demoMode.enabled]);
+    const base = EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
+    // Include custom (cloud/user-registered) endpoints from the server alongside static ones
+    const customKeys = Object.entries(dockerStatus?.endpoints || {})
+      .filter(([, ep]) => ep.backendType === 'custom')
+      .map(([k]) => k);
+    return customKeys.length ? [...new Set([...base, ...customKeys])] : base;
+  }, [demoMode.enabled, dockerStatus]);
 
   const getPreferredModelForEndpoint = useCallback((endpoint) => {
-    const configuredModel = ENDPOINT_META[endpoint]?.model || currentModel;
+    const configuredModel = allEndpointMeta[endpoint]?.model || currentModel;
     const endpointModels = models.filter((model) => model.id === endpoint);
     const getModelIdentifier = (model) => model?.name || model?.model;
 
@@ -998,7 +1022,7 @@ function App() {
     if (!endpointPool.includes(currentEndpoint)) {
       const nextEndpoint = endpointPool[0];
       setCurrentEndpoint(nextEndpoint);
-      setCurrentModel(ENDPOINT_META[nextEndpoint]?.model || ENDPOINT_META.primary.model);
+      setCurrentModel(allEndpointMeta[nextEndpoint]?.model || ENDPOINT_META.primary.model);
     }
   }, [activeSessionData, currentEndpoint, dockerStatus, getAvailableEndpoints, selectedExperience]);
 
@@ -1126,7 +1150,7 @@ function App() {
                   <option value="">No models online</option>
                 ) : (
                   selectableEndpointKeys.map((key) => (
-                    <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
+                    <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
                   ))
                 )}
               </select>
@@ -1147,6 +1171,7 @@ function App() {
                     isStreaming={isActive && loading}
                     onClick={() => setActiveSession(session.id)}
                     onDelete={deleteSession}
+                    endpointLabel={allEndpointMeta[session.endpoint]?.label}
                   />
                 );
               })}
@@ -1450,7 +1475,7 @@ function App() {
                         <option value="">No models online</option>
                       ) : (
                         selectableEndpointKeys.map((key) => (
-                          <option key={key} value={key}>{ENDPOINT_META[key]?.label}</option>
+                          <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
                         ))
                       )}
                     </select>
@@ -1498,7 +1523,7 @@ function App() {
                   <div className="endpoint-preview">
                     <h3>Available Endpoints:</h3>
                     <ul>
-                      {Object.entries(ENDPOINT_META)
+                      {Object.entries(allEndpointMeta)
                         .filter(([key]) => selectableEndpointKeys.includes(key))
                         .map(([key, { label, desc }]) => {
                         const ep = dockerStatus?.endpoints?.[key];
@@ -1628,6 +1653,22 @@ function App() {
                   disabledReason: meta.disabledReason,
                 }))}
 
+              <h3>Device Profile</h3>
+              {dockerStatus?.deviceProfile && (
+                <div className="docker-status-item">
+                  <div className="docker-service-info">
+                    <div className="docker-service-name">{dockerStatus.deviceProfile.name}</div>
+                    <div className="docker-service-status running">
+                      {dockerStatus.deviceProfile.gpu ? '● GPU enabled' : '● CPU-only'}
+                    </div>
+                    <div className="docker-service-port">
+                      general: {dockerStatus.deviceProfile.models.general} &nbsp;|&nbsp;
+                      coding: {dockerStatus.deviceProfile.models.coding}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <h3>LLM Endpoints</h3>
               {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
                 <div key={key} className="docker-status-item">
@@ -1635,6 +1676,7 @@ function App() {
                     <div className="docker-service-name">{ep.name}</div>
                     <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
                       {ep.live ? '● Live' : '● Offline / Fallback'}
+                      {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.7 }}>(API key set)</span>}
                     </div>
                     <div className="docker-service-port">{ep.model}</div>
                   </div>
