@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-12
+Last Updated: 2026-06-16
 
 ## Todo
 
@@ -13,31 +13,10 @@ Last Updated: 2026-06-12
   - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
   - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
 
-- [ ] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
-  - Priority: P1
-  - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos (`~/code/kryptos`) currently has no FastAPI/HTTP layer — it's CLI + library only (`src/kryptos/cli/main.py`). Scope includes scaffolding a minimal FastAPI app before wiring in turbovec.
-  - Tracking: implemented via a separate worktree/branch in `~/code/kryptos`, not in this repo.
-  - Acceptance Criteria: kryptos exposes a search/query FastAPI endpoint backed by turbovec over `artifacts/`; documented in kryptos README.
-
-- [ ] **[Q2-CEO] Selective model loading** — implement a model manifest or config flag so only explicitly requested models are loaded at startup; default to one small model.
-  - Priority: P1
-  - Context: large model pre-loads inflate memory and destabilize the stack for everyday use.
-  - Acceptance Criteria: default compose starts with one lightweight model; adding more models requires an explicit config change; documented in README.
-
-- [ ] **[Q2-CEO] GPU acceleration via CUDA** — configure Ollama container with NVIDIA runtime and device passthrough; detect RTX 4080 in docs and runtime checks.
-  - Priority: P1
-  - Context: host has an RTX 4080 (24 GB VRAM); GPU inference reduces RAM pressure and speeds generation significantly.
-  - Acceptance Criteria: Ollama runs GPU-based inference when CUDA is available; setup guide covers driver, container-toolkit, and docker-compose GPU stanza requirements.
-
 - [ ] **[Q2-CEO] File I/O and workspace mount** — add an agent capability to read/write files within a user-selected folder; support git commit/push via a workspace-scoped tool.
   - Priority: P1
   - Context: agents currently have no path to actually write to codebases or commit changes; this is a core capability gap.
   - Acceptance Criteria: agent can read a file, modify content, write it back, and run `git commit` within a declared workspace folder; folder path is user-configured; sandbox boundary is documented.
-
-- [ ] Enable Ollama GPU acceleration for the RTX 4080.
-  - Priority: P1
-  - Context: the local stack is still CPU-bound even though the host has a 24 GB GPU available.
-  - Acceptance Criteria: the Ollama service is configured for CUDA, GPU detection is validated, and setup prerequisites are documented.
 
 ### P2 - Medium
 
@@ -167,6 +146,18 @@ Last Updated: 2026-06-12
 - [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
   - Context: AI_STACK_STRATEGY.md priority queue #2.
   - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.
+
+- [x] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
+  - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos had no FastAPI/HTTP layer; new `kryptos serve` CLI command starts a FastAPI app with turbovec-backed semantic search over `artifacts/`. Implemented in `~/code/kryptos` (separate repo/branch, PR #113 merged 2026-06-16).
+  - Acceptance Criteria: `kryptos serve` starts a FastAPI app; `POST /api/rag/reindex` builds a turbovec index over `artifacts/`; `GET /api/rag/search?q=...` returns ranked results; `data/turbovec/` index is gitignored. ✅ Merged.
+
+- [x] **[Q2-CEO] Selective model loading / device profile system** — auto-detect host hardware (GPU VRAM + RAM) at startup; select the best default model for the detected tier without any manual configuration.
+  - Context: instead of a static model manifest, implemented a three-tier device profile system (`minimal` / `laptop` / `desktop`) with hardware thresholds. Profile drives `primary` endpoint's default model; `DEVICE_PROFILE` env var allows manual override.
+  - Acceptance Criteria: `DEVICE_PROFILE` env var (or auto-detected value) selects profile; profile models are documented in `config/device-profiles.json`; `scripts/detect-profile.ps1` writes the correct value to `.env`; dashboard System panel shows active profile name, GPU status, and model assignments. ✅ Shipped in this PR.
+
+- [x] **[Q2-CEO] GPU acceleration via CUDA** — configure Ollama container with NVIDIA runtime and device passthrough; support RTX 3070 (laptop) and RTX 4080 (desktop) via compose overlay.
+  - Context: host hardware ranges from RTX 3070 TPD-locked (8 GB VRAM) to RTX 4080 (24 GB VRAM). GPU passthrough is opt-in via `config/docker-compose.gpu.yml` overlay so CPU-only hosts are unaffected.
+  - Acceptance Criteria: `docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up -d` enables NVIDIA runtime for Ollama; NVIDIA Container Toolkit prerequisites documented in `docker-compose.gpu.yml` header; device profile system selects GPU-appropriate models when CUDA is available. ✅ Shipped in this PR.
 
 <!--
 AGENT INSTRUCTIONS:

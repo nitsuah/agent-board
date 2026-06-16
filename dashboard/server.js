@@ -42,6 +42,22 @@ const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..
 // backendType: used by the UI to show how the model is served
 const DOCKER_RUNNER_URL = process.env.DOCKER_RUNNER_URL || 'http://model-runner.docker.internal/engines/llama.cpp/v1';
 
+// ── Device profile system ─────────────────────────────────────────────────────
+// Hardware-tier profiles drive default model selection when PRIMARY_LLM_MODEL is
+// not explicitly set. Run scripts/detect-profile.ps1 to detect your hardware and
+// write DEVICE_PROFILE to .env. See config/device-profiles.json for thresholds.
+//
+// Profiles: minimal (CPU-only / <4GB VRAM)
+//           laptop  (mid-GPU ≥4GB VRAM, e.g. RTX 3070 TPD-locked, 12-20GB RAM)
+//           desktop (high-GPU ≥16GB VRAM, e.g. RTX 4080, 24+ GB RAM)
+const DEVICE_PROFILES = {
+  minimal: { gpu: false, models: { general: 'llama3.2:1b',  coding: 'llama3.2:1b',         fast: 'llama3.2:1b' } },
+  laptop:  { gpu: true,  models: { general: 'llama3.2:3b',  coding: 'qwen2.5-coder:7b',    fast: 'llama3.2:1b' } },
+  desktop: { gpu: true,  models: { general: 'llama3.1:8b',  coding: 'qwen2.5-coder:14b',   fast: 'llama3.2:3b' } },
+};
+const DEVICE_PROFILE = (process.env.DEVICE_PROFILE || 'minimal').toLowerCase();
+const activeProfile = DEVICE_PROFILES[DEVICE_PROFILE] || DEVICE_PROFILES.minimal;
+
 const LLM_CONFIG = {
   primary: {
     url: process.env.PRIMARY_LLM_URL || 'http://ollama:8080',
@@ -49,10 +65,8 @@ const LLM_CONFIG = {
     backendType: 'ollama-container',
     type: 'general',
     apiStyle: 'ollama',
-    // llama3.2:3b generates ~4x faster than llama2 7B on CPU-only hosts and
-    // scores far higher on instruction-following — 7B-class models routinely
-    // exceed the 120s chat timeout here once conversation context grows.
-    defaultModel: process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b'
+    // Defaults to the profile's general-task model; overridden by PRIMARY_LLM_MODEL.
+    defaultModel: process.env.PRIMARY_LLM_MODEL || activeProfile.models.general
   },
   docker_runner: {
     url: DOCKER_RUNNER_URL,
@@ -84,6 +98,53 @@ const LLM_CONFIG = {
     defaultModel: process.env.OPENLLM_MODEL || ''
   }
 };
+
+// ── Custom endpoint registry ──────────────────────────────────────────────────
+// Register additional OpenAI-compatible endpoints (OpenRouter, vLLM, LM Studio,
+// etc.) via CUSTOM_LLM_ENDPOINTS as a JSON array. Each entry merges into
+// LLM_CONFIG so all routing, fallback, and status logic applies automatically.
+//
+// Example .env entry:
+//   CUSTOM_LLM_ENDPOINTS=[{"key":"openrouter","name":"OpenRouter","url":"https://openrouter.ai/api/v1","apiKey":"sk-or-v1-...","defaultModel":"anthropic/claude-3-haiku","type":"cloud"}]
+//
+// Supported fields per entry:
+//   key          string  (required) — unique identifier used as the endpoint key
+//   url          string  (required) — base URL of the OpenAI-compatible API
+//   name         string  — display name shown in the UI
+//   apiKey       string  — Bearer token (for cloud APIs like OpenRouter)
+//   defaultModel string  — default model name for this endpoint
+//   type         string  — hint for the UI: 'cloud', 'custom', 'coding', etc.
+//   apiStyle     string  — 'openai' (default) or 'ollama'
+(function loadCustomEndpoints() {
+  const raw = process.env.CUSTOM_LLM_ENDPOINTS;
+  if (!raw) return;
+  let entries;
+  try {
+    entries = JSON.parse(raw);
+  } catch (e) {
+    console.error('[config] CUSTOM_LLM_ENDPOINTS is not valid JSON:', e.message);
+    return;
+  }
+  if (!Array.isArray(entries)) {
+    console.error('[config] CUSTOM_LLM_ENDPOINTS must be a JSON array');
+    return;
+  }
+  for (const ep of entries) {
+    if (!ep.key || !ep.url) {
+      console.warn('[config] Skipping custom endpoint missing key or url:', ep);
+      continue;
+    }
+    LLM_CONFIG[ep.key] = {
+      url: ep.url,
+      name: ep.name || ep.key,
+      backendType: 'custom',
+      type: ep.type || 'custom',
+      apiStyle: ep.apiStyle || 'openai',
+      defaultModel: ep.defaultModel || '',
+      apiKey: ep.apiKey || '',
+    };
+  }
+})();
 
 const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
 const BB_MCP_URL = process.env.BB_MCP_URL || 'http://localhost:3100';
@@ -527,7 +588,8 @@ async function prepareSessionForLlmCall(session) {
     });
   }
 
-  return { llmUrl, apiStyle, modelResolution };
+  const apiKey = LLM_CONFIG[session.endpoint]?.apiKey || null;
+  return { llmUrl, apiStyle, modelResolution, apiKey };
 }
 
 function coerceModelForEndpoint(endpoint, requestedModel) {
@@ -1225,12 +1287,31 @@ app.get('/api/docker/status', async (req, res) => {
       const openllmUp = containers['llm_openllm']?.running ?? false;
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
     } else {
-      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: false, fallback: true };
+      // 'custom' backendType — cloud or user-registered endpoints. Treat as live when
+      // an apiKey is present (cloud APIs don't have a local health endpoint to probe).
+      const hasKey = !!(config.apiKey);
+      endpoints[key] = {
+        name: config.name,
+        model: config.defaultModel,
+        backendType: config.backendType,
+        type: config.type || 'custom',
+        live: hasKey,
+        hasApiKey: hasKey,
+        fallback: !hasKey,
+      };
     }
   }
 
   const dockerRunning = Object.values(containers).some(c => c.running);
-  res.json({ dockerRunning, containers, endpoints, networks: { agentNetwork: true }, volumes: {}, errors: [] });
+  res.json({
+    dockerRunning,
+    containers,
+    endpoints,
+    networks: { agentNetwork: true },
+    volumes: {},
+    errors: [],
+    deviceProfile: { name: DEVICE_PROFILE, models: activeProfile.models, gpu: activeProfile.gpu },
+  });
 });
 
 /**
@@ -1919,7 +2000,8 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
+const { llmUrl, apiStyle, apiKey } = await prepareSessionForLlmCall(session);
+    const llmHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
@@ -1933,13 +2015,13 @@ const { llmUrl, apiStyle } = await prepareSessionForLlmCall(session);
         { model: session.model, messages: msgs, stream: false },
         // CPU-bound generation under strict safety prompts (longer disclaimers)
         // can take 45-60s+ on this host; match the streaming timeout below.
-        { timeout: 120000 }
+        { headers: llmHeaders, timeout: 120000 }
       );
     } else {
       response = await axios.post(
         `${llmUrl}/api/chat`,
         { model: session.model, messages: msgs, stream: false },
-        { timeout: 120000 }
+        { headers: llmHeaders, timeout: 120000 }
       );
     }
 
@@ -2082,6 +2164,7 @@ if (session.endpoint === 'primary') {
   const prepared = await prepareSessionForLlmCall(session);
   const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
   const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
+  const streamHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
   const systemMessages = buildSystemMessages({ ...session, safetyMode });
   const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
   const msgs = [...systemMessages, ...historyMessages];
@@ -2092,7 +2175,7 @@ if (session.endpoint === 'primary') {
     const streamResponse = await axios.post(
       apiStyle === 'openai' ? `${llmUrl}/chat/completions` : `${llmUrl}/api/chat`,
       { model: session.model, messages: msgs, stream: true },
-      { responseType: 'stream', timeout: 120000 }
+      { headers: streamHeaders, responseType: 'stream', timeout: 120000 }
     );
 
     streamResponse.data.on('data', (chunk) => {
