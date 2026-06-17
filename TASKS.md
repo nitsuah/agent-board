@@ -115,51 +115,6 @@ Last Updated: 2026-06-16
 
 ## Done
 
-- [x] **Expand safety-layer coverage and add adversarial prompt cases.**
-  - Context: baseline safety tests passed, but edge-case coverage for prompt injection and mixed-content payloads was thin.
-  - Acceptance Criteria: added `dashboard/tests/safety-layer.js` tests for whitespace/tab/newline-split and zero-width-character (U+200B) evasion of `blockedPatterns`/`sensitivePatterns`/`outputHarmKeywords`, mixed multi-type PII payloads (JSON-embedded, space-separated credit cards, all four PII types in one message), prompt-injection-over-PII classification priority, and mixed harmful-content+PII response sanitization. Fixed the underlying gap in `classifyInput`/`filterResponse` (`dashboard/server.js`) via a new `normalizeForMatching()` helper that strips zero-width characters and collapses whitespace runs before pattern matching. Full unit suite (`npm run test:unit`) and integration suite (`npm run test:integration`, all 12 e2e steps) pass in Docker against the rebuilt `agent-dashboard` image.
-
-- [x] **Validate dashboard and Docker initialization.**
-  - Context: README lists dashboard, Jaeger, Ollama, and NemoClaw endpoints that had not been revalidated together.
-  - Acceptance Criteria: `docker compose up` completes cleanly and the documented local endpoints respond. Verified: dashboard (`/api/health` → 200), Jaeger UI (16686 → 200), Ollama API (8081/api/tags → 200), tool-content-gen (3200/health → 200), tool-website (3201/health → 200) all respond. NemoClaw (9000) does not respond — already tracked as a known crash-loop (P2 "Unblock NemoClaw sandbox container"); README's Quick Start endpoint list now notes this. OpenLLM (8082) does not respond — opt-in profile, disabled by default (P2 "Find a working OpenLLM endpoint"), already noted as opt-in in README.
-
-- [x] **[Now] Real container control + model pulls from the Services panel** — Start/Stop/Restart now hit the live `docker compose` CLI (gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`, activated via the opt-in `config/docker-compose.docker-control.yml` overlay), and a new Models section lets the user pull each configured LLM endpoint's model (`ollama pull` for `primary`, streamed with live progress over `/ws/events`; `docker model pull` for the Docker Model Runner endpoints).
-  - Context: the system panel previously only displayed start commands as text (e.g. "Start it on the host: docker compose ... up -d tool-content-gen") without a way to run them, and models had to be pulled manually outside the dashboard.
-  - Acceptance Criteria: `POST /api/system/services/:serviceKey/:action` and the new `POST /api/models/pull` / `GET /api/models/pull-status` work against the live stack when the docker-control overlay is applied; Services panel shows Start/Stop/Restart with inline error feedback; Models panel shows install status and pull progress; unit + integration tests cover the new endpoints and route guards.
-  - Follow-up: the Services panel previously only rendered the 4 `/api/docker/status` containers (ollama, docker-runner, nemoclaw, llm_openllm); it now also renders the `tool_content_gen`, `tool_website`, and `bb_mcp` entries from `/api/system/services` with the same Start/Stop/Restart controls. Also fixed `tool_content_gen`/`tool_website` intermittently reporting `unavailable` despite being healthy — concurrent DNS lookups for down hosts (nemoclaw, llm_openllm) were starving Node's libuv threadpool (default `UV_THREADPOOL_SIZE=4`) and delaying lookups for the healthy tool containers past their axios timeout; fixed via `ENV UV_THREADPOOL_SIZE=16` in `dashboard/Dockerfile`.
-
-- [x] **[Now] Hook up content-gen & website tool servers as agent experiences** — 🎬 Content Studio and 🌐 Website Agent are selectable experiences whose chat sessions are paired with a tool workbench panel.
-  - Context: the MCP servers under `tools/` (ports 3200/3201, compose profile `tools`) had no dashboard integration; the workbench lists each server's MCP tools, generates forms from their input schemas, and executes them via the new `/api/tools` proxy routes (Streamable HTTP MCP, stateless).
-  - Acceptance Criteria: `/api/tools`, `/api/tools/:toolKey/tools`, `/api/tools/:toolKey/call` work against the live tool containers; both containers appear in the system services registry (start/stop gated by `AGENT_BOARD_ENABLE_DOCKER_CONTROL`); unit + integration tests cover experience wiring, MCP response parsing, and route guards.
-
-- [x] **[Q2-CEO] Model loading performance audit** — profiled Ollama startup and model load times; identified bottleneck (`load_tensors: mmap=false`); added opt-in warmup service.
-  - Context: large models take a long time to load, impacting development iteration speed and user experience.
-  - Acceptance Criteria: profiling data ✅ documented in `docs/MODEL_LOADING_AUDIT.md` (all 8 log samples, bottleneck analysis, ranked recommendations). ≥50% cold-load reduction ⚠️ not met by model swap alone (~17-23% average reduction from llama2→llama3.2:3b). Opt-in `ollama-warmup` compose service (profile `warmup`) moves the cold-load delay from first user chat to `docker compose up` time. Remaining path to 50%+ is GPU acceleration (tracked separately, P1).
-
-- [x] **[Now] Swap primary Ollama model from llama2 to llama3.2:3b** — llama2-7B on a CPU-only host exceeded the dashboard's 120s chat timeout once conversation context grew; llama3.2:3b (2.0 GB) generates ~4x faster with far better instruction-following.
-  - Context: the Docker Desktop VM has ~7.6 GB RAM, so only one Ollama model can be resident at a time; the default is now env-configurable via `PRIMARY_LLM_MODEL`.
-  - Acceptance Criteria: full e2e-chat suite (all 12 steps) passes against the live stack with the new default; `OLLAMA_KEEP_ALIVE=30m` keeps the model warm between requests.
-
-- [x] **[Now] Add OpenLLM endpoint to docker-compose.yml** — second OpenAI-compatible endpoint on port 8082 for custom/fine-tuned models.
-  - Context: AI_STACK_STRATEGY.md priority queue #2.
-  - Acceptance Criteria: `llm_openllm` service added behind the opt-in `openllm` compose profile (port `8082:3000`, `tools/llm-openllm/Dockerfile`); registered as the `openllm` endpoint in `LLM_CONFIG`, `getServiceRegistry()`, and the dashboard frontend; documented in README.md and `.env.example`.
-
-- [x] **[Q2-CEO] File I/O and workspace mount** — agent-dashboard can read, write, and git-commit/push files in a host-mounted workspace folder.
-  - Context: agents had no path to write to codebases or commit changes. Added `/api/workspace/*` routes (ls, read, write, git/status, git/commit, git/push) sandboxed to `WORKSPACE_ROOT`; compose overlay mounts any host folder via `WORKSPACE_PATH`; System panel file browser + git controls.
-  - Acceptance Criteria: `/api/workspace/read` and `/api/workspace/write` are path-traversal-sandboxed; `POST /api/workspace/git/commit` stages and commits; `POST /api/workspace/git/push` pushes; System panel shows file browser, changed files, commit message input, Commit + Push buttons; "Not configured" state shown when `WORKSPACE_ROOT` not set. ✅ Shipped.
-
-- [x] **[Now] Embed turbovec into Kryptos FastAPI** — cipher/hypothesis RAG over `artifacts/`.
-  - Context: AI_STACK_STRATEGY.md priority queue #1. Kryptos had no FastAPI/HTTP layer; new `kryptos serve` CLI command starts a FastAPI app with turbovec-backed semantic search over `artifacts/`. Implemented in `~/code/kryptos` (separate repo/branch, PR #113 merged 2026-06-16).
-  - Acceptance Criteria: `kryptos serve` starts a FastAPI app; `POST /api/rag/reindex` builds a turbovec index over `artifacts/`; `GET /api/rag/search?q=...` returns ranked results; `data/turbovec/` index is gitignored. ✅ Merged.
-
-- [x] **[Q2-CEO] Selective model loading / device profile system** — auto-detect host hardware (GPU VRAM + RAM) at startup; select the best default model for the detected tier without any manual configuration.
-  - Context: instead of a static model manifest, implemented a three-tier device profile system (`minimal` / `laptop` / `desktop`) with hardware thresholds. Profile drives `primary` endpoint's default model; `DEVICE_PROFILE` env var allows manual override.
-  - Acceptance Criteria: `DEVICE_PROFILE` env var (or auto-detected value) selects profile; profile models are documented in `config/device-profiles.json`; `scripts/detect-profile.ps1` writes the correct value to `.env`; dashboard System panel shows active profile name, GPU status, and model assignments. ✅ Shipped in this PR.
-
-- [x] **[Q2-CEO] GPU acceleration via CUDA** — configure Ollama container with NVIDIA runtime and device passthrough; support RTX 3070 (laptop) and RTX 4080 (desktop) via compose overlay.
-  - Context: host hardware ranges from RTX 3070 TPD-locked (8 GB VRAM) to RTX 4080 (24 GB VRAM). GPU passthrough is opt-in via `config/docker-compose.gpu.yml` overlay so CPU-only hosts are unaffected.
-  - Acceptance Criteria: `docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up -d` enables NVIDIA runtime for Ollama; NVIDIA Container Toolkit prerequisites documented in `docker-compose.gpu.yml` header; device profile system selects GPU-appropriate models when CUDA is available. ✅ Shipped in this PR.
-
 <!--
 AGENT INSTRUCTIONS:
 1. Keep active items in P0-P3.

@@ -30,6 +30,10 @@ CMD ["npm", "run", "test:unit"]
 
 # ---- production stage ----
 FROM base AS prod
+ARG GITHUB_ID
+ARG GITHUB_SECRET
+ENV GITHUB_ID=$GITHUB_ID
+ENV GITHUB_SECRET=$GITHUB_SECRET
 COPY server.js persistence.js tracing.js ./
 COPY src ./src
 COPY index.html vite.config.js ./
