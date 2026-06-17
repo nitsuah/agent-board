@@ -12,7 +12,7 @@ Last Updated: 2026-06-12
 
 ## 2026 Q2 - Quality Reset
 
-- [ ] P1: Validate safety-layer behavior with tests and examples.
+- [x] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
 - [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint)
@@ -32,7 +32,7 @@ Last Updated: 2026-06-12
 - [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in; require only core logging, metrics, and database.
 - [ ] **Host architecture profiling (Phase 1)**: Profile active hardware specs (host RAM, VRAM, CPU threads, OS overhead) beyond basic laptop/desktop checks.
 - [ ] **Windows host mitigation (Phase 2)**: Establish a lean baseline profile for Windows nodes to account for WSL2/Docker Desktop resource taxes.
-- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
+- [x] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
 - [ ] **Just-In-Time (JIT) model lifecycle (Phase 1)**: Implement a `/tools` orchestration wrapper to dynamically spin up/down containerized model sizes on task queue demand.
 - [ ] **Service lifecycle dashboard**: Control on-demand model/service execution via UI and surface real-time per-service resource tracking.
 - [ ] **Decoupled runtimes & routing (Phase 3)**: Decouple local runner images into headless worker nodes with cross-node routing for pooled resource scheduling.
@@ -44,7 +44,7 @@ Last Updated: 2026-06-12
 - [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
 - [ ] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
-- [ ] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
+- [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
 - [ ] **File & payload guardrails (Phase 2)**: Enforce confirmation prompts, pre-operation snapshots, and gateway-level payload scrubbing (PII, credentials, regex injections).
 - [ ] **Schema validation (Phase 2)**: Guard model responses with structured schema enforcement (JSON/Markdown formatting filters).
 - [ ] **3D Memory Palace context**: Build a 3D AI workspace using Neo4j, Graphiti, and 3D Force Graph (WebGL) to map code structures and cross-session agent memories.
@@ -67,10 +67,10 @@ Last Updated: 2026-06-12
 
 ## Notes
 
-- The stack remains local-first and Docker-native.
-- 2027 Q1 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
-- 2027 Q2 focuses heavily on the Blackboard frontend layer once bb-mcp establishes a stable MCP provider contract.
-- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding model portfolio breadth.
+- The stack is still local-first and Docker-native.
+- Q3 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
+- Q4 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
+- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--
