@@ -2,74 +2,75 @@
 
 Last Updated: 2026-06-12
 
-## 2026 Q1 - Foundation and Dashboard ✅
-
-> Completed. See FEATURES.md for shipped capabilities.
-
 ## 2026 Q2 - Persistence and Agent Control
 
-- [ ] Implement persistence for agent history, logs, and state snapshots.
-- [ ] Ship the agent command interface for start, stop, and restart actions.
-- [ ] Add heartbeat and resource monitoring.
-- [ ] Finish the real-time communication bridge that early docs implied.
-- [ ] Discover features from [1code](https://github.com/21st-dev/1code) and implement any relevant functionality or patterns into our stack (we're primarily focused on local models but want to see if there are useful patterns / approaches we can adopt from 1code to our design as well or include outright)
+- [ ] Implement persistence for agent history, logs, and state snapshots. Verify they work with tests and examples.
+- [ ] Ship the agent command interface for start, stop, and restart actions. Verify they work with tests and examples (1 is fine can do before chat tests).
+- [ ] Add heartbeat and resource monitoring so agents can report health and resource usage back to the dashboard or if models fail the system can offer the "restart" option.
+- [ ] Finish or investigate for further review the real-time communication bridge that early docs implied.
+- [ ] Discover features from [1code](https://github.com/21st-dev/1code) and evaluate relevant patterns/approaches for local stack adaptation.
 
-## 2026 Q3 - Quality Reset
+## 2026 Q2 - Quality Reset
 
 - [ ] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
-- [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint) and find a working
-  OpenLLM or replacement custom-model endpoint (`OPENLLM_ENABLED=false` pending). See TASKS.md.
+- [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint)
+- [ ] Verify source a working OpenLLM or even extensible custom endpoints or APIs stored securely (`OPENLLM_ENABLED=false` pending).
 
-## 2026 Q4 - Extensibility Foundations
+## 2026 Q3 - Extensibility Foundations
 
 - [ ] Add multi-tenancy (user login/sso/etc.) and RBAC planning.
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
 
-## 2026 Q4 - Blackboard & MCP Frontend
-
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server itself live here by improving the chat experience and feedback loops enabled theirein (improvements to both the underlying mcp and model/chat/guardrails around it by connecting to a real LRN instance).
-
-- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental display.
-- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp tool flows as selectable agent personas; each persona loads its permitted tool set.
-- [ ] **Blackboard agent demo mode**: Add a demo-mode preset that walks through an end-to-end Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard instance.
-- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other MCP providers; show tool status, last invocation, and per-role availability.
-- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration as a documented, runnable demo (`BB_MCP_ENABLED=true docker compose up`) suitable for portfolio or interview demonstration.
-
 ## 2027 Q1 - Custom Agents, Stability & MCP Ecosystem
 
-### Stability & Resource Optimization
+### Stability, Resource Optimization & Device Profiling
 
-- [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in rather than always-on; logging, metrics, and the database remain required.
-- [ ] **Selective model loading**: Load only models explicitly enabled by configuration; default to a lightweight profile suitable for laptops and lower-memory environments.
-- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices and pass CUDA/device flags to the Ollama runtime; document driver and container-toolkit prerequisites.
-- [ ] **Service lifecycle management**: On-demand start/stop for models and services from the dashboard; surface per-service resource usage and running status.
+- [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in; require only core logging, metrics, and database.
+- [ ] **Host architecture profiling (Phase 1)**: Profile active hardware specs (host RAM, VRAM, CPU threads, OS overhead) beyond basic laptop/desktop checks.
+- [ ] **Windows host mitigation (Phase 2)**: Establish a lean baseline profile for Windows nodes to account for WSL2/Docker Desktop resource taxes.
+- [ ] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
+- [ ] **Just-In-Time (JIT) model lifecycle (Phase 1)**: Implement a `/tools` orchestration wrapper to dynamically spin up/down containerized model sizes on task queue demand.
+- [ ] **Service lifecycle dashboard**: Control on-demand model/service execution via UI and surface real-time per-service resource tracking.
+- [ ] **Decoupled runtimes & routing (Phase 3)**: Decouple local runner images into headless worker nodes with cross-node routing for pooled resource scheduling.
+- [ ] **Model configuration matrix (Phase 3)**: Pair custom "homebrew" open-source model configs with out-of-the-box vendor images.
 
-### Custom Agent System
+### Custom Agent System & Safety Guardrails
 
-- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with its own worktree, context, and output stream (cursor, codex, etc. can be its own panel/pane setup)
-- [ ] **Plugin architecture**: Core plugin API for task-specific or integration-specific agent extensions; plugins register capabilities without modifying core code.
-- [ ] **BYOK external LLM integration**: Standardized key management and provider interface to connect Claude, Gemini, and other APIs directly from the dashboard.
-- [ ] **Local model bridge**: Adapter layer exposing local Ollama models to external tools; enables hybrid local/cloud agent workflows.
-- [ ] **Workspace file browser**: R/W access to user-selected directories with git-aware file tree navigation surfaced in the dashboard.
-- [ ] **File safety guardrails**: Require confirmation before destructive file operations; provide recovery options and pre-operation snapshots for agent-driven file work.
-- [ ] **Context persistence and code memory**: Visual file structure and agentic connections, file annotations, and cross-session agent memory to reduce context loss in long-running workflows. See the Neo4js.md `/docs` for more details on this vision. But our objective is building an immersive 3D AI "Memory Palace" workspace using Neo4j, Graphiti, and 3D Force Graph (WebGL) to map code structures and cross-session agent memories into an interactive, spatial context network.
+- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with distinct worktrees, contexts, and output streams.
+- [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
+- [ ] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
+- [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
+- [ ] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
+- [ ] **File & payload guardrails (Phase 2)**: Enforce confirmation prompts, pre-operation snapshots, and gateway-level payload scrubbing (PII, credentials, regex injections).
+- [ ] **Schema validation (Phase 2)**: Guard model responses with structured schema enforcement (JSON/Markdown formatting filters).
+- [ ] **3D Memory Palace context**: Build a 3D AI workspace using Neo4j, Graphiti, and 3D Force Graph (WebGL) to map code structures and cross-session agent memories.
 
 ### MCP Container Ecosystem
 
-- [ ] **MCP container manager**: Lightweight manager service to spin MCP tool containers (Playwright, Jira/Confluence, Docker Hub–sourced MCPs) up and down on demand via UI.
-- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional enabled-by-config service in the compose stack. or make it specific to an agent/chat experience that can be enabled/disabled as needed.
-- [ ] **Multi-MCP orchestration**: Registry pattern so new MCP containers can be declared and surfaced to agents without manual compose changes.
+- [ ] **MCP container manager**: Spin tool containers (Playwright, Jira/Confluence, Docker Hub MCPs) up and down on demand via UI.
+- [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional, config-driven service in the compose stack or bind it specifically to agent/chat experiences.
+- [ ] **Multi-MCP orchestration**: Implement a registry pattern to declare and surface new MCP containers to agents without manual compose updates.
+
+## 2027 Q2 - Blackboard & MCP Frontend
+
+> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
+
+- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the chat/task panel with typing indicators and incremental display.
+- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp flows as selectable agent personas with permitted toolsets.
+- [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
+- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other providers showing status, last invocation, and role availability.
+- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
 
 ## Notes
 
-- The stack is still local-first and Docker-native.
-- Q3 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
-- Q4 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
-- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
+- The stack remains local-first and Docker-native.
+- 2027 Q1 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
+- 2027 Q2 focuses heavily on the Blackboard frontend layer once bb-mcp establishes a stable MCP provider contract.
+- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding model portfolio breadth.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--

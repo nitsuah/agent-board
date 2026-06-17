@@ -49,11 +49,11 @@ docker compose -f config/docker-compose.yml --profile bb-mcp up -d
 
 Open these endpoints:
 
-- Dashboard: http://localhost:3000
-- Jaeger UI: http://localhost:16686
-- Ollama API: http://localhost:8081
-- NemoClaw: http://localhost:9000 (currently crash-loops on Windows builds — see TASKS.md "Unblock NemoClaw sandbox container")
-- OpenLLM API (opt-in, see [OpenLLM (optional)](#openllm-optional)): http://localhost:8082
+- [Dashboard](http://localhost:3000)
+- [Jaeger UI](http://localhost:16686)
+- [Ollama API](http://localhost:8081)
+- [NemoClaw](http://localhost:9000) (currently crash-loops on Windows builds — see TASKS.md "Unblock NemoClaw sandbox container")
+- [OpenLLM API (opt-in, see [OpenLLM (optional)](#openllm-optional))](http://localhost:8082)
 
 ## What You Can Do In 2 Minutes
 
@@ -76,7 +76,7 @@ Open these endpoints:
 
 ## Directory Structure
 
-```
+```bash
 dashboard/                    # Web UI & API server (React + Express)
   src/                        # React frontend
   tests/                      # Integration tests
@@ -90,17 +90,18 @@ services/                     # Additional microservices (future)
 scripts/                      # Setup & management scripts
 ```
 
-
 ## Models & Selective Loading
 
 Models are loaded at startup based on the `config/model-manifest.json` file. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
 
 To enable additional models:
+
 1. Pull the model in your Ollama container (e.g. `docker exec ollama ollama pull qwen3-coder:latest`).
 2. Add the model name to the `enabled` array in `config/model-manifest.json`.
 3. Restart the stack.
 
 **Example `config/model-manifest.json`:**
+
 ```json
 {
   "default": "llama2:latest",
@@ -112,12 +113,13 @@ To enable additional models:
 ```
 
 | Model | Size | Use |
-|---|---|---|
+| --- | --- | --- |
 | `llama2:latest` | 3.8 GB | Default — general chat, fits in RAM |
 | `qwen3-coder:latest` | 18 GB | Code generation (requires ~18 GB free RAM) |
 | `qwen3:latest` | 5.2 GB | General (MoE, loads as 17.7 GB at runtime) |
 
 Pull additional models:
+
 ```powershell
 docker exec ollama ollama pull llama3.2:latest   # 2 GB, good general model
 docker exec ollama ollama pull qwen3:1.7b        # 1.4 GB, small but capable
@@ -126,6 +128,7 @@ docker exec ollama ollama pull qwen3:1.7b        # 1.4 GB, small but capable
 ### Docker Model Runner (optional)
 
 Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_runner`). To enable it:
+
 1. Docker Desktop → Settings → Features in development → **Enable Docker Model Runner** + **Host-side TCP support**
 2. Select "Docker Runner" in the dashboard sidebar
 
@@ -135,9 +138,11 @@ Docker Desktop's built-in model runner is also wired up as an endpoint (`docker_
 
 1. Set `OPENLLM_MODEL` to a HuggingFace model repo id (e.g. `HuggingFaceTB/SmolLM2-1.7B-Instruct`) and `OPENLLM_ENABLED=true` in `.env`.
 2. Start the service:
+
    ```powershell
    docker compose -f config/docker-compose.yml --profile openllm up -d llm_openllm
    ```
+
 3. Select "OpenLLM" in the dashboard sidebar (Developer or Research experience).
 
 The container serves on port `3000` internally (`http://localhost:8082` on the host) and caches model weights in the `openllm_data` volume.
@@ -184,6 +189,7 @@ socket gives the dashboard container root-equivalent control over the host Docke
 daemon — only use this overlay in trusted local/dev environments.
 
 With the overlay applied:
+
 - The **Services** panel's Start/Stop/Restart buttons run real
   `docker compose up -d|stop|restart <service>` commands.
 - The **Models** panel's Pull buttons download the configured model for each LLM
@@ -194,6 +200,7 @@ With the overlay applied:
 ## API
 
 ### Sessions
+
 - `POST /api/sessions` — Create session (`{ endpoint, model, name, userId, userRole, experience, safetyMode }`)
 - `GET /api/sessions` — List all sessions
 - `GET /api/sessions/:id` — Get session with messages
@@ -202,9 +209,11 @@ With the overlay applied:
 - `POST /api/sessions/:id/feedback` — Record thumbs up/down on an assistant message (`{ messageIndex, positive }`)
 
 ### Messages
+
 - `POST /api/sessions/:id/message` — Send message (`{ message, useSafeMode }`)
 
 ### Product Surface
+
 - `GET /api/experiences` — List available experience configs
 - `GET /api/tools` — Tool server reachability (content_gen, website)
 - `GET /api/tools/:toolKey/tools` — List a tool server's MCP tools
@@ -215,6 +224,7 @@ With the overlay applied:
 - `GET /api/metrics/errors` — Error rate and recent failures
 
 ### System
+
 - `GET /api/health` — Health check (LLM endpoints + Docker status)
 - `GET /api/models` — Available models from all endpoints
 - `GET /api/docker/status` — Container status (includes `endpoints[*].modelInstalled`/`modelLoaded`)
@@ -229,6 +239,7 @@ With the overlay applied:
 - `GET /api/tracing/status` — OpenTelemetry tracing status (enabled/initialized/endpoint)
 
 ### Runtime Config
+
 - `PRIMARY_LLM_URL` — Default primary Ollama URL fallback.
 - `PRIMARY_LLM_URL_CANDIDATES` — Comma-separated discovery candidates for primary Ollama URL resolution.
 - `AGENT_BOARD_ENABLE_DOCKER_CONTROL` — Set `true` to enable service action API endpoints.
@@ -243,7 +254,7 @@ With the overlay applied:
 
 ## Architecture
 
-```
+```bash
 dashboard/
 ├── server.js         # Express API — session mgmt, LLM proxy, Docker status
 ├── src/
@@ -261,16 +272,19 @@ dashboard/
 All lint, test, and quality checks run via Docker — no local Node.js required.
 
 **Run unit tests:**
+
 ```powershell
 docker compose -f config/docker-compose.yml --profile test run --rm test
 ```
 
 **Start the full stack:**
+
 ```powershell
 docker compose -f config/docker-compose.yml up -d
 ```
 
 **Stack management:**
+
 ```powershell
 .\scripts\stack-manager.ps1 -Action start
 .\scripts\stack-manager.ps1 -Action stop
@@ -279,6 +293,7 @@ docker compose -f config/docker-compose.yml up -d
 ```
 
 **Pre-commit hooks** (installs git hooks for whitespace/yaml checks; unit tests run on push):
+
 ```powershell
 pip install pre-commit
 pre-commit install
@@ -286,27 +301,29 @@ pre-commit install --hook-type pre-push
 ```
 
 **Integration tests** require a running stack (`docker compose up -d`) then:
+
 ```powershell
 cd dashboard && npm run test:integration
 ```
 
-
 ## Troubleshooting
 
-**Chat returns error / LLM not responding**
+> If **Chat returns error / LLM not responding**
+
 - Check Ollama has models: `docker exec llm_qwen_coder ollama list`
 - Check memory — large models (qwen3-coder 18 GB) need enough free RAM
 - Default model is `llama2:latest` which is safe for ~8 GB+ systems
 
-**Container unhealthy**
+> **Container unhealthy**
+
 - `docker logs agent-dashboard` — server errors
 - `docker logs llm_qwen_coder` — Ollama errors (OOM will show here)
 
-**Port conflicts**
+> **Port conflicts**
+
 - Ollama: `8081` (host) → `8080` (container)
 - NemoClaw: `9000` → `8080`
 - Dashboard: `3000` → `3000`
-
 
 ## GPU Acceleration (CUDA/RTX 4080)
 
@@ -317,6 +334,7 @@ To enable GPU acceleration for Ollama (recommended for RTX 4080 or similar):
    - https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 3. **Update Docker Compose** to use the NVIDIA runtime for the Ollama service:
    - Add to `ollama` service:
+
      ```yaml
      deploy:
        resources:
@@ -329,6 +347,7 @@ To enable GPU acceleration for Ollama (recommended for RTX 4080 or similar):
      environment:
        - NVIDIA_VISIBLE_DEVICES=all
      ```
+
    - Or run with: `docker compose --gpus all up`
 4. **Verify GPU is detected**:
    - `docker exec ollama nvidia-smi`
@@ -350,6 +369,7 @@ For production use:
 - Regularly update images and dependencies.
 
 **Example production override:**
+
 ```yaml
 services:
   agent-dashboard:
@@ -373,9 +393,10 @@ services:
 ## License
 
 MIT
+
 ## Community Standards
 
-Shared community policies are centralized in https://github.com/nitsuah/.github:
-- Contributing: https://github.com/nitsuah/.github/blob/main/CONTRIBUTING.md
-- Code of Conduct: https://github.com/nitsuah/.github/blob/main/CODE_OF_CONDUCT.md
-- Security: https://github.com/nitsuah/.github/blob/main/SECURITY.md
+Shared community policies are centralized in [https://github.com/nitsuah/.github](https://github.com/nitsuah/.github):
+- Contributing: [https://github.com/nitsuah/.github/blob/main/CONTRIBUTING.md](https://github.com/nitsuah/.github/blob/main/CONTRIBUTING.md)
+- Code of Conduct: [https://github.com/nitsuah/.github/blob/main/CODE_OF_CONDUCT.md](https://github.com/nitsuah/.github/blob/main/CODE_OF_CONDUCT.md)
+- Security: [https://github.com/nitsuah/.github/blob/main/SECURITY.md](https://github.com/nitsuah/.github/blob/main/SECURITY.md)
