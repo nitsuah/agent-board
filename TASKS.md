@@ -13,8 +13,6 @@ Last Updated: 2026-06-16
   - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
   - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
 
-- [ ] **[Q2-CEO] File I/O and workspace mount** — ✅ In this PR. See Done section.
-
 ### P2 - Medium
 
 - [ ] **[Now] Unblock NemoClaw sandbox container** — `nemoclaw:latest` builds (1.92GB) but the container crash-loops.
