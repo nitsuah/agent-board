@@ -27,7 +27,7 @@ Last Updated: 2026-06-17
 - [ ] Improve analytics and operational observability.
 - [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
 
-## 2027 Q1 - Custom Agents, Stability & MCP Ecosystem
+### Custom Agent System & Safety Guardrails
 
 ### Stability, Resource Optimization & Device Profiling
 
@@ -70,10 +70,10 @@ Last Updated: 2026-06-17
 
 ## Notes
 
-- The stack is still local-first and Docker-native.
-- Q3 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
-- Q4 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
-- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
+- The stack remains local-first and Docker-native.
+- 2027 Q1 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
+- 2027 Q2 focuses heavily on the Blackboard frontend layer once bb-mcp establishes a stable MCP provider contract.
+- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding model portfolio breadth.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--
