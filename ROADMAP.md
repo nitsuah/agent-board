@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-06-12
+Last Updated: 2026-06-17
 
 ## 2026 Q2 - Persistence and Agent Control
 
@@ -15,8 +15,8 @@ Last Updated: 2026-06-12
 - [x] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
-- [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint)
-- [ ] Verify source a working OpenLLM or even extensible custom endpoints or APIs stored securely (`OPENLLM_ENABLED=false` pending).
+- [ ] `[deferred/P3]` Unblock NemoClaw sandbox container — Ollama is the active local runtime; revisit if NemoClaw becomes relevant.
+- [ ] `[deferred/P3]` Replace OpenLLM endpoint — CPU-incompatible with current workflow; Ollama + tools/ cover needs. `OPENLLM_ENABLED=false` stays.
 
 ## 2026 Q3 - Extensibility Foundations
 
@@ -44,6 +44,7 @@ Last Updated: 2026-06-12
 - [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
 - [ ] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
+- [ ] **Agent skills system**: Loadable first-class skill modules registered and invoked within the agent runtime (similar to Odysseus); skills layer on top of tools/ MCP servers for task-specific capabilities. Lowest priority — after plugin architecture and BYOK.
 - [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
 - [ ] **File & payload guardrails (Phase 2)**: Enforce confirmation prompts, pre-operation snapshots, and gateway-level payload scrubbing (PII, credentials, regex injections).
 - [ ] **Schema validation (Phase 2)**: Guard model responses with structured schema enforcement (JSON/Markdown formatting filters).
