@@ -9,6 +9,7 @@ Last Updated: 2026-06-17
 - [ ] Add heartbeat and resource monitoring so agents can report health and resource usage back to the dashboard or if models fail the system can offer the "restart" option.
 - [ ] Finish or investigate for further review the real-time communication bridge that early docs implied.
 - [ ] Discover features from [1code](https://github.com/21st-dev/1code) and evaluate relevant patterns/approaches for local stack adaptation.
+- [ ] **Conversation replay mode** — step-through replay of persisted agent sessions (message-by-message) for debugging decision paths, auditing tool calls, and recording portfolio demos without a live model.
 
 ## 2026 Q2 - Quality Reset
 
@@ -24,6 +25,7 @@ Last Updated: 2026-06-17
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
+- [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
 
 ## 2027 Q1 - Custom Agents, Stability & MCP Ecosystem
 
