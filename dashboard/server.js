@@ -1376,7 +1376,8 @@ app.get('/api/system/services', async (req, res) => {
 
     const serviceEntries = await Promise.all(
       Object.values(registry).map(async (service) => {
-        if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
+        // Any service explicitly disabled via env var (controllable=false + disabledReason set)
+        if (!service.controllable && service.disabledReason) {
           return [
             service.key,
             {
