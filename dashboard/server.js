@@ -1308,7 +1308,18 @@ app.get('/api/docker/status', async (req, res) => {
       };
     } else if (config.backendType === 'docker-runner') {
       const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
-      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+      // On laptop profile, 16GB Docker Runner models exceed 8GB VRAM — mark as
+      // disabled so the UI doesn't show them as available.
+      const tooLargeForDevice = DEVICE_PROFILE === 'laptop' || DEVICE_PROFILE === 'minimal';
+      if (tooLargeForDevice) {
+        endpoints[key] = {
+          name: config.name, model: config.defaultModel, backendType: config.backendType,
+          live: false, modelLoaded, runnerLive, fallback: true,
+          disabledReason: `${config.defaultModel} requires ≥16GB VRAM (${DEVICE_PROFILE} profile has 8GB)`,
+        };
+      } else {
+        endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+      }
     } else if (config.backendType === 'openllm-container') {
       const openllmUp = containers['llm_openllm']?.running ?? false;
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
