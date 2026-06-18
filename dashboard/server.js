@@ -360,7 +360,7 @@ function getServiceRegistry() {
   return {
     ollama: {
       key: 'ollama',
-      label: 'Ollama (local)',
+      label: 'Ollama',
       backendType: 'ollama-container',
       composeService: 'ollama',
       ports: '8081:8080',
@@ -371,7 +371,7 @@ function getServiceRegistry() {
     },
     nemoclaw: {
       key: 'nemoclaw',
-      label: 'NemoClaw (sandbox)',
+      label: 'NemoClaw',
       backendType: 'sandbox',
       composeService: 'nemoclaw',
       composeProfile: 'sandbox',
@@ -383,7 +383,7 @@ function getServiceRegistry() {
     },
     bb_mcp: {
       key: 'bb_mcp',
-      label: 'Blackboard Learn MCP',
+      label: 'Blackboard MCP',
       backendType: 'mcp',
       composeService: 'bb-mcp',
       ports: '3100:3100',
@@ -395,7 +395,7 @@ function getServiceRegistry() {
     },
     llm_openllm: {
       key: 'llm_openllm',
-      label: 'OpenLLM (custom models)',
+      label: 'OpenLLM',
       backendType: 'openllm-container',
       composeService: 'llm_openllm',
       composeProfile: 'openllm',
@@ -408,7 +408,7 @@ function getServiceRegistry() {
     },
     tool_content_gen: {
       key: 'tool_content_gen',
-      label: 'Content Gen (MCP tool)',
+      label: 'Content Gen',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.content_gen.composeService,
       composeProfile: 'tools',
@@ -420,7 +420,7 @@ function getServiceRegistry() {
     },
     tool_website: {
       key: 'tool_website',
-      label: 'Website Agent (MCP tool)',
+      label: 'Website Agent',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.website.composeService,
       composeProfile: 'tools',
@@ -1211,7 +1211,7 @@ app.get('/api/docker/status', async (req, res) => {
   const serviceChecks = [
     {
       name: 'ollama',
-      label: 'Ollama (local)',
+      label: 'Ollama',
       url: `${primaryResolution.url}/api/tags`,
       ports: '8081:8080',
       backendType: 'ollama-container',
@@ -1228,7 +1228,7 @@ app.get('/api/docker/status', async (req, res) => {
     },
     {
       name: 'nemoclaw',
-      label: 'NemoClaw (sandbox)',
+      label: 'NemoClaw',
       url: `${NEMOCLAW_URL}/`,
       ports: '9000:8080',
       backendType: 'sandbox',
@@ -1236,7 +1236,7 @@ app.get('/api/docker/status', async (req, res) => {
     },
     {
       name: 'llm_openllm',
-      label: 'OpenLLM (custom models)',
+      label: 'OpenLLM',
       url: `${LLM_CONFIG.openllm.url}/v1/models`,
       ports: '8082:3000',
       backendType: 'openllm-container',
@@ -1247,7 +1247,7 @@ app.get('/api/docker/status', async (req, res) => {
   if (BB_MCP_ENABLED) {
     serviceChecks.push({
       name: 'bb-mcp',
-      label: 'Blackboard Learn MCP',
+      label: 'Blackboard MCP',
       url: `${BB_MCP_URL}/health`,
       ports: '3100:3100',
       backendType: 'mcp',
@@ -1588,7 +1588,9 @@ async function startDockerModelPull(endpoint, modelName, pullKey) {
     pullStatus.set(pullKey, completed);
     eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
   } catch (error) {
-    const details = `${error.message || ''}\n${error.stderr || ''}`.trim();
+    const details = error.code === 'ENOENT'
+      ? `docker CLI not in container — pull from host: docker model pull ${modelName}`
+      : `${error.message || ''}\n${error.stderr || ''}`.trim();
     const failed = { endpoint, model: modelName, status: 'failed', error: details, startedAt, completedAt: new Date().toISOString() };
     pullStatus.set(pullKey, failed);
     eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
@@ -1674,6 +1676,14 @@ app.post('/api/models/pull-all', async (req, res) => {
         skipped.push({ endpoint: endpointKey, model: modelName, reason: 'docker_control_disabled' });
         continue;
       }
+      // Skip if already loaded in the runner (avoids noisy ENOENT errors for existing models)
+      try {
+        const runnerModels = await fetchDockerRunnerModels(DOCKER_RUNNER_URL);
+        if (runnerModels.some(m => m.id === modelName)) {
+          skipped.push({ endpoint: endpointKey, model: modelName, reason: 'already_loaded' });
+          continue;
+        }
+      } catch { /* runner offline — proceed with pull attempt */ }
       startDockerModelPull(endpointKey, modelName, pullKey);
       initiated.push({ endpoint: endpointKey, model: modelName });
     } else {

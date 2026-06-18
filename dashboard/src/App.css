@@ -1194,19 +1194,26 @@ body {
 .docker-service-status.disabled { color: var(--text-faint); }
 
 .svc-type-badge {
-  font-size: 0.62rem;
-  font-weight: 500;
-  padding: 0.05rem 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.05rem 0.28rem;
   border-radius: 3px;
-  background: var(--surface-3, var(--surface-2));
-  color: var(--text-faint);
   border: 1px solid var(--border);
-  letter-spacing: 0.02em;
-  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
+/* Per-type colors */
+.badge-local   { background: rgba(59,130,246,0.12);  color: #60a5fa; border-color: rgba(59,130,246,0.3);  }
+.badge-mcp     { background: rgba(139,92,246,0.12);  color: #a78bfa; border-color: rgba(139,92,246,0.3);  }
+.badge-sandbox { background: rgba(245,158,11,0.12);  color: #fbbf24; border-color: rgba(245,158,11,0.3);  }
+.badge-runner  { background: rgba(20,184,166,0.12);  color: #2dd4bf; border-color: rgba(20,184,166,0.3);  }
+.badge-custom  { background: rgba(244,63,94,0.12);   color: #fb7185; border-color: rgba(244,63,94,0.3);   }
+
 .svc-disabled {
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .docker-service-port {
