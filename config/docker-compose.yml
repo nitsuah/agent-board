@@ -117,25 +117,42 @@ services:
     ports:
       - "9000:8080"
     command:
-      - sh
       - -c
       - |
-        sed -i 's/\r//' /usr/local/bin/nemoclaw-wrapper.sh 2>/dev/null || true
-        node -e "var net=require('net');net.createServer(function(s){var u=net.connect(18789,'127.0.0.1');s.pipe(u);u.pipe(s);var c=function(){if(!s.destroyed)s.destroy();if(!u.destroyed)u.destroy();};s.on('error',c);u.on('error',c);s.on('close',c);u.on('close',c);}).listen(8080,'0.0.0.0');" &
-        exec /usr/local/bin/nemoclaw-wrapper.sh
+        # 1. Strip Windows CRLF line endings from all shell scripts baked with Windows line endings
+        sed -i 's/\r//' /usr/local/lib/nemoclaw/sandbox-init.sh \
+          /usr/local/bin/nemoclaw-start /usr/local/bin/docker-entrypoint.sh 2>/dev/null || true
+
+        # 2. After capsh drops cap_dac_override, root can no longer write to files it
+        #    doesn't own. The script creates /tmp/gateway.log as gateway:gateway then
+        #    tries to shell-redirect (as root) to it at line 3614 — that fails.
+        #    Remove the chown so the file stays root-owned and the redirect works.
+        sed -i '/^chown gateway:gateway \/tmp\/gateway\.log$/d' /usr/local/bin/nemoclaw-start
+
+        # 3. Patch openclaw.json to use local Ollama (inference.local is NVIDIA cloud).
+        #    The config hash is not enforced for mutable defaults so this is safe.
+        node -e "
+          var fs=require('fs'), f='/sandbox/.openclaw/openclaw.json';
+          var c=JSON.parse(fs.readFileSync(f,'utf8'));
+          var inf=c.models&&c.models.providers&&c.models.providers.inference;
+          if(inf){inf.baseUrl='http://ollama:8080/v1';inf.apiKey='ollama';}
+          var m='llama3.2:3b';
+          if(c.agents&&c.agents.defaults&&c.agents.defaults.model) c.agents.defaults.model.primary=m;
+          if(inf&&inf.models) inf.models=[{id:m,name:m,reasoning:false,input:['text'],
+            cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:32768,maxTokens:4096}];
+          fs.writeFileSync(f,JSON.stringify(c,null,2));
+          console.error('[setup] openclaw.json patched: inference → Ollama llama3.2:3b');
+        " 2>&1 || echo '[setup] WARNING: openclaw.json patch failed — NemoClaw may use cloud inference'
+
+        exec /usr/local/bin/nemoclaw-start
     volumes:
       - nemoclaw_data:/workspace
-      - /tmp
     environment:
       - NEMOCLAW_HOME=/workspace
-      - LLM_API_URL=http://ollama:8080
-      - OPENSHELL_ENABLE=true
-    cap_drop:
-      - all
-    cap_add:
-      - NET_BIND_SERVICE
+      - NEMOCLAW_DASHBOARD_PORT=8080
+      - CHAT_UI_URL=http://agent-dashboard:3000
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:false
     # healthcheck disabled because wget/curl is unavailable in this container
     depends_on:
       ollama:

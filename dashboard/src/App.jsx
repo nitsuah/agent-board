@@ -2022,7 +2022,15 @@ function App() {
                           const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
                           const isActiveRunner = ep.backendType === 'docker-runner' && dockerStatus?.activeDockerRunnerModel?.key === epKey;
                           const wasKnown = !!knownModels[pullKey];
-                          const isOnlineNotInstalled = wasKnown && ep.live && !installed;
+                          const epDisabled = !!ep.disabledReason;
+                          if (epDisabled) {
+                            return (
+                              <div key={epKey} className="service-model-row" style={{ opacity: 0.5 }}>
+                                <span className="service-model-name">{ep.model}</span>
+                                <span style={{ color: 'var(--text-faint)', fontSize: '0.67rem' }}>✗ {ep.disabledReason}</span>
+                              </div>
+                            );
+                          }
                           return (
                             <div key={epKey} className="service-model-row">
                               <span className="service-model-name">{ep.model || 'no model configured'}</span>
@@ -2127,11 +2135,16 @@ function App() {
                 }
               }
               if (dockerRunnerEndpoints.length > 0) {
+                const runnerAnyLive = dockerRunnerEndpoints.some(({ ep }) => ep.live && !ep.disabledReason);
+                const runnerAllDisabled = dockerRunnerEndpoints.every(({ ep }) => !!ep.disabledReason);
+                const runnerDisabledReason = runnerAllDisabled
+                  ? `Models exceed device VRAM (${dockerStatus?.deviceProfile?.name || 'current'} profile)`
+                  : null;
                 allSvcs.push({ key: 'docker-runner', info: {
                   label: 'Docker Model Runner',
-                  running: dockerRunnerEndpoints.some(({ ep }) => ep.live),
-                  status: 'offline', ports: 'host-internal',
-                  controllable: false, disabledReason: null, backendType: 'docker-runner',
+                  running: runnerAnyLive,
+                  status: runnerAllDisabled ? 'disabled' : 'offline', ports: 'host-internal',
+                  controllable: false, disabledReason: runnerDisabledReason, backendType: 'docker-runner',
                 }, endpoints: dockerRunnerEndpoints });
               }
               if (systemServices?.services) {
