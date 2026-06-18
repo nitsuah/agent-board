@@ -129,7 +129,14 @@ services:
         #    Remove the chown so the file stays root-owned and the redirect works.
         sed -i '/^chown gateway:gateway \/tmp\/gateway\.log$/d' /usr/local/bin/nemoclaw-start
 
-        # 3. Patch openclaw.json to use local Ollama (inference.local is NVIDIA cloud).
+        # 3. After capsh drops cap_dac_override, root can no longer traverse
+        #    sandbox:sandbox directories (mode 2770 = no 'others' access).
+        #    start_persistent_gateway_log_mirror tries to install into
+        #    /sandbox/.openclaw/logs/ and exits 1 when it can't.
+        #    Add o+x so root (treated as 'other' after cap drop) can traverse.
+        chmod o+x /sandbox/.openclaw /sandbox/.openclaw/logs 2>/dev/null || true
+
+        # 4. Patch openclaw.json to use local Ollama (inference.local is NVIDIA cloud).
         #    The config hash is not enforced for mutable defaults so this is safe.
         node -e "
           var fs=require('fs'), f='/sandbox/.openclaw/openclaw.json';
