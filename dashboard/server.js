@@ -1631,6 +1631,43 @@ app.get('/api/models/pull-status', (req, res) => {
 });
 
 /**
+ * Kick off pulls for all models that are not yet installed.
+ * Ollama models are pulled via startOllamaPull; Docker Runner models require
+ * AGENT_BOARD_ENABLE_DOCKER_CONTROL and are pulled via startDockerModelPull.
+ */
+app.post('/api/models/pull-all', async (req, res) => {
+  const initiated = [];
+  const skipped = [];
+
+  for (const [endpointKey, config] of Object.entries(LLM_CONFIG)) {
+    const modelName = config.defaultModel;
+    if (!modelName) { skipped.push({ endpoint: endpointKey, reason: 'no_model_configured' }); continue; }
+
+    const pullKey = `${endpointKey}:${modelName}`;
+    if (pullStatus.get(pullKey)?.status === 'pulling') {
+      skipped.push({ endpoint: endpointKey, model: modelName, reason: 'already_pulling' });
+      continue;
+    }
+
+    if (config.backendType === 'ollama-container') {
+      startOllamaPull(endpointKey, modelName, pullKey);
+      initiated.push({ endpoint: endpointKey, model: modelName });
+    } else if (config.backendType === 'docker-runner') {
+      if (!DOCKER_CONTROL_ENABLED) {
+        skipped.push({ endpoint: endpointKey, model: modelName, reason: 'docker_control_disabled' });
+        continue;
+      }
+      startDockerModelPull(endpointKey, modelName, pullKey);
+      initiated.push({ endpoint: endpointKey, model: modelName });
+    } else {
+      skipped.push({ endpoint: endpointKey, model: modelName, reason: 'unsupported_backend' });
+    }
+  }
+
+  res.json({ success: true, initiated, skipped });
+});
+
+/**
  * Get system information
  */
 app.get('/api/system/info', async (req, res) => {
