@@ -3602,6 +3602,15 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
       bbMcpUrl: BB_MCP_URL,
       websocketPath: '/ws/events'
     });
+
+    // Probe Docker Model Runner reachability on startup so the log tells us immediately
+    // if model-runner.docker.internal isn't resolving (common when not using Docker Desktop).
+    checkHttpService(`${DOCKER_RUNNER_URL}/models`, 3000)
+      .then(() => logStructured('info', 'docker_runner_reachable', { url: DOCKER_RUNNER_URL }))
+      .catch(() => logStructured('warn', 'docker_runner_unreachable', {
+        url: DOCKER_RUNNER_URL,
+        hint: 'Enable Docker Desktop Model Runner or set DOCKER_RUNNER_URL in .env'
+      }));
   });
 
   attachEventWebSocketServer(server);

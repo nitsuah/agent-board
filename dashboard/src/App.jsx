@@ -2216,9 +2216,12 @@ function App() {
               <div className="system-meta-text">
                 <div><strong>Primary:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}</div>
                 <div><strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}</div>
-                <div style={{ marginTop: '0.4rem', opacity: 0.6 }}>
-                  Pull: <code>docker model pull ai/glm-4.7-flash:latest</code>
-                </div>
+                {dockerStatus?.endpoints && Object.values(dockerStatus.endpoints).some(ep => ep.backendType === 'docker-runner' && !ep.runnerLive) && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.4rem 0.5rem', background: 'var(--surface-3)', borderRadius: '4px', fontSize: '0.72rem', opacity: 0.8 }}>
+                    <strong>Docker Runner offline.</strong> Requires Docker Desktop 4.40+ with Model Runner enabled.<br />
+                    Pull models: <code>docker model pull ai/qwen3-coder:latest</code>
+                  </div>
+                )}
               </div>
 
               {/* Generated content file browser — shown when website tool output exists */}
