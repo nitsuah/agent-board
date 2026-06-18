@@ -449,6 +449,7 @@ function App() {
   const streamAbortControllersRef = useRef(new Map());
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(() => window.innerWidth > 900);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [serviceActionErrors, setServiceActionErrors] = useState({});
   const [modelPulls, setModelPulls] = useState({});
@@ -2049,8 +2050,14 @@ function App() {
                 </div>
               )}
 
-              <h3>Workspace</h3>
-              {!dockerStatus?.workspace?.configured ? (
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setWorkspaceExpanded(x => !x)}
+              >
+                <h3 style={{ margin: 0 }}>Workspace</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)', transform: workspaceExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>▼</span>
+              </div>
+              {workspaceExpanded && (!dockerStatus?.workspace?.configured ? (
                 <div className="docker-status-item">
                   <div className="docker-service-info">
                     <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
@@ -2162,7 +2169,7 @@ function App() {
                     </div>
                   )}
                 </>
-              )}
+              ))}
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3>Models &amp; Endpoints</h3>
@@ -2216,7 +2223,7 @@ function App() {
                         <div className={`docker-service-pull-status ${pull.status}`}>
                           {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
                           {pull.status === 'completed' && '✓ Pull complete'}
-                          {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
+                          {pull.status === 'failed' && !installed && `✗ ${pull.error || 'Pull failed'}`}
                         </div>
                       )}
                       {serviceActionErrors[actionId] && (

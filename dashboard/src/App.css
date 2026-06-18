@@ -1317,12 +1317,19 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .docker-actions {
-    width: 100%;
-  }
-
   .btn-docker-action {
     flex: 1;
+  }
+
+  /* Service cards: allow name to wrap on narrow panels */
+  .docker-service-name {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  /* Keep actions column from growing too wide */
+  .docker-actions {
+    flex-shrink: 0;
   }
 }
 
