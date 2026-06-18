@@ -2021,20 +2021,23 @@ function App() {
                     {canControl && (
                       <div className="docker-actions">
                         <button
-                          className="btn-docker-action start-btn"
+                          className="btn-service-icon start-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:start`]}
+                          title="Start"
                           onClick={() => runServiceAction(serviceKey, 'start')}
-                        >{serviceActionsInFlight[`${serviceKey}:start`] ? '…' : 'Start'}</button>
+                        >{serviceActionsInFlight[`${serviceKey}:start`] ? '…' : '▶'}</button>
                         <button
-                          className="btn-docker-action stop-btn"
+                          className="btn-service-icon stop-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:stop`]}
+                          title="Stop"
                           onClick={() => runServiceAction(serviceKey, 'stop')}
-                        >{serviceActionsInFlight[`${serviceKey}:stop`] ? '…' : 'Stop'}</button>
+                        >{serviceActionsInFlight[`${serviceKey}:stop`] ? '…' : '■'}</button>
                         <button
-                          className="btn-docker-action restart-btn"
+                          className="btn-service-icon restart-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:restart`]}
+                          title="Restart"
                           onClick={() => runServiceAction(serviceKey, 'restart')}
-                        >{serviceActionsInFlight[`${serviceKey}:restart`] ? '…' : 'Restart'}</button>
+                        >{serviceActionsInFlight[`${serviceKey}:restart`] ? '…' : '↺'}</button>
                       </div>
                     )}
                   </div>
@@ -2071,18 +2074,20 @@ function App() {
                   }}
                 >Pull All</button>
               </div>
-              {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => {
-                const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
-                const serviceMeta = systemServices?.services?.[serviceKey];
-                return renderServiceRow(serviceKey, {
-                  label: status.label || name,
-                  running: status.running,
-                  status: status.status,
-                  ports: status.ports,
-                  controllable: serviceMeta?.controllable,
-                  disabledReason: serviceMeta?.disabledReason,
-                }, containerToEndpoints[name] || null);
-              })}
+              {dockerStatus?.containers && Object.entries(dockerStatus.containers)
+                .filter(([name]) => name !== 'docker-runner')
+                .map(([name, status]) => {
+                  const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
+                  const serviceMeta = systemServices?.services?.[serviceKey];
+                  return renderServiceRow(serviceKey, {
+                    label: status.label || name,
+                    running: status.running,
+                    status: status.status,
+                    ports: status.ports,
+                    controllable: serviceMeta?.controllable,
+                    disabledReason: serviceMeta?.disabledReason,
+                  }, containerToEndpoints[name] || null);
+                })}
               {dockerRunnerEndpoints.length > 0 && renderServiceRow('docker-runner', {
                 label: 'Docker Model Runner',
                 running: dockerRunnerEndpoints.some(({ ep }) => ep.live),

@@ -455,7 +455,7 @@ async function runComposeAction(action, serviceName, composeProfile = null) {
     } catch (error) {
       lastError = error;
       const details = `${error.message || ''}\n${error.stderr || ''}`;
-      const binaryMissing = /(not found|is not recognized|docker-compose: not found|docker: not found|is not a docker command|unknown shorthand flag:\s*'f'\s*in -f)/i.test(details);
+      const binaryMissing = error.code === 'ENOENT' || /(not found|is not recognized|docker-compose: not found|docker: not found|is not a docker command|unknown shorthand flag:\s*'f'\s*in -f)/i.test(details);
       if (!binaryMissing) {
         throw error;
       }
