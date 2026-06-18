@@ -108,8 +108,7 @@ services:
 
   # ===== SAFETY & SANDBOX =====
   # Opt-in: enable with --profile sandbox
-  # NemoClaw is currently deferred (crash-loops on Windows builds — CRLF in entrypoint).
-  # Gate it behind a profile so it never starts in the default stack.
+  # NemoClaw — sandbox profile (opt-in with --profile sandbox)
   nemoclaw:
     image: nemoclaw:latest
     container_name: nemoclaw
@@ -117,8 +116,13 @@ services:
       - sandbox
     ports:
       - "9000:8080"
-    command: |
-      sh -lc 'node -e "const net=require("net");net.createServer((socket)=>{const upstream=net.connect(18789,"127.0.0.1");socket.pipe(upstream);upstream.pipe(socket);const close=()=>{if(!socket.destroyed) socket.destroy(); if(!upstream.destroyed) upstream.destroy();};socket.on("error",close);upstream.on("error",close);socket.on("close",close);upstream.on("close",close);}).listen(8080,"0.0.0.0");" & exec /usr/local/bin/nemoclaw-wrapper.sh'
+    command:
+      - sh
+      - -c
+      - |
+        sed -i 's/\r//' /usr/local/bin/nemoclaw-wrapper.sh 2>/dev/null || true
+        node -e "var net=require('net');net.createServer(function(s){var u=net.connect(18789,'127.0.0.1');s.pipe(u);u.pipe(s);var c=function(){if(!s.destroyed)s.destroy();if(!u.destroyed)u.destroy();};s.on('error',c);u.on('error',c);s.on('close',c);u.on('close',c);}).listen(8080,'0.0.0.0');" &
+        exec /usr/local/bin/nemoclaw-wrapper.sh
     volumes:
       - nemoclaw_data:/workspace
       - /tmp

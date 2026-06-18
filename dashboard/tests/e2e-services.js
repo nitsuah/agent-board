@@ -211,8 +211,13 @@ async function testContentGen() {
     if (!text) {
       recordFail(NAME, 'empty response');
     } else {
-      console.log(`  response snippet: ${text.slice(0, 120)}`);
-      recordPass(NAME);
+      const hasToolRef = /script|video|gen|audio|content|voice|image|visual|moneyprinter|render/i.test(text);
+      if (!hasToolRef) {
+        recordFail(NAME, `response missing expected tool keywords — got: ${text.slice(0, 120)}`);
+      } else {
+        console.log(`  response snippet: ${text.slice(0, 120)}`);
+        recordPass(NAME);
+      }
     }
   } catch (err) {
     recordFail(NAME, err.message);
@@ -241,8 +246,13 @@ async function testWebsiteAgent() {
     if (!text) {
       recordFail(NAME, 'empty response');
     } else {
-      console.log(`  response snippet: ${text.slice(0, 120)}`);
-      recordPass(NAME);
+      const hasToolRef = /lead|site|deploy|file|netlify|discover|pitch|web|page|html|publish/i.test(text);
+      if (!hasToolRef) {
+        recordFail(NAME, `response missing expected tool keywords — got: ${text.slice(0, 120)}`);
+      } else {
+        console.log(`  response snippet: ${text.slice(0, 120)}`);
+        recordPass(NAME);
+      }
     }
   } catch (err) {
     recordFail(NAME, err.message);
