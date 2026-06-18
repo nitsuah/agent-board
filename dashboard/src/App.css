@@ -1125,14 +1125,28 @@ body {
 
 .docker-status-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.6rem;
+  flex-direction: column;
+  padding: 0.55rem 0.6rem;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  flex-wrap: wrap;
+  gap: 0;
+}
+
+.docker-status-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.docker-status-error-zone {
+  margin-top: 0.35rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .docker-status-item.known-offline {
@@ -1145,7 +1159,8 @@ body {
   flex-direction: column;
   gap: 0.15rem;
   flex: 1;
-  min-width: 140px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .docker-service-name {
