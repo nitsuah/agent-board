@@ -182,16 +182,11 @@ function AgentStatusCard({ session, isActive, isStreaming, queueCount, isPaused,
       </div>
       <div className="agent-card-meta">
         <span className="agent-card-endpoint">{endpointLabel || session.endpoint}</span>
-        <span className="agent-card-msgs">{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
-        <span className="agent-card-time">{ago(session.updatedAt || session.createdAt)}</span>
-        {queueCount > 0 && <span className="agent-card-queue">{queueCount} queued</span>}
-        {isPaused && <span className="agent-card-paused">paused</span>}
+        <span className="agent-card-msgs">{session.messageCount}m</span>
+        {queueCount > 0 && <span className="agent-card-queue">{queueCount}q</span>}
+        {isPaused && <span className="agent-card-paused">⏸</span>}
+        {isStreaming && <span style={{ color: 'var(--accent)' }}>⟳</span>}
       </div>
-      {isStreaming && (
-        <div className="agent-card-streaming">
-          <span className="streaming-indicator">⟳ receiving response…</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -1459,6 +1454,43 @@ function App() {
             </div>
           </div>
 
+          {/* Output Files — visible when a tool-backed experience is active */}
+          {EXPERIENCE_TOOLS[selectedExperience] && (
+            <div className="drawer-section">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3>Output Files</h3>
+                <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={fetchContentClients}>↻</button>
+              </div>
+              {contentClients.length === 0 ? (
+                <div style={{ fontSize: '0.73rem', opacity: 0.45 }}>No output yet.</div>
+              ) : contentClients.map(slug => (
+                <div key={slug} style={{ fontSize: '0.73rem' }}>
+                  <div
+                    style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}
+                    onClick={() => {
+                      const next = !contentExpanded[slug];
+                      setContentExpanded(prev => ({ ...prev, [slug]: next }));
+                      if (next && !contentFiles[slug]) fetchContentFiles(slug);
+                    }}
+                  >
+                    {contentExpanded[slug] ? '▼' : '▶'} {slug}
+                  </div>
+                  {contentExpanded[slug] && (
+                    <div style={{ paddingLeft: '0.7rem' }}>
+                      {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
+                      {contentFiles[slug]?.map(f => (
+                        <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.1rem 0' }}>
+                          <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>{f.path}</span>
+                          <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem', flexShrink: 0 }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="drawer-section">
             <h3>Sessions</h3>
             <button className="btn-primary" onClick={createSession}>+ New Session</button>
@@ -2021,9 +2053,11 @@ function App() {
               {!dockerStatus?.workspace?.configured ? (
                 <div className="docker-status-item">
                   <div className="docker-service-info">
-                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Not configured</div>
-                    <div className="docker-service-port" style={{ fontSize: '0.72rem' }}>
-                      Set WORKSPACE_PATH in .env and apply docker-compose.workspace.yml
+                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
+                    <div className="docker-service-port" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
+                      Mount a local project folder so the AI can read, write, and git-commit files.<br />
+                      Set <code>WORKSPACE_PATH=C:/path/to/project</code> in <code>config/.env</code> then apply
+                      <code> docker-compose.workspace.yml</code> overlay.
                     </div>
                   </div>
                 </div>

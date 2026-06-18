@@ -2411,7 +2411,16 @@ if (session.endpoint === 'primary') {
     });
   } catch (error) {
     console.error('[Stream] Error starting LLM stream:', error.message);
-    const errMsg = `[Error] Could not reach LLM at ${llmUrl}: ${error.message}`;
+    const backendType = LLM_CONFIG[session.endpoint]?.backendType || '';
+    let errMsg;
+    if (error.response?.status === 500 && backendType === 'docker-runner') {
+      errMsg = `[Error] Docker Model Runner returned 500 for ${session.model}. ` +
+        `The model may be too large for this device (${DEVICE_PROFILE} profile), or ` +
+        `Docker Desktop's Model Runner feature may not be fully enabled. ` +
+        `Try a smaller model or check Docker Desktop → Settings → Features in Development → Docker Model Runner.`;
+    } else {
+      errMsg = `[Error] Could not reach LLM at ${llmUrl}: ${error.message}`;
+    }
     session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
     session.updatedAt = new Date();
     upsertSessionContext(session, logStructured);
