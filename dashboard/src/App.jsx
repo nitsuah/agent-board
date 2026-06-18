@@ -2001,7 +2001,7 @@ function App() {
                       <div className="docker-service-info">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                           <span className="docker-service-name">{info.label}</span>
-                          {typeLabel && <span className="svc-type-badge">{typeLabel}</span>}
+                          {typeLabel && <span className={`svc-type-badge badge-${typeLabel}`}>{typeLabel}</span>}
                           <span className={`docker-service-status ${info.running ? 'running' : isDisabled ? 'disabled' : 'stopped'}`}>
                             {info.running ? '● Live' : isDisabled ? '● disabled' : `● ${info.status || 'offline'}`}
                           </span>
