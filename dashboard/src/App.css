@@ -1283,6 +1283,20 @@ body {
 .docker-service-pull-status.completed { color: var(--green); }
 .docker-service-pull-status.failed { color: var(--red); }
 
+.service-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.service-model-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 .system-meta-text {
   font-size: 0.74rem;
   color: var(--text-muted);
