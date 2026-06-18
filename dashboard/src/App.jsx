@@ -2008,6 +2008,13 @@ function App() {
                           </span>
                         </div>
                         {info.ports && <div className="docker-service-port">{info.ports}</div>}
+                        {info.backendType === 'mcp' && !isDisabled && (
+                          <div style={{ fontSize: '0.67rem', marginTop: '0.1rem' }}>
+                            <span style={{ color: info.running ? 'var(--green)' : 'var(--text-faint)' }}>
+                              {info.running ? '✓ health ok' : '✗ unreachable'}
+                            </span>
+                          </div>
+                        )}
                         {eps.map(({ epKey, ep }) => {
                           const pullKey = `${epKey}:${ep.model}`;
                           const pull = modelPulls[pullKey];
