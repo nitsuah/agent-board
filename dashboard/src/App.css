@@ -1258,6 +1258,37 @@ body {
   color: var(--accent-strong);
 }
 
+.btn-service-icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
+}
+
+.btn-service-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-service-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.btn-service-icon.start-btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.btn-service-icon.stop-btn:hover:not(:disabled)   { border-color: var(--red);   color: var(--red); }
+.btn-service-icon.restart-btn:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
+
 .btn-docker-action:disabled {
   opacity: 0.3;
   cursor: not-allowed;
