@@ -435,6 +435,44 @@ body {
   color: var(--red);
 }
 
+.btn-stop {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.btn-stop:hover {
+  opacity: 1;
+  color: var(--yellow);
+}
+
+.drawer-collapse-btn {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 0.5rem 0 0.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.drawer-collapse-btn .icon-btn {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+.drawer-collapse-btn .icon-btn:hover {
+  opacity: 1;
+  color: var(--text-muted);
+}
+
 /* ===== Task queue ===== */
 .task-summary-row {
   display: flex;

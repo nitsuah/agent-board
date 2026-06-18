@@ -62,7 +62,7 @@ const SAFETY_COLORS = { strict: 'var(--red)', standard: 'var(--yellow)', researc
 /**
  * AgentStatusCard — compact card showing a single session's live status.
  */
-function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, endpointLabel }) {
+function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, onStop, endpointLabel }) {
   const ago = (date) => {
     const secs = Math.floor((Date.now() - new Date(date)) / 1000);
     if (secs < 60) return `${secs}s ago`;
@@ -84,6 +84,13 @@ function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, en
       <div className="agent-card-header">
         <span className={`agent-status-dot ${statusClass}`} title={statusLabel} />
         <span className="agent-card-name">{session.name}</span>
+        {isStreaming && onStop && (
+          <button
+            className="btn-stop"
+            title="Stop responding"
+            onClick={(e) => { e.stopPropagation(); onStop(session.id); }}
+          >■</button>
+        )}
         <button
           className="btn-delete"
           title="Delete session"
@@ -356,8 +363,10 @@ function App() {
   const [currentEndpoint, setCurrentEndpoint] = useState('primary');
   const [messageInput, setMessageInput] = useState('');
   const [useNemoClaw, setUseNemoClaw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
+  // Per-session streaming state — tracks which sessions are actively receiving a response
+  const [loadingSessions, setLoadingSessions] = useState(new Set());
+  const [streamingBySession, setStreamingBySession] = useState({});
+  const streamAbortControllersRef = useRef(new Map());
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
@@ -413,7 +422,10 @@ function App() {
   const [taskPriority, setTaskPriority] = useState('medium');
 
   const chatBottomRef = useRef(null);
-  const activeStreamRef = useRef(null);
+
+  // Derived per-active-session helpers (backwards-compat with single-session UI)
+  const loading = loadingSessions.has(activeSession);
+  const streamingContent = streamingBySession[activeSession] || '';
 
   // Merge static ENDPOINT_META with any custom endpoints reported by the server.
   // Custom endpoints (backendType: 'custom') are dynamically registered via
@@ -827,28 +839,36 @@ function App() {
     } catch (error) { console.error('Error fetching session details:', error); }
   };
 
+  const stopSession = (sessionId) => {
+    const ctrl = streamAbortControllersRef.current.get(sessionId);
+    if (ctrl) {
+      ctrl.abort();
+      streamAbortControllersRef.current.delete(sessionId);
+    }
+    setLoadingSessions(prev => { const next = new Set(prev); next.delete(sessionId); return next; });
+    setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (!activeSession || !messageInput.trim()) return;
+    const sessionId = activeSession;
+    if (!sessionId || !messageInput.trim()) return;
 
-    // Cancel any active stream
-    if (activeStreamRef.current) {
-      activeStreamRef.current.abort();
-      activeStreamRef.current = null;
-    }
+    // Stop any existing stream for this session before starting a new one
+    stopSession(sessionId);
 
     const optimisticMsg = { role: 'user', content: messageInput.trim(), timestamp: new Date() };
     setActiveSessionMessages(prev => [...prev, optimisticMsg]);
     const sentMessage = messageInput;
     setMessageInput('');
-    setLoading(true);
-    setStreamingContent('');
+    setLoadingSessions(prev => new Set([...prev, sessionId]));
+    setStreamingBySession(prev => ({ ...prev, [sessionId]: '' }));
 
     const controller = new AbortController();
-    activeStreamRef.current = controller;
+    streamAbortControllersRef.current.set(sessionId, controller);
 
     try {
-      const res = await fetch(`/api/sessions/${activeSession}/stream`, {
+      const res = await fetch(`/api/sessions/${sessionId}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw }),
@@ -880,16 +900,16 @@ function App() {
             const event = JSON.parse(json);
             if (event.type === 'token') {
               accumulated += event.content;
-              setStreamingContent(accumulated);
+              setStreamingBySession(prev => ({ ...prev, [sessionId]: accumulated }));
             } else if (event.type === 'done') {
-              setStreamingContent('');
+              setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
-              fetchSessionDetails(activeSession);
+              fetchSessionDetails(sessionId);
             } else if (event.type === 'error') {
               console.error('LLM stream error:', event.message);
-              setStreamingContent('');
+              setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
-              fetchSessionDetails(activeSession);
+              fetchSessionDetails(sessionId);
             }
           } catch {
             // skip malformed SSE line
@@ -901,14 +921,14 @@ function App() {
         console.error('Error sending message via stream, falling back:', error);
         // Fallback to non-streaming endpoint
         try {
-          const res = await fetch(`/api/sessions/${activeSession}/message`, {
+          const res = await fetch(`/api/sessions/${sessionId}/message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw })
           });
           const data = await res.json();
           fetchSessions();
-          fetchSessionDetails(activeSession);
+          fetchSessionDetails(sessionId);
           if (!data.success) console.error('LLM error:', data.response);
         } catch (fbErr) {
           console.error('Fallback also failed:', fbErr);
@@ -917,9 +937,9 @@ function App() {
         }
       }
     } finally {
-      activeStreamRef.current = null;
-      setLoading(false);
-      setStreamingContent('');
+      streamAbortControllersRef.current.delete(sessionId);
+      setLoadingSessions(prev => { const next = new Set(prev); next.delete(sessionId); return next; });
+      setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
     }
   };
 
@@ -1251,9 +1271,13 @@ function App() {
                     key={session.id}
                     session={session}
                     isActive={isActive}
-                    isStreaming={isActive && loading}
-                    onClick={() => setActiveSession(session.id)}
+                    isStreaming={loadingSessions.has(session.id)}
+                    onClick={() => {
+                      setActiveSession(session.id);
+                      fetchSessionDetails(session.id);
+                    }}
                     onDelete={deleteSession}
+                    onStop={stopSession}
                     endpointLabel={allEndpointMeta[session.endpoint]?.label}
                   />
                 );
@@ -1261,7 +1285,7 @@ function App() {
             </div>
           </div>
 
-          <div className="drawer-section">
+          <div className="drawer-section drawer-section-tasks">
             <h3>Task Queue</h3>
             <div className="task-summary-row">
               <span>Total {taskSummary.total || 0}</span>
@@ -1309,6 +1333,14 @@ function App() {
                 <div className="task-empty">No tasks yet.</div>
               )}
             </div>
+          </div>
+
+          <div className="drawer-collapse-btn">
+            <button
+              className="icon-btn"
+              onClick={() => setShowSidebar(false)}
+              title="Collapse sidebar"
+            >‹ Hide</button>
           </div>
         </aside>
 
@@ -1865,48 +1897,42 @@ function App() {
                 </>
               )}
 
-              <h3>LLM Endpoints</h3>
-              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
-                <div key={key} className="docker-status-item">
-                  <div className="docker-service-info">
-                    <div className="docker-service-name">{ep.name}</div>
-                    <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
-                      {ep.live ? '● Live' : '● Offline / Fallback'}
-                      {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.7 }}>(API key set)</span>}
-                    </div>
-                    <div className="docker-service-port">{ep.model}</div>
-                  </div>
-                </div>
-              ))}
-
-              <h3>Models</h3>
-              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints)
-                .filter(([, ep]) => ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner')
-                .map(([key, ep]) => {
-                  const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
-                  const pullKey = `${key}:${ep.model}`;
-                  const actionId = `pull:${pullKey}`;
-                  const pull = modelPulls[pullKey];
-                  const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
-                  return (
-                    <div key={key} className="docker-status-item">
-                      <div className="docker-service-info">
-                        <div className="docker-service-name">{ep.name}</div>
-                        <div className="docker-service-port">{ep.model || 'no model configured'}</div>
-                        <div className={`docker-service-status ${installed ? 'running' : 'stopped'}`}>
-                          {installed ? '● Installed' : '● Not pulled'}
-                        </div>
-                        {pull && (
-                          <div className={`docker-service-pull-status ${pull.status}`}>
-                            {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
-                            {pull.status === 'completed' && '✓ Pull complete'}
-                            {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
-                          </div>
-                        )}
-                        {serviceActionErrors[actionId] && (
-                          <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
+              <h3>Models &amp; Endpoints</h3>
+              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => {
+                const canPull = ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner';
+                const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
+                const pullKey = `${key}:${ep.model}`;
+                const actionId = `pull:${pullKey}`;
+                const pull = modelPulls[pullKey];
+                const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
+                return (
+                  <div key={key} className="docker-status-item">
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">
+                        {ep.name}
+                        {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.6, fontSize: '0.7rem' }}>(API key)</span>}
+                      </div>
+                      <div className="docker-service-port">{ep.model || 'no model configured'}</div>
+                      <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
+                        {ep.live ? '● Live' : '● Offline'}
+                        {canPull && ep.live && (
+                          <span style={{ marginLeft: '0.4rem', opacity: 0.7 }}>
+                            {installed ? '· installed' : '· not pulled'}
+                          </span>
                         )}
                       </div>
+                      {pull && (
+                        <div className={`docker-service-pull-status ${pull.status}`}>
+                          {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
+                          {pull.status === 'completed' && '✓ Pull complete'}
+                          {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
+                        </div>
+                      )}
+                      {serviceActionErrors[actionId] && (
+                        <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
+                      )}
+                    </div>
+                    {canPull && (
                       <div className="docker-actions">
                         <button
                           className="btn-docker-action"
@@ -1916,28 +1942,18 @@ function App() {
                           {pulling ? 'Pulling…' : installed ? 'Installed' : 'Pull'}
                         </button>
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+                  </div>
+                );
+              })}
 
               <div className="system-meta-text">
-                <div>
-                  <strong>Primary endpoint resolved:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}
-                </div>
-                {Array.isArray(systemServices?.primaryLlm?.candidates) && (
-                  <div>
-                    <strong>Discovery candidates:</strong> {systemServices.primaryLlm.candidates.join(', ')}
-                  </div>
-                )}
-                <div>
-                  <strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}
+                <div><strong>Primary:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}</div>
+                <div><strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}</div>
+                <div style={{ marginTop: '0.4rem', opacity: 0.6 }}>
+                  Pull: <code>docker model pull ai/glm-4.7-flash:latest</code>
                 </div>
               </div>
-
-              <p className="system-meta-text">
-                Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br />
-                Manage stack: <code>stack-manager.ps1</code>
-              </p>
             </div>
               );
             })()}

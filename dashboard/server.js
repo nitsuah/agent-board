@@ -370,6 +370,7 @@ function getServiceRegistry() {
       label: 'NemoClaw (sandbox)',
       backendType: 'sandbox',
       composeService: 'nemoclaw',
+      composeProfile: 'sandbox',
       ports: '9000:8080',
       controllable: true,
       checkType: 'tcp',
@@ -393,6 +394,7 @@ function getServiceRegistry() {
       label: 'OpenLLM (custom models)',
       backendType: 'openllm-container',
       composeService: 'llm_openllm',
+      composeProfile: 'openllm',
       ports: '8082:3000',
       controllable: OPENLLM_ENABLED,
       checkType: 'http',
@@ -405,6 +407,7 @@ function getServiceRegistry() {
       label: 'Content Gen (MCP tool)',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.content_gen.composeService,
+      composeProfile: 'tools',
       ports: TOOL_SERVERS.content_gen.ports,
       controllable: true,
       checkType: 'http',
@@ -416,6 +419,7 @@ function getServiceRegistry() {
       label: 'Website Agent (MCP tool)',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.website.composeService,
+      composeProfile: 'tools',
       ports: TOOL_SERVERS.website.ports,
       controllable: true,
       checkType: 'http',
@@ -425,11 +429,12 @@ function getServiceRegistry() {
   };
 }
 
-async function runComposeAction(action, serviceName) {
-const actionArgs = {
-    start: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'up', '-d', serviceName],
-    stop: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'stop', serviceName],
-    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'restart', serviceName],
+async function runComposeAction(action, serviceName, composeProfile = null) {
+  const profileFlag = composeProfile ? ['--profile', composeProfile] : [];
+  const actionArgs = {
+    start:   ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...profileFlag, 'up', '-d', serviceName],
+    stop:    ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'stop', serviceName],
+    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...profileFlag, 'restart', serviceName],
   };
 
   const args = actionArgs[action];
@@ -1444,8 +1449,26 @@ app.post('/api/system/services/:serviceKey/:action', async (req, res) => {
     });
   }
 
+  // Enforce one LLM sidecar at a time: when starting an optional LLM container,
+  // stop any other optional LLM sidecar that may be running.
+  const LLM_SIDECAR_KEYS = ['llm_openllm'];
+  if (action === 'start' && LLM_SIDECAR_KEYS.includes(serviceKey)) {
+    const siblingsToStop = LLM_SIDECAR_KEYS.filter(k => k !== serviceKey);
+    for (const siblingKey of siblingsToStop) {
+      const sibling = registry[siblingKey];
+      if (sibling?.controllable && sibling.composeService) {
+        try {
+          await runComposeAction('stop', sibling.composeService, null);
+          logStructured('info', 'llm_sidecar_stopped_for_exclusive_start', { stopped: siblingKey, starting: serviceKey });
+        } catch {
+          // Non-fatal — sibling may not be running
+        }
+      }
+    }
+  }
+
   try {
-    const result = await runComposeAction(action, service.composeService);
+    const result = await runComposeAction(action, service.composeService, service.composeProfile || null);
     res.json({
       success: true,
       serviceKey,
