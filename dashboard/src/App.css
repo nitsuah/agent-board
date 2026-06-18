@@ -435,6 +435,44 @@ body {
   color: var(--red);
 }
 
+.btn-stop {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.btn-stop:hover {
+  opacity: 1;
+  color: var(--yellow);
+}
+
+.drawer-collapse-btn {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 0.5rem 0 0.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.drawer-collapse-btn .icon-btn {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+.drawer-collapse-btn .icon-btn:hover {
+  opacity: 1;
+  color: var(--text-muted);
+}
+
 /* ===== Task queue ===== */
 .task-summary-row {
   display: flex;
@@ -1106,6 +1144,20 @@ body {
   font-size: 0.84rem;
 }
 
+.badge-active {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--green);
+  color: #000;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 .docker-service-status {
   font-size: 0.7rem;
   font-weight: 600;
@@ -1510,3 +1562,183 @@ code {
   outline: none;
   border-color: var(--accent, #4493f8);
 }
+
+/* ===== Chat header queue/pause controls ===== */
+.chat-header-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 4px;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.btn-secondary.active {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.queue-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  border-radius: 10px;
+  background: var(--accent-soft, rgba(68,147,248,0.15));
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.agent-card-queue {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 8px;
+  background: var(--accent-soft, rgba(68,147,248,0.15));
+  color: var(--accent);
+}
+
+.agent-card-paused {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 8px;
+  background: rgba(201,135,38,0.15);
+  color: var(--yellow);
+}
+
+/* ===== Message role label ===== */
+.message-role {
+  font-weight: 600;
+  font-size: 0.78rem;
+  margin-right: 0.5rem;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.message-text {
+  white-space: pre-wrap;
+}
+
+/* ===== Markdown renderer ===== */
+.md-content {
+  display: inline;
+}
+
+.md-content .md-p {
+  margin: 0 0 0.5em;
+  display: block;
+}
+
+.md-content .md-p:last-child { margin-bottom: 0; }
+
+.md-content .md-h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.75em 0 0.35em;
+}
+
+.md-content .md-h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+}
+
+.md-content .md-h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0.5em 0 0.2em;
+}
+
+.md-content .md-ul {
+  margin: 0.3em 0 0.5em 1.2em;
+  padding: 0;
+}
+
+.md-content .md-ul li {
+  margin: 0.15em 0;
+  line-height: 1.5;
+}
+
+.md-code-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  background: rgba(0,0,0,0.25);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.md-code-block {
+  margin: 0.6em 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.md-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.6rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.md-code-lang {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: lowercase;
+}
+
+.md-copy-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.md-copy-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.md-code-block pre {
+  margin: 0;
+  padding: 0.75rem;
+  background: var(--bg);
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.md-code-block code {
+  font-family: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
