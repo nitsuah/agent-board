@@ -469,6 +469,11 @@ function App() {
   const [contentFiles, setContentFiles] = useState({}); // slug -> file list
   const [contentExpanded, setContentExpanded] = useState({}); // slug -> bool
 
+  // Known pulled models persisted in localStorage so tiles survive container restarts
+  const [knownModels, setKnownModels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('agent_board_pulled_models') || '{}'); } catch { return {}; }
+  }); // { "endpointKey:model": { endpointKey, model, pulledAt } }
+
   // Workspace file I/O
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspaceLs, setWorkspaceLs] = useState(null);
@@ -780,6 +785,14 @@ function App() {
       const data = await res.json();
       if (!data.success) {
         setServiceActionErrors(prev => ({ ...prev, [actionId]: data.error || 'Pull failed' }));
+      } else {
+        // Record the pull in localStorage so the tile persists if the container restarts
+        const record = { endpointKey: endpoint, model, pulledAt: new Date().toISOString() };
+        setKnownModels(prev => {
+          const next = { ...prev, [pullKey]: record };
+          try { localStorage.setItem('agent_board_pulled_models', JSON.stringify(next)); } catch { /* storage full */ }
+          return next;
+        });
       }
       await fetchModelPullStatus();
     } catch (error) {
@@ -2139,8 +2152,11 @@ function App() {
                 const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
                 const isActiveRunner = ep.backendType === 'docker-runner' &&
                   dockerStatus?.activeDockerRunnerModel?.key === key;
+                const wasKnown = !!knownModels[pullKey];
+                const isOfflineButKnown = wasKnown && !ep.live;
+                const isOnlineNotInstalled = wasKnown && ep.live && !installed;
                 return (
-                  <div key={key} className="docker-status-item">
+                  <div key={key} className={`docker-status-item${isOfflineButKnown ? ' known-offline' : ''}`}>
                     <div className="docker-service-info">
                       <div className="docker-service-name">
                         {ep.name}
@@ -2154,6 +2170,12 @@ function App() {
                           <span style={{ marginLeft: '0.4rem', opacity: 0.7 }}>
                             {installed ? '· installed' : '· not pulled'}
                           </span>
+                        )}
+                        {isOfflineButKnown && (
+                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· was installed</span>
+                        )}
+                        {isOnlineNotInstalled && (
+                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· re-pull needed</span>
                         )}
                       </div>
                       {pull && (
@@ -2174,7 +2196,7 @@ function App() {
                           disabled={pulling || installed === true || !ep.model}
                           onClick={() => pullModel(key, ep.model)}
                         >
-                          {pulling ? 'Pulling…' : installed ? 'Installed' : 'Pull'}
+                          {pulling ? 'Pulling…' : installed ? 'Installed' : isOnlineNotInstalled ? 'Re-pull' : 'Pull'}
                         </button>
                       )}
                       {ep.backendType === 'docker-runner' && installed && (
