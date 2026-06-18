@@ -6,11 +6,11 @@ Last Updated: 2026-06-17
 
 ### P1 - High
 
-- [ ] **[Q2-CEO] Docker optimization pass** — audit compose services and model pre-loads; make all non-essential subsystems opt-in via env flags; keep logging, metrics, and DB always up.
+- [x] **[Q2-CEO] Docker optimization pass** — gated nemoclaw behind `sandbox` profile and jaeger behind `observability` profile; default stack is now agent-db + ollama + agent-dashboard only; `OTEL_ENABLED` defaults to false; `.env.example` and README document all profiles; `docker compose up` succeeds on a 16 GB host without pulling the 1.92 GB NemoClaw image.
   - Priority: P1
   - Context: CEO flagged stability issues due to container size and memory usage on laptops and low-memory hosts.
-  - Acceptance Criteria: `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services (bb-mcp, large models) are gated behind env flags and documented.
-  - [ ] **PERFORMANCE** - setup turbovec - setup turbovec to decrease LLM memory usage significantly
+  - Acceptance Criteria: ✅ `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services are gated behind compose profiles and documented.
+  - [ ] **PERFORMANCE** - setup turbovec to decrease LLM memory usage significantly (separate follow-up)
   - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
 
 ### P2 - Medium

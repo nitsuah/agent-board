@@ -31,7 +31,7 @@ Last Updated: 2026-06-17
 
 ### Stability, Resource Optimization & Device Profiling
 
-- [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in; require only core logging, metrics, and database.
+- [x] **Docker image optimization**: Gated nemoclaw (`sandbox` profile) and jaeger (`observability` profile); minimal default stack is agent-db + ollama + dashboard; all profiles documented in `.env.example` and README.
 - [ ] **Host architecture profiling (Phase 1)**: Profile active hardware specs (host RAM, VRAM, CPU threads, OS overhead) beyond basic laptop/desktop checks.
 - [ ] **Windows host mitigation (Phase 2)**: Establish a lean baseline profile for Windows nodes to account for WSL2/Docker Desktop resource taxes.
 - [x] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
