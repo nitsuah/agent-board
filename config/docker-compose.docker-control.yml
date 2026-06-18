@@ -8,12 +8,16 @@
 # mounting the Docker socket gives the dashboard container root-equivalent
 # control over the host Docker daemon.
 #
-# Usage:
+# Usage (Linux/Mac):
+#   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
+#     --project-directory . up -d --build agent-dashboard
+#
+# Usage (Windows):
 #   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
 #     --project-directory . up -d --build agent-dashboard
 #
 # This builds the dashboard image with the Docker CLI installed
-# (INSTALL_DOCKER_CLI=true), mounts the host Docker socket read-write, and
+# (INSTALL_DOCKER_CLI=true), mounts the host Docker socket, and
 # enables AGENT_BOARD_ENABLE_DOCKER_CONTROL so the service action endpoints
 # (start/stop/restart) and model-pull endpoints actually execute.
 
@@ -25,4 +29,5 @@ services:
     environment:
       - AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
     volumes:
+      # Linux/Mac: Unix socket
       - /var/run/docker.sock:/var/run/docker.sock

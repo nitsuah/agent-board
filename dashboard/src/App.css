@@ -383,9 +383,6 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .agent-status-dot {
@@ -418,11 +415,6 @@ body {
 }
 
 .agent-card-endpoint { color: var(--accent); }
-
-.agent-card-streaming {
-  font-size: 0.7rem;
-  color: var(--accent);
-}
 
 .btn-delete {
   background: transparent;
@@ -1078,6 +1070,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .system-info-item {
@@ -1108,10 +1101,11 @@ body {
 .system-info-item .value.error { color: var(--red); }
 .system-info-item .value.warning { color: var(--yellow); }
 
+/* ===== Docker Status Redesigned ===== */
 .docker-status {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .docker-status h3 {
@@ -1120,30 +1114,50 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
-  margin-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .docker-status-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.6rem;
+  align-items: stretch;
+  gap: 0.6rem;
+  padding: 0.55rem;
   background: var(--surface-2);
   border: 1px solid var(--border);
+  border-left-width: 3px;
   border-radius: var(--radius);
-  flex-wrap: wrap;
+  transition: all 0.15s ease;
+}
+
+.docker-status-item.running {
+  border-left-color: var(--green);
+  background: rgba(137, 201, 127, 0.05);
+}
+
+.docker-status-item.stopped {
+  border-left-color: var(--red);
+  background: rgba(244, 113, 113, 0.05);
+}
+
+.docker-status-item.unknown {
+  border-left-color: var(--text-faint);
+}
+
+.docker-status-item:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
 }
 
 .docker-status-item.known-offline {
-  opacity: 0.65;
+  opacity: 0.7;
   border-style: dashed;
 }
 
 .docker-service-info {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
   flex: 1;
   min-width: 140px;
 }
@@ -1151,82 +1165,118 @@ body {
 .docker-service-name {
   font-weight: 600;
   color: var(--text);
-  font-size: 0.84rem;
+  font-size: 0.80rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
 }
 
-.badge-active {
+.badge-status {
   display: inline-block;
-  margin-left: 0.4rem;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.62rem;
+  padding: 0.08rem 0.3rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.badge-status.running {
   background: var(--green);
   color: #000;
-  border-radius: 3px;
-  vertical-align: middle;
+}
+
+.badge-status.stopped {
+  background: var(--red);
+  color: #fff;
+}
+
+.docker-service-port {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
 }
 
 .docker-service-status {
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .docker-service-status.running { color: var(--green); }
 .docker-service-status.stopped { color: var(--red); }
 .docker-service-status.starting { color: var(--yellow); }
 
-.docker-service-port {
-  font-size: 0.72rem;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-}
-
 .docker-service-disabled-reason {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: var(--text-faint);
   font-style: italic;
+  opacity: 0.7;
+  margin-top: 0.1rem;
+}
+
+.docker-service-error {
+  font-size: 0.62rem;
+  color: var(--red);
+  word-break: break-word;
+  padding: 0.3rem;
+  background: rgba(244, 113, 113, 0.08);
+  border-radius: 3px;
+  margin-top: 0.25rem;
+  line-height: 1.4;
+  grid-column: 1 / -1;
 }
 
 .docker-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.3rem;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .btn-docker-action {
-  padding: 0.3rem 0.65rem;
+  padding: 0.28rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.12s ease, color 0.12s ease;
+  transition: all 0.12s ease;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .btn-docker-action:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--text);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .btn-docker-action:disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
-.docker-service-error {
-  flex-basis: 100%;
-  font-size: 0.7rem;
-  color: var(--red);
-  word-break: break-word;
+/* Hide Start button when running; hide Stop/Restart when stopped */
+.docker-status-item.running .btn-docker-action.start-btn {
+  display: none;
+}
+
+.docker-status-item.stopped .btn-docker-action.stop-btn,
+.docker-status-item.stopped .btn-docker-action.restart-btn {
+  display: none;
 }
 
 .docker-service-pull-status {
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 600;
+  margin-top: 0.1rem;
 }
 
 .docker-service-pull-status.pulling { color: var(--yellow); }
@@ -1234,9 +1284,10 @@ body {
 .docker-service-pull-status.failed { color: var(--red); }
 
 .system-meta-text {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
-  line-height: 1.7;
+  line-height: 1.6;
+  padding: 0.5rem 0;
 }
 
 .system-meta-text strong {
@@ -1249,7 +1300,7 @@ code {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
-  font-size: 0.85em;
+  font-size: 0.82em;
   color: var(--accent-strong);
 }
 
@@ -1751,4 +1802,3 @@ code {
   border: none;
   padding: 0;
 }
-

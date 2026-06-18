@@ -1959,7 +1959,7 @@ function App() {
               const renderServiceRow = (serviceKey, info) => {
                 const canControl = !!(systemServices?.dockerControlEnabled && info.controllable);
                 return (
-                  <div key={serviceKey} className="docker-status-item">
+                  <div key={serviceKey} className={`docker-status-item ${dockerStatus ? "running" : "stopped"}`}>
                     <div className="docker-service-info">
                       <div className="docker-service-name">
                         {info.label}
@@ -1978,22 +1978,19 @@ function App() {
                     </div>
                     <div className="docker-actions">
                       <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
+                        className="btn-docker-action start-btn" disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
                         onClick={() => runServiceAction(serviceKey, 'start')}
                       >
                         {serviceActionsInFlight[`${serviceKey}:start`] ? 'Starting…' : 'Start'}
                       </button>
                       <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:stop`]}
+                        className="btn-docker-action stop-btn" disabled={!canControl || serviceActionsInFlight[`${serviceKey}:stop`]}
                         onClick={() => runServiceAction(serviceKey, 'stop')}
                       >
                         {serviceActionsInFlight[`${serviceKey}:stop`] ? 'Stopping…' : 'Stop'}
                       </button>
                       <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
+                        className="btn-docker-action restart-btn" disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
                         onClick={() => runServiceAction(serviceKey, 'restart')}
                       >
                         {serviceActionsInFlight[`${serviceKey}:restart`] ? 'Restarting…' : 'Restart'}
@@ -2035,7 +2032,7 @@ function App() {
 
               <h3>Device Profile</h3>
               {dockerStatus?.deviceProfile && (
-                <div className="docker-status-item">
+                <div className={`docker-status-item ${dockerStatus ? "running" : "stopped"}`}>
                   <div className="docker-service-info">
                     <div className="docker-service-name">{dockerStatus.deviceProfile.name}</div>
                     <div className="docker-service-status running">
@@ -2051,7 +2048,7 @@ function App() {
 
               <h3>Workspace</h3>
               {!dockerStatus?.workspace?.configured ? (
-                <div className="docker-status-item">
+                <div className={`docker-status-item ${dockerStatus ? "running" : "stopped"}`}>
                   <div className="docker-service-info">
                     <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
                     <div className="docker-service-port" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
@@ -2063,7 +2060,7 @@ function App() {
                 </div>
               ) : (
                 <>
-                  <div className="docker-status-item">
+                  <div className={`docker-status-item ${dockerStatus ? "running" : "stopped"}`}>
                     <div className="docker-service-info">
                       <div className="docker-service-name">{dockerStatus.workspace.root}</div>
                       {workspaceGitStatus && (
@@ -2308,3 +2305,7 @@ function App() {
 }
 
 export default App;
+
+
+
+

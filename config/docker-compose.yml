@@ -274,7 +274,7 @@ services:
       - ../:/workspace-root:ro
       # Mount Docker socket so the server can start/stop MoneyPrinterTurbo
       # Only enabled when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
-      # - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -353,3 +353,5 @@ networks:
     name: agent-network
     driver: bridge
     external: false
+
+
