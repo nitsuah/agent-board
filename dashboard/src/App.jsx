@@ -2021,17 +2021,17 @@ function App() {
                     {canControl && (
                       <div className="docker-actions">
                         <button
-                          className="btn-docker-action"
+                          className="btn-docker-action start-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:start`]}
                           onClick={() => runServiceAction(serviceKey, 'start')}
                         >{serviceActionsInFlight[`${serviceKey}:start`] ? '…' : 'Start'}</button>
                         <button
-                          className="btn-docker-action"
+                          className="btn-docker-action stop-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:stop`]}
                           onClick={() => runServiceAction(serviceKey, 'stop')}
                         >{serviceActionsInFlight[`${serviceKey}:stop`] ? '…' : 'Stop'}</button>
                         <button
-                          className="btn-docker-action"
+                          className="btn-docker-action restart-btn"
                           disabled={serviceActionsInFlight[`${serviceKey}:restart`]}
                           onClick={() => runServiceAction(serviceKey, 'restart')}
                         >{serviceActionsInFlight[`${serviceKey}:restart`] ? '…' : 'Restart'}</button>
