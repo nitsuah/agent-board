@@ -470,6 +470,7 @@ function App() {
   }); // { "endpointKey:model": { endpointKey, model, pulledAt } }
 
   // Workspace file I/O
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(() => window.innerWidth > 900);
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspaceLs, setWorkspaceLs] = useState(null);
   const [workspaceFileView, setWorkspaceFileView] = useState(null);
@@ -2027,7 +2028,7 @@ function App() {
                                   {pull.percent != null ? `${pull.percent}%` : pull.message || 'Pulling…'}
                                 </span>
                               )}
-                              {pull?.status === 'failed' && (
+                              {pull?.status === 'failed' && !installed && (
                                 <span className="docker-service-pull-status failed" style={{ fontSize: '0.67rem' }}>
                                   ✗ {pull.error || 'failed'}
                                 </span>
@@ -2162,8 +2163,14 @@ function App() {
               </div>
               {allSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
 
-              <h3>Workspace</h3>
-              {!dockerStatus?.workspace?.configured ? (
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setWorkspaceExpanded(x => !x)}
+              >
+                <h3 style={{ margin: 0 }}>Workspace</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)', transform: workspaceExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s', marginRight: '0.25rem' }}>▼</span>
+              </div>
+              {workspaceExpanded && (!dockerStatus?.workspace?.configured ? (
                 <div className="docker-status-item">
                   <div className="docker-service-info">
                     <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
@@ -2275,7 +2282,7 @@ function App() {
                     </div>
                   )}
                 </>
-              )}
+              ))}
 
 
             </div>

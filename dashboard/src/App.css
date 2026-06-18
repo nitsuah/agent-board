@@ -1402,11 +1402,13 @@ code {
   }
 
   .docker-actions {
-    width: 100%;
+    flex-shrink: 0;
   }
 
-  .btn-docker-action {
-    flex: 1;
+  /* Allow service name to wrap on narrow panels */
+  .docker-service-name {
+    white-space: normal;
+    word-break: break-word;
   }
 }
 
