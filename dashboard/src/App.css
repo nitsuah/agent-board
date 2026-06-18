@@ -1188,9 +1188,26 @@ body {
   font-weight: 600;
 }
 
-.docker-service-status.running { color: var(--green); }
-.docker-service-status.stopped { color: var(--red); }
+.docker-service-status.running  { color: var(--green); }
+.docker-service-status.stopped  { color: var(--red); }
 .docker-service-status.starting { color: var(--yellow); }
+.docker-service-status.disabled { color: var(--text-faint); }
+
+.svc-type-badge {
+  font-size: 0.62rem;
+  font-weight: 500;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  background: var(--surface-3, var(--surface-2));
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.svc-disabled {
+  opacity: 0.55;
+}
 
 .docker-service-port {
   font-size: 0.72rem;
