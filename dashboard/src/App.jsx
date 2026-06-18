@@ -1956,19 +1956,61 @@ function App() {
             </div>
 
             {(() => {
-              const renderServiceRow = (serviceKey, info) => {
+              const renderServiceRow = (serviceKey, info, endpointData = null) => {
                 const canControl = !!(systemServices?.dockerControlEnabled && info.controllable);
+                const eps = endpointData || [];
                 return (
                   <div key={serviceKey} className="docker-status-item">
                     <div className="docker-service-info">
-                      <div className="docker-service-name">
-                        {info.label}
-                        <span style={{ fontSize: '0.7rem', opacity: 0.55, marginLeft: '0.4rem' }}>({info.backendType})</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <span className="docker-service-name">{info.label}</span>
+                        <span className={`docker-service-status ${info.running ? 'running' : 'stopped'}`}>
+                          {info.running ? '● Live' : '● ' + info.status}
+                        </span>
                       </div>
-                      <div className={`docker-service-status ${info.running ? 'running' : 'stopped'}`}>
-                        {info.running ? '● Live' : '● ' + info.status}
-                      </div>
-                      <div className="docker-service-port">{info.ports}</div>
+                      {info.ports && <div className="docker-service-port">{info.ports}</div>}
+                      {eps.map(({ epKey, ep }) => {
+                        const pullKey = `${epKey}:${ep.model}`;
+                        const actionId = `pull:${pullKey}`;
+                        const pull = modelPulls[pullKey];
+                        const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
+                        const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
+                        const isActiveRunner = ep.backendType === 'docker-runner' && dockerStatus?.activeDockerRunnerModel?.key === epKey;
+                        const wasKnown = !!knownModels[pullKey];
+                        const isOnlineNotInstalled = wasKnown && ep.live && !installed;
+                        return (
+                          <div key={epKey} className="service-model-row">
+                            <span className="service-model-name">{ep.model || 'no model configured'}</span>
+                            {isActiveRunner && <span className="badge-active">Active</span>}
+                            {ep.live && installed && <span style={{ color: 'var(--green)', fontSize: '0.67rem' }}>· installed</span>}
+                            {ep.live && !installed && ep.model && <span style={{ color: 'var(--text-faint)', fontSize: '0.67rem' }}>· not pulled</span>}
+                            {wasKnown && !ep.live && <span style={{ color: 'var(--yellow)', fontSize: '0.67rem' }}>· was installed</span>}
+                            {pull && (
+                              <span className={`docker-service-pull-status ${pull.status}`} style={{ fontSize: '0.67rem' }}>
+                                {pull.status === 'pulling' && (pull.percent != null ? `${pull.percent}%` : pull.message || 'Pulling…')}
+                                {pull.status === 'completed' && '✓'}
+                                {pull.status === 'failed' && `✗ ${pull.error || 'failed'}`}
+                              </span>
+                            )}
+                            <button
+                              className="btn-docker-action"
+                              style={{ fontSize: '0.67rem', padding: '0.1rem 0.35rem' }}
+                              disabled={pulling || installed === true || !ep.model}
+                              onClick={() => pullModel(epKey, ep.model)}
+                            >{pulling ? '…' : installed ? 'Installed' : isOnlineNotInstalled ? 'Re-pull' : 'Pull'}</button>
+                            {ep.backendType === 'docker-runner' && installed && (
+                              <button
+                                className="btn-docker-action"
+                                style={{ fontSize: '0.67rem', padding: '0.1rem 0.35rem' }}
+                                onClick={() => unloadDockerModel(ep.model)}
+                              >Unload</button>
+                            )}
+                            {serviceActionErrors[actionId] && (
+                              <div className="docker-service-error" style={{ flexBasis: '100%' }}>{serviceActionErrors[actionId]}</div>
+                            )}
+                          </div>
+                        );
+                      })}
                       {!canControl && info.disabledReason && (
                         <div className="docker-service-disabled-reason">{info.disabledReason}</div>
                       )}
@@ -1976,56 +2018,84 @@ function App() {
                         <div className="docker-service-error">{serviceActionErrors[serviceKey]}</div>
                       )}
                     </div>
-                    <div className="docker-actions">
-                      <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:start`]}
-                        onClick={() => runServiceAction(serviceKey, 'start')}
-                      >
-                        {serviceActionsInFlight[`${serviceKey}:start`] ? 'Starting…' : 'Start'}
-                      </button>
-                      <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:stop`]}
-                        onClick={() => runServiceAction(serviceKey, 'stop')}
-                      >
-                        {serviceActionsInFlight[`${serviceKey}:stop`] ? 'Stopping…' : 'Stop'}
-                      </button>
-                      <button
-                        className="btn-docker-action"
-                        disabled={!canControl || serviceActionsInFlight[`${serviceKey}:restart`]}
-                        onClick={() => runServiceAction(serviceKey, 'restart')}
-                      >
-                        {serviceActionsInFlight[`${serviceKey}:restart`] ? 'Restarting…' : 'Restart'}
-                      </button>
-                    </div>
+                    {canControl && (
+                      <div className="docker-actions">
+                        <button
+                          className="btn-docker-action"
+                          disabled={serviceActionsInFlight[`${serviceKey}:start`]}
+                          onClick={() => runServiceAction(serviceKey, 'start')}
+                        >{serviceActionsInFlight[`${serviceKey}:start`] ? '…' : 'Start'}</button>
+                        <button
+                          className="btn-docker-action"
+                          disabled={serviceActionsInFlight[`${serviceKey}:stop`]}
+                          onClick={() => runServiceAction(serviceKey, 'stop')}
+                        >{serviceActionsInFlight[`${serviceKey}:stop`] ? '…' : 'Stop'}</button>
+                        <button
+                          className="btn-docker-action"
+                          disabled={serviceActionsInFlight[`${serviceKey}:restart`]}
+                          onClick={() => runServiceAction(serviceKey, 'restart')}
+                        >{serviceActionsInFlight[`${serviceKey}:restart`] ? '…' : 'Restart'}</button>
+                      </div>
+                    )}
                   </div>
                 );
               };
 
+              const containerToEndpoints = {};
+              const dockerRunnerEndpoints = [];
+              if (dockerStatus?.endpoints) {
+                for (const [epKey, ep] of Object.entries(dockerStatus.endpoints)) {
+                  if (ep.backendType === 'ollama-container') {
+                    if (!containerToEndpoints['ollama']) containerToEndpoints['ollama'] = [];
+                    containerToEndpoints['ollama'].push({ epKey, ep });
+                  } else if (ep.backendType === 'openllm') {
+                    if (!containerToEndpoints['llm_openllm']) containerToEndpoints['llm_openllm'] = [];
+                    containerToEndpoints['llm_openllm'].push({ epKey, ep });
+                  } else if (ep.backendType === 'docker-runner') {
+                    dockerRunnerEndpoints.push({ epKey, ep });
+                  }
+                }
+              }
+
               return (
             <div className="docker-status">
-              <h3>Services</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3>Services</h3>
+                <button
+                  className="btn-docker-action"
+                  style={{ fontSize: '0.72rem' }}
+                  title="Pull all configured models"
+                  onClick={async () => {
+                    try { await fetch('/api/models/pull-all', { method: 'POST' }); }
+                    catch (err) { console.error('pull-all failed:', err); }
+                  }}
+                >Pull All</button>
+              </div>
               {dockerStatus?.containers && Object.entries(dockerStatus.containers).map(([name, status]) => {
                 const serviceKey = name === 'bb-mcp' ? 'bb_mcp' : name;
                 const serviceMeta = systemServices?.services?.[serviceKey];
                 return renderServiceRow(serviceKey, {
                   label: status.label || name,
-                  backendType: status.backendType,
                   running: status.running,
                   status: status.status,
                   ports: status.ports,
                   controllable: serviceMeta?.controllable,
                   disabledReason: serviceMeta?.disabledReason,
-                });
+                }, containerToEndpoints[name] || null);
               })}
-              {/* Tool/MCP servers (e.g. content-gen, website) and other registry-only
-                  services aren't part of dockerStatus.containers, so render them here too. */}
+              {dockerRunnerEndpoints.length > 0 && renderServiceRow('docker-runner', {
+                label: 'Docker Model Runner',
+                running: dockerRunnerEndpoints.some(({ ep }) => ep.live),
+                status: 'Offline',
+                ports: 'host-internal',
+                controllable: false,
+                disabledReason: 'Managed by Docker Desktop',
+              }, dockerRunnerEndpoints)}
+              {/* Tool/MCP servers not in dockerStatus.containers */}
               {systemServices?.services && Object.entries(systemServices.services)
-                .filter(([key]) => !(key in (dockerStatus?.containers || {})))
+                .filter(([key]) => !(key in (dockerStatus?.containers || {})) && key !== 'docker-runner')
                 .map(([key, meta]) => renderServiceRow(key, {
                   label: meta.label,
-                  backendType: meta.backendType,
                   running: meta.running,
                   status: meta.status,
                   ports: meta.ports,
@@ -2164,88 +2234,6 @@ function App() {
                 </>
               )}
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3>Models &amp; Endpoints</h3>
-                <button
-                  className="btn-docker-action"
-                  style={{ fontSize: '0.72rem' }}
-                  title="Pull all configured models that are not yet installed"
-                  onClick={async () => {
-                    try {
-                      await fetch('/api/models/pull-all', { method: 'POST' });
-                    } catch (err) { console.error('pull-all failed:', err); }
-                  }}
-                >Pull All</button>
-              </div>
-              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => {
-                const canPull = ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner';
-                const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
-                const pullKey = `${key}:${ep.model}`;
-                const actionId = `pull:${pullKey}`;
-                const pull = modelPulls[pullKey];
-                const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
-                const isActiveRunner = ep.backendType === 'docker-runner' &&
-                  dockerStatus?.activeDockerRunnerModel?.key === key;
-                const wasKnown = !!knownModels[pullKey];
-                const isOfflineButKnown = wasKnown && !ep.live;
-                const isOnlineNotInstalled = wasKnown && ep.live && !installed;
-                return (
-                  <div key={key} className={`docker-status-item${isOfflineButKnown ? ' known-offline' : ''}`}>
-                    <div className="docker-service-info">
-                      <div className="docker-service-name">
-                        {ep.name}
-                        {isActiveRunner && <span className="badge-active">Active</span>}
-                        {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.6, fontSize: '0.7rem' }}>(API key)</span>}
-                      </div>
-                      <div className="docker-service-port">{ep.model || 'no model configured'}</div>
-                      <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
-                        {ep.live ? '● Live' : '● Offline'}
-                        {canPull && ep.live && (
-                          <span style={{ marginLeft: '0.4rem', opacity: 0.7 }}>
-                            {installed ? '· installed' : '· not pulled'}
-                          </span>
-                        )}
-                        {isOfflineButKnown && (
-                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· was installed</span>
-                        )}
-                        {isOnlineNotInstalled && (
-                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· re-pull needed</span>
-                        )}
-                      </div>
-                      {pull && (
-                        <div className={`docker-service-pull-status ${pull.status}`}>
-                          {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
-                          {pull.status === 'completed' && '✓ Pull complete'}
-                          {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
-                        </div>
-                      )}
-                      {serviceActionErrors[actionId] && (
-                        <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
-                      )}
-                    </div>
-                    <div className="docker-actions">
-                      {canPull && (
-                        <button
-                          className="btn-docker-action"
-                          disabled={pulling || installed === true || !ep.model}
-                          onClick={() => pullModel(key, ep.model)}
-                        >
-                          {pulling ? 'Pulling…' : installed ? 'Installed' : isOnlineNotInstalled ? 'Re-pull' : 'Pull'}
-                        </button>
-                      )}
-                      {ep.backendType === 'docker-runner' && installed && (
-                        <button
-                          className="btn-docker-action"
-                          title="Remove model from Docker Runner cache"
-                          onClick={() => unloadDockerModel(ep.model)}
-                        >
-                          Unload
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
 
               <div className="system-meta-text">
                 <div><strong>Primary:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}</div>
@@ -2258,45 +2246,6 @@ function App() {
                 )}
               </div>
 
-              {/* Generated content file browser — shown when website tool output exists */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem' }}>
-                <h3>Generated Output</h3>
-                <button className="btn-docker-action" style={{ fontSize: '0.72rem' }} onClick={fetchContentClients}>Refresh</button>
-              </div>
-              {contentClients.length === 0 ? (
-                <div style={{ fontSize: '0.78rem', opacity: 0.45, padding: '0.2rem 0' }}>No client output yet. Run the Website Agent to generate files.</div>
-              ) : (
-                contentClients.map(slug => (
-                  <div key={slug} className="docker-status-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.3rem' }}>
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', width: '100%' }}
-                      onClick={() => {
-                        const next = !contentExpanded[slug];
-                        setContentExpanded(prev => ({ ...prev, [slug]: next }));
-                        if (next && !contentFiles[slug]) fetchContentFiles(slug);
-                      }}
-                    >
-                      <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{contentExpanded[slug] ? '▼' : '▶'} {slug}</span>
-                    </div>
-                    {contentExpanded[slug] && (
-                      <div style={{ paddingLeft: '0.8rem', width: '100%' }}>
-                        {!contentFiles[slug] && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>Loading…</div>}
-                        {contentFiles[slug]?.length === 0 && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>(empty)</div>}
-                        {contentFiles[slug]?.map(f => (
-                          <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.15rem 0' }}>
-                            <span style={{ fontSize: '0.73rem', opacity: 0.8 }}>{f.path}</span>
-                            <button
-                              className="btn-docker-action"
-                              style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem' }}
-                              onClick={() => downloadContentFile(slug, f.path)}
-                            >↓</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
             </div>
               );
             })()}
