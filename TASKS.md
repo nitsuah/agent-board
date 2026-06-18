@@ -55,10 +55,10 @@ Last Updated: 2026-06-17
   - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
   - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
 
-- [ ] Document agent lifecycle APIs.
+- [x] Document agent lifecycle APIs.
   - Priority: P2
   - Context: README references agent start, stop, restart, and persistence behavior that is not described in `docs/API.md`.
-  - Acceptance Criteria: lifecycle endpoints are documented with request and response examples.
+  - Acceptance Criteria: ✅ `docs/API.md` rewritten — all lifecycle, metrics, experiences, tools, workspace, and status endpoints documented with request/response examples and a quick-reference table.
 
 - [ ] Expand coverage after the reporting baseline is restored.
   - Priority: P2
