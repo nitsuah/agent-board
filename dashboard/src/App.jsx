@@ -464,6 +464,11 @@ function App() {
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
 
+  // Content file browser (website agent output)
+  const [contentClients, setContentClients] = useState([]);
+  const [contentFiles, setContentFiles] = useState({}); // slug -> file list
+  const [contentExpanded, setContentExpanded] = useState({}); // slug -> bool
+
   // Workspace file I/O
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspaceLs, setWorkspaceLs] = useState(null);
@@ -782,6 +787,43 @@ function App() {
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
     }
+  };
+
+  const unloadDockerModel = async (model) => {
+    try {
+      const res = await fetch('/api/models/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model })
+      });
+      const data = await res.json();
+      if (!data.success) console.error('Unload failed:', data.error);
+      else await fetchDockerStatus();
+    } catch (err) { console.error('Unload error:', err); }
+  };
+
+  const fetchContentClients = async () => {
+    try {
+      const res = await fetch('/api/content/clients');
+      const data = await res.json();
+      if (data.success) setContentClients(data.clients || []);
+    } catch { /* ignore */ }
+  };
+
+  const fetchContentFiles = async (slug) => {
+    try {
+      const res = await fetch(`/api/content/clients/${encodeURIComponent(slug)}/files`);
+      const data = await res.json();
+      if (data.success) setContentFiles(prev => ({ ...prev, [slug]: data.files || [] }));
+    } catch { /* ignore */ }
+  };
+
+  const downloadContentFile = (slug, filePath) => {
+    const url = `/api/content/download/${encodeURIComponent(slug)}/${filePath}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filePath.split('/').pop();
+    a.click();
   };
 
   const fetchDemoMode = async () => {
@@ -1326,9 +1368,12 @@ function App() {
             onClick={() => {
               setShowSystemPanel(prev => {
                 const next = !prev;
-                if (next && dockerStatus?.workspace?.configured) {
-                  browseWorkspace('');
-                  refreshWorkspaceGit();
+                if (next) {
+                  if (dockerStatus?.workspace?.configured) {
+                    browseWorkspace('');
+                    refreshWorkspaceGit();
+                  }
+                  fetchContentClients();
                 }
                 return next;
               });
@@ -2092,11 +2137,14 @@ function App() {
                 const actionId = `pull:${pullKey}`;
                 const pull = modelPulls[pullKey];
                 const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
+                const isActiveRunner = ep.backendType === 'docker-runner' &&
+                  dockerStatus?.activeDockerRunnerModel?.key === key;
                 return (
                   <div key={key} className="docker-status-item">
                     <div className="docker-service-info">
                       <div className="docker-service-name">
                         {ep.name}
+                        {isActiveRunner && <span className="badge-active">Active</span>}
                         {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.6, fontSize: '0.7rem' }}>(API key)</span>}
                       </div>
                       <div className="docker-service-port">{ep.model || 'no model configured'}</div>
@@ -2119,8 +2167,8 @@ function App() {
                         <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
                       )}
                     </div>
-                    {canPull && (
-                      <div className="docker-actions">
+                    <div className="docker-actions">
+                      {canPull && (
                         <button
                           className="btn-docker-action"
                           disabled={pulling || installed === true || !ep.model}
@@ -2128,8 +2176,17 @@ function App() {
                         >
                           {pulling ? 'Pulling…' : installed ? 'Installed' : 'Pull'}
                         </button>
-                      </div>
-                    )}
+                      )}
+                      {ep.backendType === 'docker-runner' && installed && (
+                        <button
+                          className="btn-docker-action"
+                          title="Remove model from Docker Runner cache"
+                          onClick={() => unloadDockerModel(ep.model)}
+                        >
+                          Unload
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -2141,6 +2198,46 @@ function App() {
                   Pull: <code>docker model pull ai/glm-4.7-flash:latest</code>
                 </div>
               </div>
+
+              {/* Generated content file browser — shown when website tool output exists */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem' }}>
+                <h3>Generated Output</h3>
+                <button className="btn-docker-action" style={{ fontSize: '0.72rem' }} onClick={fetchContentClients}>Refresh</button>
+              </div>
+              {contentClients.length === 0 ? (
+                <div style={{ fontSize: '0.78rem', opacity: 0.45, padding: '0.2rem 0' }}>No client output yet. Run the Website Agent to generate files.</div>
+              ) : (
+                contentClients.map(slug => (
+                  <div key={slug} className="docker-status-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.3rem' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', width: '100%' }}
+                      onClick={() => {
+                        const next = !contentExpanded[slug];
+                        setContentExpanded(prev => ({ ...prev, [slug]: next }));
+                        if (next && !contentFiles[slug]) fetchContentFiles(slug);
+                      }}
+                    >
+                      <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{contentExpanded[slug] ? '▼' : '▶'} {slug}</span>
+                    </div>
+                    {contentExpanded[slug] && (
+                      <div style={{ paddingLeft: '0.8rem', width: '100%' }}>
+                        {!contentFiles[slug] && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>Loading…</div>}
+                        {contentFiles[slug]?.length === 0 && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>(empty)</div>}
+                        {contentFiles[slug]?.map(f => (
+                          <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.15rem 0' }}>
+                            <span style={{ fontSize: '0.73rem', opacity: 0.8 }}>{f.path}</span>
+                            <button
+                              className="btn-docker-action"
+                              style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem' }}
+                              onClick={() => downloadContentFile(slug, f.path)}
+                            >↓</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
               );
             })()}

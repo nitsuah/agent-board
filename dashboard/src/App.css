@@ -1144,6 +1144,20 @@ body {
   font-size: 0.84rem;
 }
 
+.badge-active {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--green);
+  color: #000;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 .docker-service-status {
   font-size: 0.7rem;
   font-weight: 600;

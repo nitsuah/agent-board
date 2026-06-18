@@ -42,11 +42,15 @@ const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..
 // Set WORKSPACE_ROOT to the path inside the container (default /workspace).
 // Apply config/docker-compose.workspace.yml overlay to mount a host folder there.
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || null;
+const WEBSITE_OUTPUT_DIR = process.env.WEBSITE_OUTPUT_DIR || join(__dirname, '..', 'tools', 'website', 'output');
 
 // LLM Configuration - Support multiple endpoints
 // apiStyle: 'ollama' uses /api/chat + /api/tags; 'openai' uses /v1/chat/completions + /v1/models
 // backendType: used by the UI to show how the model is served
 const DOCKER_RUNNER_URL = process.env.DOCKER_RUNNER_URL || 'http://model-runner.docker.internal/engines/llama.cpp/v1';
+
+// Track which Docker Runner model was most recently used so the UI can show it
+let activeDockerRunnerModel = null; // { key, model, at }
 
 // ── Device profile system ─────────────────────────────────────────────────────
 // Hardware-tier profiles drive default model selection when PRIMARY_LLM_MODEL is
@@ -825,8 +829,12 @@ const EXPERIENCE_CONFIGS = {
     safetyMode: 'standard',
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix:
-      'You are helping the user plan and produce short-form AI videos. Suggest concrete video topics, ' +
-      'hooks, and scripts. The user can execute generation through the Content Gen tool panel.',
+      'You are a short-form video production assistant powered by the Content Studio tools. ' +
+      'Help the user brainstorm viral video topics, attention-grabbing hooks, and tight scripts (30-60s). ' +
+      'When the user is ready to generate, tell them to use the Content Gen tool panel on the right — ' +
+      'do NOT attempt to call tools yourself in this chat window. ' +
+      'Before generation: describe the topic, hook style, and voice-over tone you are recommending. ' +
+      'After generation completes: summarise what was created and suggest 2-3 follow-up iterations.',
     tool: 'content_gen'
   },
   website: {
@@ -836,8 +844,15 @@ const EXPERIENCE_CONFIGS = {
     safetyMode: 'standard',
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix:
-      'You are helping the user run a B2B website agency workflow: lead discovery, pitch copy, ' +
-      'site content, and invoicing. The user can execute external actions through the Website Agent tool panel.',
+      'You are a B2B website agency assistant. Help the user with lead discovery, pitch copy, site content, and invoicing. ' +
+      'CRITICAL RULE: never paste raw HTML, CSS, or large code blocks directly into this chat. ' +
+      'When you generate site content, always save it using the save_file tool — describe what you are creating ' +
+      'in plain language first, then call the tool. ' +
+      'Workflow: (1) discover_leads to find prospects, (2) write pitch copy in plain text here, ' +
+      '(3) save_file to store generated HTML under the client slug, ' +
+      '(4) list_client_files to confirm what was saved, (5) deploy_site when approved. ' +
+      'Use a slug format like "business-name-zipcode" (e.g. "joes-pizza-90210"). ' +
+      'The user can also trigger tools directly from the Website Agent tool panel on the right.',
     tool: 'website'
   }
 };
@@ -1323,6 +1338,7 @@ app.get('/api/docker/status', async (req, res) => {
     errors: [],
     deviceProfile: { name: DEVICE_PROFILE, models: activeProfile.models, gpu: activeProfile.gpu },
     workspace: { configured: !!WORKSPACE_ROOT, root: WORKSPACE_ROOT || null },
+    activeDockerRunnerModel,
   });
 });
 
@@ -1665,6 +1681,99 @@ app.post('/api/models/pull-all', async (req, res) => {
   }
 
   res.json({ success: true, initiated, skipped });
+});
+
+/**
+ * Unload a Docker Runner model from memory.
+ * Attempts `docker model rm <model>` to remove the pulled model.
+ * Requires AGENT_BOARD_ENABLE_DOCKER_CONTROL=true.
+ */
+app.post('/api/models/unload', async (req, res) => {
+  if (!DOCKER_CONTROL_ENABLED) {
+    return res.status(403).json({ success: false, error: 'Docker control not enabled' });
+  }
+  const { model } = req.body;
+  if (!model) return res.status(400).json({ success: false, error: 'model is required' });
+  try {
+    await execFileAsync('docker', ['model', 'rm', model]);
+    if (activeDockerRunnerModel?.model === model) activeDockerRunnerModel = null;
+    res.json({ success: true, model });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * List all website output client slugs.
+ */
+app.get('/api/content/clients', async (req, res) => {
+  try {
+    let entries;
+    try {
+      entries = await readdir(WEBSITE_OUTPUT_DIR);
+    } catch {
+      return res.json({ success: true, clients: [] });
+    }
+    const clients = [];
+    for (const entry of entries) {
+      try {
+        const s = await stat(join(WEBSITE_OUTPUT_DIR, entry));
+        if (s.isDirectory()) clients.push(entry);
+      } catch { /* skip */ }
+    }
+    res.json({ success: true, clients });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * List all files for a given client slug (recursive).
+ */
+app.get('/api/content/clients/:slug/files', async (req, res) => {
+  const { slug } = req.params;
+  if (!/^[\w-]+$/.test(slug)) return res.status(400).json({ success: false, error: 'Invalid slug' });
+  const clientDir = join(WEBSITE_OUTPUT_DIR, slug);
+  try {
+    const files = [];
+    async function walk(dir, prefix) {
+      let entries;
+      try { entries = await readdir(dir); } catch { return; }
+      for (const entry of entries) {
+        const full = join(dir, entry);
+        const rel  = prefix ? `${prefix}/${entry}` : entry;
+        try {
+          const s = await stat(full);
+          if (s.isDirectory()) {
+            await walk(full, rel);
+          } else {
+            files.push({ path: rel, size: s.size, mtime: s.mtime });
+          }
+        } catch { /* skip */ }
+      }
+    }
+    await walk(clientDir, '');
+    res.json({ success: true, slug, files });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * Download a specific generated file.
+ * GET /api/content/download/:slug/:path  (path is /-separated subdir+filename)
+ */
+app.get('/api/content/download/:slug/*', (req, res) => {
+  const { slug } = req.params;
+  if (!/^[\w-]+$/.test(slug)) return res.status(400).json({ success: false, error: 'Invalid slug' });
+  const filePath = req.params[0];
+  if (!filePath) return res.status(400).json({ success: false, error: 'Missing file path' });
+  const fullPath = resolvePath(join(WEBSITE_OUTPUT_DIR, slug, filePath));
+  if (!fullPath.startsWith(resolvePath(WEBSITE_OUTPUT_DIR))) {
+    return res.status(403).json({ success: false, error: 'Path traversal blocked' });
+  }
+  if (!existsSync(fullPath)) return res.status(404).json({ success: false, error: 'File not found' });
+  res.download(fullPath);
 });
 
 /**
@@ -2067,7 +2176,10 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-const { llmUrl, apiStyle, apiKey } = await prepareSessionForLlmCall(session);
+    const { llmUrl, apiStyle, apiKey } = await prepareSessionForLlmCall(session);
+    if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
+      activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
+    }
     const llmHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
@@ -2229,6 +2341,9 @@ if (session.endpoint === 'primary') {
 
   const safetyMode = resolveEffectiveSafetyMode(session, useSafeMode);
   const prepared = await prepareSessionForLlmCall(session);
+  if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
+    activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
+  }
   const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
   const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
   const streamHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
