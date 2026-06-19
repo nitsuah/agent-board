@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve as resolvePath, relative as relativePath } from 'path';
 import { createReadStream, existsSync, readFileSync } from 'fs';
-import { readdir, readFile, writeFile, mkdir, stat } from 'fs/promises';
+import { readdir, readFile, writeFile, mkdir, stat, unlink, rm } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
@@ -3947,6 +3947,138 @@ app.post('/api/workspace/exec', express.json(), async (req, res) => {
     res.json({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 });
   } catch (err) {
     res.json({ stdout: (err.stdout || '').trim(), stderr: (err.stderr || err.message).trim(), exitCode: err.code || 1 });
+  }
+});
+
+// DELETE /api/workspace/file?path=...  (works for files and dirs)
+app.delete('/api/workspace/file', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const abs = resolveWorkspacePath(req.query.path || '');
+  if (!abs) return res.status(400).json({ error: 'Invalid path' });
+  try {
+    const s = await stat(abs);
+    if (s.isDirectory()) {
+      await rm(abs, { recursive: true, force: true });
+    } else {
+      await unlink(abs);
+    }
+    res.json({ deleted: relativePath(WORKSPACE_ROOT, abs) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/workspace/mkdir  { path }
+app.post('/api/workspace/mkdir', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const abs = resolveWorkspacePath(req.body?.path || '');
+  if (!abs) return res.status(400).json({ error: 'Invalid path' });
+  try {
+    await mkdir(abs, { recursive: true });
+    res.json({ path: relativePath(WORKSPACE_ROOT, abs) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/workspace/rename  { from, to }
+app.post('/api/workspace/rename', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { from: fromPath, to: toPath } = req.body || {};
+  const absFrom = resolveWorkspacePath(fromPath || '');
+  const absTo = resolveWorkspacePath(toPath || '');
+  if (!absFrom || !absTo) return res.status(400).json({ error: 'Invalid path' });
+  try {
+    const { rename } = await import('fs/promises');
+    await rename(absFrom, absTo);
+    res.json({ from: relativePath(WORKSPACE_ROOT, absFrom), to: relativePath(WORKSPACE_ROOT, absTo) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/workspace/search  { query }
+app.post('/api/workspace/search', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { query } = req.body || {};
+  if (!query) return res.status(400).json({ error: 'query is required' });
+  try {
+    const { stdout } = await execAsync(
+      `grep -rl "${query.replace(/"/g, '\\"')}" --include="*" --exclude-dir=".git" --exclude-dir="node_modules" .`,
+      { cwd: WORKSPACE_ROOT, timeout: 10000 }
+    );
+    const files = stdout.split('\n').map(f => f.replace(/^\.\//, '')).filter(Boolean);
+    res.json({ query, files });
+  } catch (err) {
+    // exit code 1 means no matches, not an error
+    if (err.code === 1) return res.json({ query, files: [] });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/workspace/git/branches
+app.get('/api/workspace/git/branches', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  try {
+    const localOut = await gitInWorkspace('branch', '--format=%(refname:short)');
+    const current = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    let remotes = [];
+    try {
+      const remoteOut = await gitInWorkspace('branch', '-r', '--format=%(refname:short)');
+      remotes = remoteOut.split('\n').map(s => s.trim()).filter(Boolean);
+    } catch { /* no remotes */ }
+    const branches = localOut.split('\n').map(s => s.trim()).filter(Boolean);
+    res.json({ branches, remotes, current });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/workspace/git/checkout  { branch, create }
+app.post('/api/workspace/git/checkout', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { branch, create } = req.body || {};
+  if (!branch) return res.status(400).json({ error: 'branch is required' });
+  const safe = branch.replace(/[^a-zA-Z0-9/_.-]/g, '');
+  try {
+    if (create) {
+      await execAsync(`git checkout -b ${safe}`, { cwd: WORKSPACE_ROOT });
+    } else {
+      await execAsync(`git checkout ${safe}`, { cwd: WORKSPACE_ROOT });
+    }
+    const current = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
+    res.json({ branch: current });
+  } catch (err) {
+    res.status(500).json({ error: err.stderr || err.message });
+  }
+});
+
+// POST /api/workspace/git/pull
+app.post('/api/workspace/git/pull', async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  try {
+    const { stdout, stderr } = await execAsync('git pull', { cwd: WORKSPACE_ROOT, timeout: 30000 });
+    res.json({ result: (stdout || stderr).trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.stderr || err.message });
+  }
+});
+
+// POST /api/workspace/git/discard  { file? }  — discards one file or all unstaged changes
+app.post('/api/workspace/git/discard', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { file } = req.body || {};
+  try {
+    if (file) {
+      const abs = resolveWorkspacePath(file);
+      if (!abs) return res.status(400).json({ error: 'Invalid path' });
+      await execAsync(`git checkout -- "${abs.replace(/"/g, '\\"')}"`, { cwd: WORKSPACE_ROOT });
+    } else {
+      await execAsync('git checkout -- .', { cwd: WORKSPACE_ROOT });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
