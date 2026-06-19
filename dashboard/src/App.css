@@ -1838,3 +1838,40 @@ code {
   padding: 0;
 }
 
+/* ===== Workspace tab layout ===== */
+.workspace-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+}
+.workspace-view h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ===== Collapsed service row ===== */
+.svc-row-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  transition: opacity 0.1s;
+}
+.svc-row-collapsed:hover { opacity: 0.8; }
+.svc-name-dim { flex: 1; }
+.svc-status-dim { font-size: 0.72rem; color: var(--text-faint); }
+.svc-expand-icon { font-size: 0.8rem; opacity: 0.5; }
+

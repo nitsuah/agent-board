@@ -1317,13 +1317,22 @@ function App() {
     const endpointStatus = dockerStatus?.endpoints?.[key];
     return endpointStatus ? endpointStatus.live === true : true;
   });
-  const runningServices = Object.values(dockerStatus?.containers || {}).filter(c => c.running).length;
-  const totalServices = Object.keys(dockerStatus?.containers || {}).length;
+  // Count all services: docker containers + standalone tool services
+  const allServiceEntries = [
+    ...Object.values(dockerStatus?.containers || {}),
+    ...Object.entries(systemServices?.services || {})
+      .filter(([k]) => !(dockerStatus?.containers || {})[k] && k !== 'docker-runner')
+      .map(([, v]) => v),
+  ];
+  const runningServices = allServiceEntries.filter(s => s.running).length;
+  const totalServices = allServiceEntries.length;
 
   const dismissOnboarding = () => {
     localStorage.setItem('agent_board_onboarding_dismissed', '1');
     setShowOnboarding(false);
   };
+
+  const [expandedSvcs, setExpandedSvcs] = React.useState({});
 
   // ── Metrics helpers ────────────────────────────────────────────────────────
   const renderBar = (value, max, color = 'var(--green)') => {
@@ -1372,6 +1381,11 @@ function App() {
             onClick={() => setActiveTab('metrics')}
             title="Metrics"
           >📊</button>
+          <button
+            className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); }}
+            title="Workspace"
+          >🗂️</button>
           <button
             className={`icon-btn ${showSystemPanel ? 'active' : ''}`}
             onClick={() => {
@@ -1519,56 +1533,6 @@ function App() {
             </div>
           </div>
 
-          <div className="drawer-section drawer-section-tasks">
-            <h3>Task Queue</h3>
-            <div className="task-summary-row">
-              <span>Total {taskSummary.total || 0}</span>
-              <span>Pending {taskSummary.byStatus?.pending || 0}</span>
-              <span>Active {taskSummary.byStatus?.in_progress || 0}</span>
-            </div>
-
-            <div className="task-create-row">
-              <input
-                type="text"
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="Add a task"
-                maxLength={140}
-              />
-              <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="urgent">urgent</option>
-              </select>
-              <button className="btn-primary" onClick={createTask}>Add</button>
-            </div>
-
-            <div className="task-list">
-              {tasks.slice(0, 12).map((task) => (
-                <div key={task.id} className={`task-item status-${task.status}`}>
-                  <div className="task-item-head">
-                    <strong>{task.title}</strong>
-                    <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                  </div>
-                  <div className="task-item-meta">
-                    <span>{task.status.replace('_', ' ')}</span>
-                    <span>{task.assignedSessionName || 'unassigned'}</span>
-                  </div>
-                  <div className="task-item-actions">
-                    <button onClick={() => updateTaskStatus(task.id, 'in_progress')}>Start</button>
-                    <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
-                    <button onClick={() => routeTaskToSession(task.id)} disabled={!activeSession}>Route</button>
-                    <button onClick={() => deleteTask(task.id)}>Delete</button>
-                  </div>
-                </div>
-              ))}
-              {tasks.length === 0 && (
-                <div className="task-empty">No tasks yet.</div>
-              )}
-            </div>
-          </div>
-
           <div className="drawer-collapse-btn">
             <button
               className="icon-btn"
@@ -1578,9 +1542,183 @@ function App() {
           </div>
         </aside>
 
-        {/* Main content: chat or metrics */}
+        {/* Main content: workspace, chat, or metrics */}
         <div className="content">
-          {activeTab === 'metrics' ? (
+          {activeTab === 'workspace' ? (
+            <div className="workspace-view">
+              <h2>Workspace</h2>
+              {!dockerStatus?.workspace?.configured ? (
+                <div className="docker-status-item">
+                  <div className="docker-service-info">
+                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
+                    <div className="docker-service-port" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
+                      Mount a local project folder so the AI can read, write, and git-commit files.<br />
+                      Set <code>WORKSPACE_PATH=C:/path/to/project</code> in <code>config/.env</code> then apply
+                      <code> docker-compose.workspace.yml</code> overlay.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="docker-status-item">
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">{dockerStatus.workspace.root}</div>
+                      {workspaceGitStatus && (
+                        <div className={`docker-service-status ${workspaceGitStatus.dirty ? 'stopped' : 'running'}`}>
+                          ● {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' (uncommitted changes)' : ' (clean)'}
+                        </div>
+                      )}
+                    </div>
+                    <div className="docker-actions">
+                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); }}>Refresh</button>
+                    </div>
+                  </div>
+
+                  <div className="workspace-browser">
+                    <div className="workspace-breadcrumb">
+                      <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace('')}>root</span>
+                      {workspacePath.split('/').filter(Boolean).map((seg, i, arr) => (
+                        <span key={i}>
+                          {' / '}
+                          <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace(arr.slice(0, i + 1).join('/'))}>
+                            {seg}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="workspace-entries">
+                      {workspaceLs?.entries?.map(e => (
+                        <div
+                          key={e.name}
+                          className="workspace-entry"
+                          onClick={() => {
+                            const p = workspacePath ? `${workspacePath}/${e.name}` : e.name;
+                            if (e.type === 'dir') browseWorkspace(p); else openWorkspaceFile(p);
+                          }}
+                        >
+                          {e.type === 'dir' ? '📁' : '📄'} {e.name}
+                          {e.size != null && <span style={{ opacity: 0.45, fontSize: '0.72rem' }}> ({(e.size / 1024).toFixed(1)} KB)</span>}
+                        </div>
+                      ))}
+                      {workspaceLs?.entries?.length === 0 && <div style={{ opacity: 0.4, fontSize: '0.8rem' }}>(empty)</div>}
+                    </div>
+                    {workspaceFileView && (
+                      <div className="workspace-file-view">
+                        <div className="workspace-file-header">
+                          <span style={{ fontSize: '0.78rem', opacity: 0.7 }}>{workspaceFileView.path}</span>
+                          <button className="icon-btn" onClick={() => setWorkspaceFileView(null)} title="Close">✕</button>
+                        </div>
+                        <pre className="workspace-file-content">{workspaceFileView.content}</pre>
+                      </div>
+                    )}
+                  </div>
+
+                  {workspaceGitStatus && (
+                    <div className="workspace-git-section">
+                      {workspaceGitStatus.files.length > 0 ? (
+                        <>
+                          <div className="workspace-changed-files">
+                            {workspaceGitStatus.files.map(f => (
+                              <div key={f.file} className="workspace-changed-file">
+                                <code style={{ fontSize: '0.7rem', opacity: 0.7 }}>{f.status}</code> {f.file}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="workspace-commit-row">
+                            <input
+                              className="workspace-commit-msg"
+                              type="text"
+                              placeholder="Commit message…"
+                              value={workspaceCommitMsg}
+                              onChange={e => setWorkspaceCommitMsg(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && commitWorkspace()}
+                            />
+                            <button
+                              className="btn-docker-action"
+                              disabled={!workspaceCommitMsg || workspaceActions.committing}
+                              onClick={commitWorkspace}
+                            >
+                              {workspaceActions.committing ? 'Committing…' : 'Commit'}
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '0.78rem', opacity: 0.5, padding: '0.25rem 0' }}>Working tree clean</div>
+                      )}
+                      <button
+                        className="btn-docker-action"
+                        disabled={workspaceActions.pushing}
+                        onClick={pushWorkspace}
+                        style={{ marginTop: '0.25rem' }}
+                      >
+                        {workspaceActions.pushing ? 'Pushing…' : 'Push'}
+                      </button>
+                      {workspaceActions.error && (
+                        <div className="docker-service-error">{workspaceActions.error}</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <h2>Task Queue</h2>
+              <div className="task-summary-row">
+                <span>Total {taskSummary.total || 0}</span>
+                <span>Pending {taskSummary.byStatus?.pending || 0}</span>
+                <span>Active {taskSummary.byStatus?.in_progress || 0}</span>
+              </div>
+
+              <div className="task-create-row">
+                <input
+                  type="text"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  placeholder="Add a task"
+                  maxLength={140}
+                />
+                <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="urgent">urgent</option>
+                </select>
+                <button className="btn-primary" onClick={createTask}>Add</button>
+              </div>
+
+              <div className="task-list">
+                {tasks.slice(0, 12).map((task) => (
+                  <div key={task.id} className={`task-item status-${task.status}`}>
+                    <div className="task-item-head">
+                      <strong>{task.title}</strong>
+                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                    </div>
+                    <div className="task-item-meta">
+                      <span>{task.status.replace('_', ' ')}</span>
+                      <span>{task.assignedSessionName || 'unassigned'}</span>
+                    </div>
+                    <div className="task-item-actions">
+                      <button onClick={() => updateTaskStatus(task.id, 'in_progress')}>Start</button>
+                      <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
+                      <button onClick={() => routeTaskToSession(task.id)} disabled={!activeSession}>Route</button>
+                      <button onClick={() => deleteTask(task.id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+                {tasks.length === 0 && (
+                  <div className="task-empty">No tasks yet.</div>
+                )}
+              </div>
+
+              {dockerStatus?.workspace?.configured && (
+                <>
+                  <h2>Artifacts</h2>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                    Files in <code>workspace/artifacts/</code> will appear here.
+                  </div>
+                </>
+              )}
+            </div>
+          ) : activeTab === 'metrics' ? (
             <div className="metrics-view">
               <div className="metric-cards">
                 {[
@@ -1996,6 +2134,17 @@ function App() {
                   .filter(Boolean);
                 const allErrors = [...epErrors, serviceActionErrors[serviceKey]].filter(Boolean);
 
+                if (!info.running && !expandedSvcs[serviceKey]) {
+                  return (
+                    <div key={serviceKey} className="svc-row-collapsed" onClick={() => setExpandedSvcs(p => ({ ...p, [serviceKey]: true }))}>
+                      <span className={`status-dot ${isDisabled ? 'disabled' : 'stopped'}`} />
+                      <span className="svc-name-dim">{info.label}</span>
+                      <span className="svc-status-dim">{isDisabled ? 'disabled' : info.status || 'offline'}</span>
+                      <span className="svc-expand-icon">›</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={serviceKey} className={`docker-status-item${isDisabled ? ' svc-disabled' : ''}`}>
                     <div className="docker-status-main">
@@ -2006,6 +2155,14 @@ function App() {
                           <span className={`docker-service-status ${info.running ? 'running' : isDisabled ? 'disabled' : 'stopped'}`}>
                             {info.running ? '● Live' : isDisabled ? '● disabled' : `● ${info.status || 'offline'}`}
                           </span>
+                          {!info.running && expandedSvcs[serviceKey] && (
+                            <button
+                              className="btn-docker-action"
+                              style={{ fontSize: '0.62rem', padding: '0.05rem 0.25rem', marginLeft: 'auto' }}
+                              onClick={() => setExpandedSvcs(p => ({ ...p, [serviceKey]: false }))}
+                              title="Collapse"
+                            >‹</button>
+                          )}
                         </div>
                         {info.ports && <div className="docker-service-port">{info.ports}</div>}
                         {info.backendType === 'mcp' && !isDisabled && (
@@ -2182,128 +2339,6 @@ function App() {
                 >Pull All</button>
               </div>
               {allSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
-
-              <div
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
-                onClick={() => setWorkspaceExpanded(x => !x)}
-              >
-                <h3 style={{ margin: 0 }}>Workspace</h3>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)', transform: workspaceExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s', marginRight: '0.25rem' }}>▼</span>
-              </div>
-              {workspaceExpanded && (!dockerStatus?.workspace?.configured ? (
-                <div className="docker-status-item">
-                  <div className="docker-service-info">
-                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
-                    <div className="docker-service-port" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
-                      Mount a local project folder so the AI can read, write, and git-commit files.<br />
-                      Set <code>WORKSPACE_PATH=C:/path/to/project</code> in <code>config/.env</code> then apply
-                      <code> docker-compose.workspace.yml</code> overlay.
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="docker-status-item">
-                    <div className="docker-service-info">
-                      <div className="docker-service-name">{dockerStatus.workspace.root}</div>
-                      {workspaceGitStatus && (
-                        <div className={`docker-service-status ${workspaceGitStatus.dirty ? 'stopped' : 'running'}`}>
-                          ● {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' (uncommitted changes)' : ' (clean)'}
-                        </div>
-                      )}
-                    </div>
-                    <div className="docker-actions">
-                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); }}>Refresh</button>
-                    </div>
-                  </div>
-
-                  <div className="workspace-browser">
-                    <div className="workspace-breadcrumb">
-                      <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace('')}>root</span>
-                      {workspacePath.split('/').filter(Boolean).map((seg, i, arr) => (
-                        <span key={i}>
-                          {' / '}
-                          <span className="workspace-path-seg" style={{ cursor: 'pointer' }} onClick={() => browseWorkspace(arr.slice(0, i + 1).join('/'))}>
-                            {seg}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="workspace-entries">
-                      {workspaceLs?.entries?.map(e => (
-                        <div
-                          key={e.name}
-                          className="workspace-entry"
-                          onClick={() => {
-                            const p = workspacePath ? `${workspacePath}/${e.name}` : e.name;
-                            if (e.type === 'dir') browseWorkspace(p); else openWorkspaceFile(p);
-                          }}
-                        >
-                          {e.type === 'dir' ? '📁' : '📄'} {e.name}
-                          {e.size != null && <span style={{ opacity: 0.45, fontSize: '0.72rem' }}> ({(e.size / 1024).toFixed(1)} KB)</span>}
-                        </div>
-                      ))}
-                      {workspaceLs?.entries?.length === 0 && <div style={{ opacity: 0.4, fontSize: '0.8rem' }}>(empty)</div>}
-                    </div>
-                    {workspaceFileView && (
-                      <div className="workspace-file-view">
-                        <div className="workspace-file-header">
-                          <span style={{ fontSize: '0.78rem', opacity: 0.7 }}>{workspaceFileView.path}</span>
-                          <button className="icon-btn" onClick={() => setWorkspaceFileView(null)} title="Close">✕</button>
-                        </div>
-                        <pre className="workspace-file-content">{workspaceFileView.content}</pre>
-                      </div>
-                    )}
-                  </div>
-
-                  {workspaceGitStatus && (
-                    <div className="workspace-git-section">
-                      {workspaceGitStatus.files.length > 0 ? (
-                        <>
-                          <div className="workspace-changed-files">
-                            {workspaceGitStatus.files.map(f => (
-                              <div key={f.file} className="workspace-changed-file">
-                                <code style={{ fontSize: '0.7rem', opacity: 0.7 }}>{f.status}</code> {f.file}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="workspace-commit-row">
-                            <input
-                              className="workspace-commit-msg"
-                              type="text"
-                              placeholder="Commit message…"
-                              value={workspaceCommitMsg}
-                              onChange={e => setWorkspaceCommitMsg(e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && commitWorkspace()}
-                            />
-                            <button
-                              className="btn-docker-action"
-                              disabled={!workspaceCommitMsg || workspaceActions.committing}
-                              onClick={commitWorkspace}
-                            >
-                              {workspaceActions.committing ? 'Committing…' : 'Commit'}
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <div style={{ fontSize: '0.78rem', opacity: 0.5, padding: '0.25rem 0' }}>Working tree clean</div>
-                      )}
-                      <button
-                        className="btn-docker-action"
-                        disabled={workspaceActions.pushing}
-                        onClick={pushWorkspace}
-                        style={{ marginTop: '0.25rem' }}
-                      >
-                        {workspaceActions.pushing ? 'Pushing…' : 'Push'}
-                      </button>
-                      {workspaceActions.error && (
-                        <div className="docker-service-error">{workspaceActions.error}</div>
-                      )}
-                    </div>
-                  )}
-                </>
-              ))}
-
 
             </div>
               );

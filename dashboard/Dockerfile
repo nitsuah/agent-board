@@ -9,6 +9,7 @@ ENV UV_THREADPOOL_SIZE=16
 # Docker CLI is opt-in. Build with --build-arg INSTALL_DOCKER_CLI=true only in
 # trusted dev/CI environments where Docker socket access is explicitly required.
 ARG INSTALL_DOCKER_CLI=false
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN if [ "$INSTALL_DOCKER_CLI" = "true" ]; then \
       apt-get update \
       && (apt-get install -y --no-install-recommends docker.io docker-compose-plugin ca-certificates \
