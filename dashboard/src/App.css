@@ -1957,25 +1957,388 @@ code {
   padding: 0;
 }
 
-/* ===== Workspace tab layout ===== */
+/* ===== Live feed pulsing dot ===== */
+.live-dot-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+.live-dot-wrap.live .live-dot {
+  background: var(--green);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+.live-dot-wrap.offline .live-dot {
+  background: var(--red);
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.8); }
+}
+
+/* ===== Combined cog + service count button ===== */
+.svc-cog-btn {
+  width: auto;
+  padding: 0 0.5rem;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+.svc-cog-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.svc-cog-btn.active .svc-cog-count {
+  color: var(--accent);
+}
+
+/* ===== Task session link ===== */
+.task-session-link {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.72rem;
+  text-decoration: underline dotted;
+}
+.task-session-link:hover {
+  color: var(--accent-strong);
+}
+
+/* ===== Dispatch button ===== */
+.task-dispatch-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.task-dispatch-btn:hover {
+  background: var(--accent-strong);
+}
+
+/* ===== Workspace VSCode-style layout ===== */
 .workspace-view {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  max-width: 900px;
-  margin: 0 auto;
   height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* Workspace toolbar */
+.ws-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 0.5rem;
+  min-height: 36px;
+}
+.ws-toolbar-left,
+.ws-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ws-root-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-branch-badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.ws-branch-badge.dirty {
+  color: var(--orange);
+  border-color: var(--orange);
+}
+.ws-branch-badge.clean {
+  color: var(--green);
+  border-color: var(--green);
+}
+
+/* Not configured placeholder */
+.ws-not-configured {
+  padding: 2rem;
+  color: var(--text-muted);
+}
+
+/* 3-panel IDE area */
+.ws-ide {
+  display: grid;
+  grid-template-columns: 1fr;
+  flex: 1;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  min-height: 0;
+  height: clamp(180px, 40vh, 480px);
+}
+.ws-ide.show-explorer {
+  grid-template-columns: 220px 1fr;
+}
+.ws-ide.show-explorer.show-git {
+  grid-template-columns: 220px 1fr 260px;
+}
+.ws-ide:not(.show-explorer).show-git {
+  grid-template-columns: 1fr 260px;
+}
+
+/* Generic panel */
+.ws-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+.ws-panel:last-child {
+  border-right: none;
+}
+
+/* Panel title bar (like VSCode activity-bar labels) */
+.ws-panel-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+/* Explorer panel */
+.ws-explorer-panel {
+  background: var(--surface);
+}
+.ws-explorer-panel .workspace-breadcrumb {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.68rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.ws-explorer-panel .workspace-entries {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.2rem 0;
+}
+.ws-explorer-panel .workspace-entry {
+  padding: 0.22rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text);
+  border-radius: 0;
+}
+.ws-explorer-panel .workspace-entry:hover {
+  background: var(--surface-2);
+}
+.ws-explorer-panel .workspace-entry.selected {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.ws-file-size {
+  font-size: 0.65rem;
+  opacity: 0.4;
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
+/* Editor panel */
+.ws-editor-panel {
+  background: var(--bg);
+  position: relative;
+}
+.ws-editor-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.ws-editor-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.ws-editor-panel .workspace-file-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  color: var(--text);
+  margin: 0;
+  height: 100%;
+}
+
+/* Git panel */
+.ws-git-panel {
+  background: var(--surface);
+  padding: 0;
   overflow-y: auto;
 }
-.workspace-view h2 {
-  margin: 0 0 0.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.ws-git-panel .workspace-changed-files {
+  padding: 0.3rem 0;
 }
+.ws-git-panel .workspace-changed-file {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.ws-git-status-code {
+  font-size: 0.65rem;
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  flex-shrink: 0;
+}
+.ws-git-panel .workspace-commit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+}
+.ws-git-panel .workspace-commit-msg {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.ws-git-panel .btn-docker-action {
+  width: 100%;
+}
+
+/* Bottom row */
+.ws-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 700px) {
+  .ws-bottom-row {
+    grid-template-columns: 1fr;
+  }
+}
+.ws-bottom-panel {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0;
+  min-width: 0;
+}
+.ws-tasks-panel {
+  border-right: 1px solid var(--border);
+}
+.ws-task-counts {
+  font-weight: 400;
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ws-tasks-panel .task-create-row {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.ws-tasks-panel .task-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.2rem 0;
+}
+.ws-tasks-panel .task-item {
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+}
+
+/* Files panel */
+.ws-files-panel {
+  padding: 0;
+}
+.ws-files-empty {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  padding: 0.4rem 0.6rem;
+}
+.ws-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  gap: 0.5rem;
+}
+.ws-file-link {
+  font-size: 0.68rem;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.ws-file-link:hover { text-decoration: underline; }
+.ws-file-group-header {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}
+.ws-file-group-header:hover { color: var(--accent-strong); }
 
 /* ===== Collapsed service row ===== */
 .svc-row-collapsed {
