@@ -2327,9 +2327,10 @@ app.post('/api/sessions/:id/message', async (req, res) => {
     if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
       activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
     }
-    const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
-    const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
-    const llmHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
+    // NemoClaw is a WebSocket UI, not a REST API — safe mode uses primary LLM with strict filters
+    const llmUrl = prepared.llmUrl;
+    const apiStyle = prepared.apiStyle;
+    const llmHeaders = prepared.apiKey ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
@@ -2481,14 +2482,15 @@ if (session.endpoint === 'primary') {
   if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
     activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
   }
-  const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
-  const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
-  const streamHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
+  // NemoClaw is a WebSocket UI, not a REST API — safe mode uses primary LLM with strict filters
+  const llmUrl = prepared.llmUrl;
+  const apiStyle = prepared.apiStyle;
+  const streamHeaders = prepared.apiKey ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
   const systemMessages = buildSystemMessages({ ...session, safetyMode });
   const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
   const msgs = [...systemMessages, ...historyMessages];
 
-  const experienceStreamTools = getExperienceTools(session.experience);
+  const experienceStreamTools = useSafeMode ? [] : getExperienceTools(session.experience);
   let fullContent = '';
 
   // For tool-enabled experiences, run the agentic loop synchronously first,
