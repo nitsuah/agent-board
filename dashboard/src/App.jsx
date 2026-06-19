@@ -476,29 +476,39 @@ function App() {
   }); // { "endpointKey:model": { endpointKey, model, pulledAt } }
 
   // Workspace file I/O
-  const [workspaceExpanded, setWorkspaceExpanded] = useState(() => window.innerWidth > 900);
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspaceLs, setWorkspaceLs] = useState(null);
-  const [workspaceFileView, setWorkspaceFileView] = useState(null);
-  const [workspaceFileEdit, setWorkspaceFileEdit] = useState(false); // edit mode
-  const [workspaceFileContent, setWorkspaceFileContent] = useState(''); // editable buffer
+  // Multi-file editor tabs
+  const [openFiles, setOpenFiles] = useState([]); // [{ path, content, editContent: null|string, editing: bool }]
+  const [activeFilePath, setActiveFilePath] = useState(null);
   const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
   const [workspaceBranches, setWorkspaceBranches] = useState({ branches: [], remotes: [], current: '' });
   const [wsNewBranch, setWsNewBranch] = useState('');
-  const [wsGitBusy, setWsGitBusy] = useState(''); // 'pull'|'checkout'|'discard'|''
+  const [wsGitBusy, setWsGitBusy] = useState('');
   const [wsGitMsg, setWsGitMsg] = useState('');
+  const [wsGitPopover, setWsGitPopover] = useState(false); // compact git popover
   const [workspaceCommitMsg, setWorkspaceCommitMsg] = useState('');
   const [workspaceActions, setWorkspaceActions] = useState({ committing: false, pushing: false, saving: false, error: null });
   const [artifactFiles, setArtifactFiles] = useState([]);
   const [wsShowExplorer, setWsShowExplorer] = useState(true);
-  const [wsShowGit, setWsShowGit] = useState(true);
   const [wsSearch, setWsSearch] = useState('');
-  const [wsSearchResults, setWsSearchResults] = useState(null); // null = not searched
+  const [wsSearchResults, setWsSearchResults] = useState(null);
   const [wsSearchBusy, setWsSearchBusy] = useState(false);
-  const [wsNewName, setWsNewName] = useState(''); // for create file/dir
-  const [wsCreateMode, setWsCreateMode] = useState(''); // 'file'|'dir'|''
-  const [wsRenaming, setWsRenaming] = useState(null); // { name, newName }
+  const [wsNewName, setWsNewName] = useState('');
+  const [wsCreateMode, setWsCreateMode] = useState('');
+  const [wsRenaming, setWsRenaming] = useState(null);
   const [showMetricsPanel, setShowMetricsPanel] = useState(false);
+  // Bottom panel tabs + terminal
+  const [wsBottomTab, setWsBottomTab] = useState('terminal');
+  const [termHistory, setTermHistory] = useState([]); // [{cmd, stdout, stderr, exitCode, ts}]
+  const [termInput, setTermInput] = useState('');
+  const [termBusy, setTermBusy] = useState(false);
+  const termEndRef = useRef(null);
+  // Layout: split view
+  const [wsLayout, setWsLayout] = useState('single'); // 'single'|'split-h'|'split-v'
+  const [wsExplorerWidth, setWsExplorerWidth] = useState(220);
+  const wsResizingRef = useRef(false);
+  const wsGitPopoverRef = useRef(null);
 
   // Theme toggle (dark default)
   const [darkMode, setDarkMode] = useState(() => {
@@ -706,15 +716,36 @@ function App() {
   };
 
   const openWorkspaceFile = async (path) => {
+    // If already open, just switch to it
+    const existing = openFiles.find(f => f.path === path);
+    if (existing) { setActiveFilePath(path); return; }
     try {
       const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       if (!data.error) {
-        setWorkspaceFileView(data);
-        setWorkspaceFileContent(data.content);
-        setWorkspaceFileEdit(false);
+        setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: null, editing: false }]);
+        setActiveFilePath(data.path);
       }
     } catch (err) { console.error('Workspace read failed:', err); }
+  };
+
+  const closeFile = (path) => {
+    setOpenFiles(prev => prev.filter(f => f.path !== path));
+    setActiveFilePath(prev => {
+      if (prev !== path) return prev;
+      const remaining = openFiles.filter(f => f.path !== path);
+      return remaining.length ? remaining[remaining.length - 1].path : null;
+    });
+  };
+
+  const setFileEditing = (path, editing) => {
+    setOpenFiles(prev => prev.map(f =>
+      f.path === path ? { ...f, editing, editContent: editing ? (f.editContent ?? f.content) : null } : f
+    ));
+  };
+
+  const updateFileEditContent = (path, content) => {
+    setOpenFiles(prev => prev.map(f => f.path === path ? { ...f, editContent: content } : f));
   };
 
   const refreshWorkspaceGit = async () => {
@@ -771,21 +802,22 @@ function App() {
     }
   };
 
-  const saveWorkspaceFile = async () => {
-    if (!workspaceFileView) return;
+  const saveWorkspaceFile = async (path) => {
+    const file = openFiles.find(f => f.path === (path || activeFilePath));
+    if (!file || !file.editing) return;
+    const content = file.editContent ?? file.content;
     setWorkspaceActions(p => ({ ...p, saving: true, error: null }));
     try {
       const res = await fetch('/api/workspace/write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: workspaceFileView.path, content: workspaceFileContent }),
+        body: JSON.stringify({ path: file.path, content }),
       });
       const data = await res.json();
       if (data.error) {
         setWorkspaceActions(p => ({ ...p, saving: false, error: data.error }));
       } else {
-        setWorkspaceFileView(v => ({ ...v, content: workspaceFileContent }));
-        setWorkspaceFileEdit(false);
+        setOpenFiles(prev => prev.map(f => f.path === file.path ? { ...f, content, editContent: null, editing: false } : f));
         setWorkspaceActions(p => ({ ...p, saving: false, error: null }));
         refreshWorkspaceGit();
       }
@@ -794,11 +826,46 @@ function App() {
     }
   };
 
+  const runTermCommand = async (cmd) => {
+    if (!cmd.trim() || termBusy) return;
+    const entry = { cmd, stdout: '', stderr: '', exitCode: null, ts: Date.now() };
+    setTermHistory(h => [...h, entry]);
+    setTermInput('');
+    setTermBusy(true);
+    try {
+      const res = await fetch('/api/workspace/exec', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd }),
+      });
+      const data = await res.json();
+      setTermHistory(h => h.map((e, i) => i === h.length - 1 ? { ...e, ...data } : e));
+    } catch (err) {
+      setTermHistory(h => h.map((e, i) => i === h.length - 1 ? { ...e, stderr: err.message, exitCode: 1 } : e));
+    }
+    setTermBusy(false);
+    setTimeout(() => termEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  };
+
+  const startExplorerResize = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = wsExplorerWidth;
+    wsResizingRef.current = true;
+    const onMove = (ev) => {
+      if (!wsResizingRef.current) return;
+      setWsExplorerWidth(Math.max(140, Math.min(480, startW + ev.clientX - startX)));
+    };
+    const onUp = () => { wsResizingRef.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const deleteWorkspaceEntry = async (path) => {
     if (!window.confirm(`Delete ${path}?`)) return;
     try {
       await fetch(`/api/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
-      if (workspaceFileView?.path === path) setWorkspaceFileView(null);
+      closeFile(path);
       browseWorkspace(workspacePath);
       refreshWorkspaceGit();
     } catch (err) { console.error('Delete failed:', err); }
@@ -836,7 +903,7 @@ function App() {
       body: JSON.stringify({ from: fromPath, to: toPath }),
     });
     setWsRenaming(null);
-    if (workspaceFileView?.path === fromPath) setWorkspaceFileView(null);
+    closeFile(fromPath);
     browseWorkspace(workspacePath);
   };
 
@@ -902,7 +969,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) setWsGitMsg(`✗ ${data.error}`);
-      else { refreshWorkspaceGit(); if (workspaceFileView?.path === file) openWorkspaceFile(file); }
+      else { refreshWorkspaceGit(); if (file && openFiles.find(f => f.path === file)) { closeFile(file); openWorkspaceFile(file); } }
     } catch { /* ignore */ }
     finally { setWsGitBusy(''); }
   };
@@ -1454,20 +1521,21 @@ function App() {
       const data = await res.json();
       const sessionId = data.session?.id;
       if (!sessionId) return;
-      setActiveSession(sessionId);
-      setActiveTab('chat');
+      // Update task status
       await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'in_progress', sessionId })
       });
-      await fetch(`/api/sessions/${sessionId}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: task.title })
-      });
+      // Load session into state before switching
+      await fetchSessions();
+      await fetchSessionDetails(sessionId);
+      setActiveSession(sessionId);
+      // Switch to chat (or split view shows both)
+      if (wsLayout === 'single') setActiveTab('chat');
+      // Send via streaming path
+      sendMessageCore(sessionId, task.title);
       fetchTasks();
-      fetchSessions();
     } catch (err) { console.error('dispatchTask failed:', err); }
   };
 
@@ -1494,6 +1562,13 @@ function App() {
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [showNewSessionMenu]);
+
+  useEffect(() => {
+    if (!wsGitPopover) return;
+    const handle = (e) => { if (!wsGitPopoverRef.current?.contains(e.target)) setWsGitPopover(false); };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [wsGitPopover]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1559,15 +1634,25 @@ function App() {
           <span className="topbar-title">🤖 Agent Board</span>
           <div className="topbar-tabs">
             <button
-              className={`icon-btn ${activeTab === 'chat' ? 'active' : ''}`}
-              onClick={() => setActiveTab('chat')}
+              className={`icon-btn ${(activeTab === 'chat' && wsLayout === 'single') ? 'active' : ''}`}
+              onClick={() => { setActiveTab('chat'); setWsLayout('single'); }}
               title="Chat"
             >💬</button>
             <button
-              className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }}
+              className={`icon-btn ${(activeTab === 'workspace' && wsLayout === 'single') ? 'active' : ''}`}
+              onClick={() => { setActiveTab('workspace'); setWsLayout('single'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }}
               title="Workspace"
             >🗂️</button>
+            <button
+              className={`icon-btn ${wsLayout === 'split-h' ? 'active' : ''}`}
+              onClick={() => { setWsLayout('split-h'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
+              title="Split view — side by side"
+            >⊟</button>
+            <button
+              className={`icon-btn ${wsLayout === 'split-v' ? 'active' : ''}`}
+              onClick={() => { setWsLayout('split-v'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
+              title="Split view — stacked"
+            >⊠</button>
           </div>
           <div className="topbar-divider" />
         </div>
@@ -1700,22 +1785,48 @@ function App() {
       )}
 
       <div className="layout">
-        {/* Main content: workspace, chat, or metrics */}
-        <div className="content">
-          {activeTab === 'workspace' ? (
+        {/* Main content: workspace, chat, or split layout */}
+        <div className={`content${wsLayout !== 'single' ? ` layout-${wsLayout}` : ''}`}>
+          {(wsLayout !== 'single' || activeTab === 'workspace') && (
             <div className="workspace-view">
 
-              {/* ── Workspace toolbar ─────────────────────────────────────── */}
+              {/* ── Workspace toolbar with compact git ─────────────────────── */}
               <div className="ws-toolbar">
                 <div className="ws-toolbar-left">
                   {dockerStatus?.workspace?.configured ? (
                     <>
                       <span className="ws-root-label">{dockerStatus.workspace.root}</span>
-                      {workspaceGitStatus && (
+                      {workspaceBranches.branches.length > 0 ? (
+                        <select
+                          className="ws-branch-select-inline"
+                          value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
+                          onChange={e => checkoutBranch(e.target.value)}
+                          disabled={wsGitBusy === 'checkout'}
+                          title="Switch branch"
+                        >
+                          {workspaceBranches.branches.map(b => <option key={b} value={b}>{b}</option>)}
+                          {workspaceBranches.remotes.filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, ''))).map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      ) : workspaceGitStatus && (
                         <span className={`ws-branch-badge ${workspaceGitStatus.dirty ? 'dirty' : 'clean'}`}>
                           ⎇ {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' ●' : ''}
                         </span>
                       )}
+                      <div className="ws-new-branch-inline">
+                        <input
+                          className="ws-new-branch-input"
+                          type="text"
+                          placeholder="new-branch…"
+                          value={wsNewBranch}
+                          onChange={e => setWsNewBranch(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && wsNewBranch && checkoutBranch(wsNewBranch, true)}
+                        />
+                        {wsNewBranch && (
+                          <button className="ws-new-branch-btn" disabled={wsGitBusy === 'checkout'} onClick={() => checkoutBranch(wsNewBranch, true)} title="Create branch">+</button>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <span className="ws-root-label" style={{ opacity: 0.45 }}>No workspace mounted</span>
@@ -1724,23 +1835,59 @@ function App() {
                 <div className="ws-toolbar-right">
                   {dockerStatus?.workspace?.configured && (
                     <>
-                      <button
-                        className={`icon-btn ${wsShowExplorer ? 'active' : ''}`}
-                        onClick={() => setWsShowExplorer(p => !p)}
-                        title="Toggle Explorer"
-                      >≡</button>
-                      <button
-                        className={`icon-btn ${wsShowGit ? 'active' : ''}`}
-                        onClick={() => setWsShowGit(p => !p)}
-                        title="Toggle Source Control"
-                      >⎇</button>
-                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); fetchBranches(); }}>↻ Refresh</button>
+                      {workspaceGitStatus?.dirty && (
+                        <div className="ws-git-inline" ref={wsGitPopoverRef}>
+                          <button
+                            className={`ws-changes-btn ${wsGitPopover ? 'active' : ''}`}
+                            onClick={() => setWsGitPopover(p => !p)}
+                            title="View changes and commit"
+                          >
+                            {workspaceGitStatus.files.length} change{workspaceGitStatus.files.length !== 1 ? 's' : ''} ●
+                          </button>
+                          {wsGitPopover && (
+                            <div className="ws-git-popover">
+                              <div className="ws-git-popover-files">
+                                {workspaceGitStatus.files.map(f => (
+                                  <div key={f.file} className="ws-popover-file">
+                                    <code className="ws-git-status-code">{f.status}</code>
+                                    <span className="ws-changed-file-name" onClick={() => { openWorkspaceFile(f.file); setWsGitPopover(false); }}>{f.file}</span>
+                                    <button className="ws-entry-btn ws-entry-btn-del" title="Discard" disabled={wsGitBusy === 'discard'} onClick={() => discardFile(f.file)}>↩</button>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="ws-git-popover-commit">
+                                <input
+                                  className="workspace-commit-msg"
+                                  type="text"
+                                  placeholder="Commit message…"
+                                  value={workspaceCommitMsg}
+                                  onChange={e => setWorkspaceCommitMsg(e.target.value)}
+                                  onKeyDown={e => e.key === 'Enter' && commitWorkspace()}
+                                />
+                                <button className="btn-docker-action" disabled={!workspaceCommitMsg || workspaceActions.committing} onClick={commitWorkspace}>
+                                  {workspaceActions.committing ? '…' : '✓ Commit'}
+                                </button>
+                              </div>
+                              {wsGitMsg && <div className={`ws-git-msg ${wsGitMsg.startsWith('✗') ? 'err' : 'ok'}`}>{wsGitMsg}</div>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <button className="btn-docker-action ws-git-btn" disabled={wsGitBusy === 'pull'} onClick={pullBranch} title="Pull">
+                        {wsGitBusy === 'pull' ? '…' : '↓ Pull'}
+                      </button>
+                      <button className="btn-docker-action ws-git-btn" disabled={workspaceActions.pushing} onClick={pushWorkspace} title="Push">
+                        {workspaceActions.pushing ? '…' : '↑ Push'}
+                      </button>
+                      {workspaceActions.error && <span className="ws-git-err-icon" title={workspaceActions.error}>⚠</span>}
+                      <button className={`icon-btn ${wsShowExplorer ? 'active' : ''}`} onClick={() => setWsShowExplorer(p => !p)} title="Toggle Explorer">≡</button>
+                      <button className="icon-btn" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); fetchBranches(); }} title="Refresh">↻</button>
                     </>
                   )}
                 </div>
               </div>
 
-              {/* ── IDE 3-panel area ──────────────────────────────────────── */}
+              {/* ── IDE 2-panel area ──────────────────────────────────────── */}
               {!dockerStatus?.workspace?.configured ? (
                 <div className="ws-not-configured">
                   <div style={{ opacity: 0.55, fontWeight: 600 }}>Optional — not configured</div>
@@ -1751,11 +1898,11 @@ function App() {
                   </div>
                 </div>
               ) : (
-                <div className={`ws-ide ${wsShowExplorer ? 'show-explorer' : ''} ${wsShowGit ? 'show-git' : ''}`}>
+                <div className={`ws-ide ${wsShowExplorer ? 'show-explorer' : ''}`}>
 
                   {/* ── Explorer panel ─────────────────────────────────── */}
                   {wsShowExplorer && (
-                    <div className="ws-panel ws-explorer-panel">
+                    <div className="ws-panel ws-explorer-panel" style={{ width: wsExplorerWidth, minWidth: wsExplorerWidth, maxWidth: wsExplorerWidth }}>
                       <div className="ws-panel-title">
                         EXPLORER
                         <div className="ws-explorer-actions">
@@ -1825,7 +1972,7 @@ function App() {
                             : wsSearchResults.map(f => (
                               <div
                                 key={f}
-                                className={`workspace-entry ${workspaceFileView?.path === f ? 'selected' : ''}`}
+                                className={`workspace-entry ${activeFilePath === f ? 'selected' : ''}`}
                                 onClick={() => openWorkspaceFile(f)}
                               >
                                 📄 {f}
@@ -1838,7 +1985,7 @@ function App() {
                             return (
                               <div
                                 key={e.name}
-                                className={`workspace-entry ${workspaceFileView?.path === fullPath ? 'selected' : ''}`}
+                                className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''}`}
                               >
                                 {isRenaming ? (
                                   <input
@@ -1886,299 +2033,229 @@ function App() {
                     </div>
                   )}
 
-                  {/* ── Editor panel ───────────────────────────────────── */}
+                  {/* ── Drag resize handle ─────────────────────────────── */}
+                  {wsShowExplorer && (
+                    <div className="ws-resize-handle" onMouseDown={startExplorerResize} />
+                  )}
+
+                  {/* ── Editor panel with file tabs ─────────────────────── */}
                   <div className="ws-panel ws-editor-panel">
-                    {workspaceFileView ? (
-                      <>
-                        <div className="ws-editor-tab">
-                          <span className="ws-editor-filename">
-                            {workspaceFileView.path.split('/').pop()}
-                            {workspaceFileEdit && <span className="ws-unsaved-dot" title="Unsaved changes" />}
-                          </span>
-                          <div className="ws-editor-tab-actions">
-                            {workspaceFileEdit ? (
-                              <>
-                                <button
-                                  className="ws-btn-save"
-                                  disabled={workspaceActions.saving}
-                                  onClick={saveWorkspaceFile}
-                                >{workspaceActions.saving ? 'Saving…' : '✓ Save'}</button>
-                                <button
-                                  className="ws-btn-discard"
-                                  onClick={() => { setWorkspaceFileContent(workspaceFileView.content); setWorkspaceFileEdit(false); }}
-                                >✕ Discard</button>
-                              </>
-                            ) : (
-                              <button
-                                className="ws-btn-edit"
-                                onClick={() => { setWorkspaceFileContent(workspaceFileView.content); setWorkspaceFileEdit(true); }}
-                              >✎ Edit</button>
-                            )}
-                            <button className="icon-btn" onClick={() => { setWorkspaceFileView(null); setWorkspaceFileEdit(false); }} title="Close">✕</button>
+                    {openFiles.length > 0 && (
+                      <div className="ws-file-tabs">
+                        {openFiles.map(f => (
+                          <div
+                            key={f.path}
+                            className={`ws-file-tab ${f.path === activeFilePath ? 'active' : ''}`}
+                            onClick={() => setActiveFilePath(f.path)}
+                            title={f.path}
+                          >
+                            <span className="ws-tab-name">{f.path.split('/').pop()}</span>
+                            {f.editContent !== null && <span className="ws-unsaved-dot" title="Unsaved" />}
+                            <button className="ws-tab-close" onClick={e => { e.stopPropagation(); closeFile(f.path); }}>✕</button>
                           </div>
-                        </div>
-                        {workspaceActions.error && (
-                          <div className="ws-editor-error">{workspaceActions.error}</div>
-                        )}
-                        {workspaceFileEdit ? (
-                          <textarea
-                            className="ws-editor-textarea"
-                            value={workspaceFileContent}
-                            onChange={e => setWorkspaceFileContent(e.target.value)}
-                            spellCheck={false}
-                          />
-                        ) : (
-                          <pre className="workspace-file-content">{workspaceFileView.content}</pre>
-                        )}
-                      </>
-                    ) : (
-                      <div className="ws-editor-empty">
-                        <div style={{ opacity: 0.3, fontSize: '0.85rem' }}>Select a file to view or edit</div>
+                        ))}
                       </div>
                     )}
-                  </div>
-
-                  {/* ── Git panel ──────────────────────────────────────── */}
-                  {wsShowGit && (
-                    <div className="ws-panel ws-git-panel">
-                      <div className="ws-panel-title">SOURCE CONTROL</div>
-
-                      {/* Branch switcher */}
-                      <div className="ws-git-section">
-                        <div className="ws-git-section-label">BRANCH</div>
-                        <select
-                          className="ws-branch-select"
-                          value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
-                          onChange={e => checkoutBranch(e.target.value)}
-                          disabled={wsGitBusy === 'checkout'}
-                        >
-                          {workspaceBranches.branches.map(b => (
-                            <option key={b} value={b}>{b}</option>
-                          ))}
-                          {workspaceBranches.remotes.filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, ''))).map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                        <div className="ws-new-branch-row">
-                          <input
-                            className="workspace-commit-msg"
-                            type="text"
-                            placeholder="new-branch-name"
-                            value={wsNewBranch}
-                            onChange={e => setWsNewBranch(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && wsNewBranch && checkoutBranch(wsNewBranch, true)}
-                          />
-                          <button
-                            className="btn-docker-action"
-                            disabled={!wsNewBranch || wsGitBusy === 'checkout'}
-                            onClick={() => checkoutBranch(wsNewBranch, true)}
-                          >+ Create</button>
+                    {(() => {
+                      const af = openFiles.find(f => f.path === activeFilePath);
+                      if (!af) return (
+                        <div className="ws-editor-empty">
+                          <div style={{ opacity: 0.3, fontSize: '0.85rem' }}>Select a file to view or edit</div>
                         </div>
-                      </div>
-
-                      {/* Pull */}
-                      <div className="ws-git-section">
-                        <button
-                          className="btn-docker-action ws-git-full-btn"
-                          disabled={wsGitBusy === 'pull'}
-                          onClick={pullBranch}
-                        >{wsGitBusy === 'pull' ? 'Pulling…' : '↓ Pull'}</button>
-                      </div>
-
-                      {wsGitMsg && (
-                        <div className={`ws-git-msg ${wsGitMsg.startsWith('✗') ? 'err' : 'ok'}`}>{wsGitMsg}</div>
-                      )}
-
-                      {/* Changed files + commit */}
-                      <div className="ws-git-section">
-                        <div className="ws-git-section-label">CHANGES</div>
-                        {workspaceGitStatus ? (
-                          workspaceGitStatus.files.length > 0 ? (
-                            <>
-                              <div className="workspace-changed-files">
-                                {workspaceGitStatus.files.map(f => (
-                                  <div key={f.file} className="workspace-changed-file">
-                                    <code className="ws-git-status-code">{f.status}</code>
-                                    <span
-                                      className="ws-changed-file-name"
-                                      onClick={() => openWorkspaceFile(f.file)}
-                                    >{f.file}</span>
-                                    <button
-                                      className="ws-entry-btn ws-entry-btn-del"
-                                      title="Discard changes"
-                                      disabled={wsGitBusy === 'discard'}
-                                      onClick={() => discardFile(f.file)}
-                                    >↩</button>
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="workspace-commit-row">
-                                <input
-                                  className="workspace-commit-msg"
-                                  type="text"
-                                  placeholder="Commit message…"
-                                  value={workspaceCommitMsg}
-                                  onChange={e => setWorkspaceCommitMsg(e.target.value)}
-                                  onKeyDown={e => e.key === 'Enter' && commitWorkspace()}
-                                />
-                                <button
-                                  className="btn-docker-action"
-                                  disabled={!workspaceCommitMsg || workspaceActions.committing}
-                                  onClick={commitWorkspace}
-                                >{workspaceActions.committing ? 'Committing…' : '✓ Commit'}</button>
-                              </div>
-                            </>
+                      );
+                      return (
+                        <>
+                          <div className="ws-editor-tab-actions">
+                            {af.editing ? (
+                              <>
+                                <button className="ws-btn-save" disabled={workspaceActions.saving} onClick={() => saveWorkspaceFile()}>
+                                  {workspaceActions.saving ? 'Saving…' : '✓ Save'}
+                                </button>
+                                <button className="ws-btn-discard" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: false, editContent: null } : f))}>
+                                  ✕ Discard
+                                </button>
+                              </>
+                            ) : (
+                              <button className="ws-btn-edit" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: true, editContent: f.content } : f))}>
+                                ✎ Edit
+                              </button>
+                            )}
+                          </div>
+                          {workspaceActions.error && <div className="ws-editor-error">{workspaceActions.error}</div>}
+                          {af.editing ? (
+                            <textarea
+                              className="ws-editor-textarea"
+                              value={af.editContent ?? af.content}
+                              onChange={e => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editContent: e.target.value } : f))}
+                              spellCheck={false}
+                            />
                           ) : (
-                            <div style={{ fontSize: '0.75rem', opacity: 0.45, padding: '0.3rem 0' }}>Working tree clean</div>
-                          )
-                        ) : (
-                          <div style={{ opacity: 0.35, fontSize: '0.75rem' }}>Loading…</div>
-                        )}
-                      </div>
-
-                      {/* Push */}
-                      <div className="ws-git-section">
-                        <button
-                          className="btn-docker-action ws-git-full-btn"
-                          disabled={workspaceActions.pushing}
-                          onClick={pushWorkspace}
-                        >{workspaceActions.pushing ? 'Pushing…' : '↑ Push'}</button>
-                        {workspaceActions.error && (
-                          <div className="docker-service-error" style={{ marginTop: '0.4rem' }}>{workspaceActions.error}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                            <pre className="workspace-file-content">{af.content}</pre>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 
-              {/* ── Bottom row: Tasks + Files ─────────────────────────────── */}
-              <div className="ws-bottom-row">
-
-                {/* Task queue */}
-                <div className="ws-bottom-panel ws-tasks-panel">
-                  <div className="ws-panel-title">
-                    TASK QUEUE
-                    <span className="ws-task-counts">
-                      {taskSummary.byStatus?.pending || 0} pending · {taskSummary.byStatus?.in_progress || 0} active
-                    </span>
-                  </div>
-                  <div className="task-create-row">
-                    <input
-                      type="text"
-                      value={taskTitle}
-                      onChange={(e) => setTaskTitle(e.target.value)}
-                      placeholder="Add a task…"
-                      maxLength={140}
-                      onKeyDown={e => e.key === 'Enter' && createTask()}
-                    />
-                    <select value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)}>
-                      <option value="low">low</option>
-                      <option value="medium">medium</option>
-                      <option value="high">high</option>
-                      <option value="urgent">urgent</option>
-                    </select>
-                    <button className="btn-primary" onClick={createTask}>Add</button>
-                  </div>
-                  <div className="task-list">
-                    {tasks.slice(0, 20).map((task) => (
-                      <div key={task.id} className={`task-item status-${task.status}`}>
-                        <div className="task-item-head">
-                          <strong>{task.title}</strong>
-                          <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                        </div>
-                        <div className="task-item-meta">
-                          <span>{task.status.replace('_', ' ')}</span>
-                          {task.sessionId ? (
-                            <span
-                              className="task-session-link"
-                              onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }}
-                              title="Go to session"
-                            >{task.assignedSessionName || 'session →'}</span>
-                          ) : (
-                            <span style={{ opacity: 0.4 }}>unassigned</span>
-                          )}
-                        </div>
-                        <div className="task-item-actions">
-                          {task.status === 'pending' && (
-                            <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>
-                          )}
-                          <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
-                          <button onClick={() => deleteTask(task.id)}>Delete</button>
-                        </div>
-                      </div>
-                    ))}
-                    {tasks.length === 0 && <div className="task-empty">No tasks yet.</div>}
-                  </div>
+              {/* ── Bottom tabbed panel ───────────────────────────────────── */}
+              <div className="ws-bottom-panel-outer">
+                <div className="ws-bottom-tabs-bar">
+                  {[
+                    { key: 'terminal', label: 'TERMINAL' },
+                    { key: 'tasks', label: 'TASKS' },
+                    { key: 'artifacts', label: 'ARTIFACTS' },
+                    { key: 'output', label: 'OUTPUT' },
+                  ].map(({ key, label }) => (
+                    <button key={key} className={`ws-bottom-tab-btn ${wsBottomTab === key ? 'active' : ''}`} onClick={() => setWsBottomTab(key)}>
+                      {label}
+                      {key === 'tasks' && tasks.filter(t => t.status !== 'completed').length > 0 && (
+                        <span className="ws-tab-badge">{tasks.filter(t => t.status !== 'completed').length}</span>
+                      )}
+                    </button>
+                  ))}
                 </div>
+                <div className="ws-bottom-tab-content">
 
-                {/* Artifacts + Output Files */}
-                <div className="ws-bottom-panel ws-files-panel">
-                  {dockerStatus?.workspace?.configured && (
-                    <>
-                      <div className="ws-panel-title">
-                        ARTIFACTS
-                        <button className="icon-btn" style={{ fontSize: '0.7rem' }} onClick={fetchArtifacts}>↻</button>
+                  {/* TERMINAL */}
+                  {wsBottomTab === 'terminal' && (
+                    <div className="ws-terminal">
+                      <div className="ws-term-history">
+                        {termHistory.length === 0 && (
+                          <div className="ws-term-welcome">Connected to workspace shell. Type a command to begin.</div>
+                        )}
+                        {termHistory.map((entry, i) => (
+                          <div key={i} className="ws-term-entry">
+                            <div className="ws-term-cmd"><span className="ws-term-prompt">$</span> {entry.cmd}</div>
+                            {entry.stdout && <pre className="ws-term-stdout">{entry.stdout}</pre>}
+                            {entry.stderr && <pre className="ws-term-stderr">{entry.stderr}</pre>}
+                            {entry.exitCode != null && entry.exitCode !== 0 && (
+                              <div className="ws-term-exit">exit {entry.exitCode}</div>
+                            )}
+                          </div>
+                        ))}
+                        <div ref={termEndRef} />
                       </div>
-                      {artifactFiles.length === 0 ? (
+                      <div className="ws-term-input-row">
+                        <span className="ws-term-prompt">$</span>
+                        <input
+                          className="ws-term-input"
+                          type="text"
+                          value={termInput}
+                          onChange={e => setTermInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && runTermCommand(termInput)}
+                          placeholder={termBusy ? 'Running…' : 'Enter command…'}
+                          disabled={termBusy}
+                          spellCheck={false}
+                          autoComplete="off"
+                        />
+                        {termBusy && <span className="ws-term-busy">⟳</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TASKS */}
+                  {wsBottomTab === 'tasks' && (
+                    <div className="ws-tasks-tab">
+                      <div className="task-create-row">
+                        <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Add a task…" maxLength={140} onKeyDown={e => e.key === 'Enter' && createTask()} />
+                        <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                          <option value="urgent">urgent</option>
+                        </select>
+                        <button className="btn-primary" onClick={createTask}>Add</button>
+                      </div>
+                      <div className="task-list">
+                        {tasks.slice(0, 20).map(task => (
+                          <div key={task.id} className={`task-item status-${task.status}`}>
+                            <div className="task-item-head">
+                              <strong>{task.title}</strong>
+                              <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                            </div>
+                            <div className="task-item-meta">
+                              <span>{task.status.replace('_', ' ')}</span>
+                              {task.sessionId ? (
+                                <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
+                              ) : (
+                                <span style={{ opacity: 0.4 }}>unassigned</span>
+                              )}
+                            </div>
+                            <div className="task-item-actions">
+                              {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
+                              <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
+                              <button onClick={() => deleteTask(task.id)}>Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                        {tasks.length === 0 && <div className="task-empty">No tasks yet.</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ARTIFACTS */}
+                  {wsBottomTab === 'artifacts' && (
+                    <div className="ws-artifacts-tab">
+                      <div className="ws-tab-header">
+                        <span>ARTIFACTS</span>
+                        <button className="icon-btn" onClick={fetchArtifacts} title="Refresh">↻</button>
+                      </div>
+                      {!dockerStatus?.workspace?.configured ? (
+                        <div className="ws-files-empty">Workspace not configured.</div>
+                      ) : artifactFiles.length === 0 ? (
                         <div className="ws-files-empty">Research Mode saves files here.</div>
                       ) : artifactFiles.map(f => (
                         <div key={f.name} className="ws-file-row">
                           <span>{f.name}</span>
-                          <a
-                            href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="ws-file-link"
-                          >↓ view</a>
+                          <a href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`} target="_blank" rel="noreferrer" className="ws-file-link">↓ view</a>
                         </div>
                       ))}
-                    </>
+                    </div>
                   )}
 
-                  {EXPERIENCE_TOOLS[selectedExperience] && (
-                    <>
-                      <div className="ws-panel-title" style={{ marginTop: dockerStatus?.workspace?.configured ? '1rem' : 0 }}>
-                        OUTPUT FILES
-                        <button className="icon-btn" style={{ fontSize: '0.7rem' }} onClick={fetchContentClients}>↻</button>
-                      </div>
-                      {contentClients.length === 0 ? (
-                        <div className="ws-files-empty">No output yet.</div>
-                      ) : contentClients.map(slug => (
-                        <div key={slug} style={{ fontSize: '0.82rem', marginBottom: '0.3rem' }}>
-                          <div
-                            className="ws-file-group-header"
-                            onClick={() => {
-                              const next = !contentExpanded[slug];
-                              setContentExpanded(prev => ({ ...prev, [slug]: next }));
-                              if (next && !contentFiles[slug]) fetchContentFiles(slug);
-                            }}
-                          >
-                            {contentExpanded[slug] ? '▼' : '▶'} {slug}
+                  {/* OUTPUT */}
+                  {wsBottomTab === 'output' && (
+                    <div className="ws-output-tab">
+                      {EXPERIENCE_TOOLS[selectedExperience] ? (
+                        <>
+                          <div className="ws-tab-header">
+                            <span>OUTPUT FILES</span>
+                            <button className="icon-btn" onClick={fetchContentClients} title="Refresh">↻</button>
                           </div>
-                          {contentExpanded[slug] && (
-                            <div style={{ paddingLeft: '0.7rem' }}>
-                              {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
-                              {contentFiles[slug]?.map(f => (
-                                <div key={f.path} className="ws-file-row">
-                                  <span>{f.path}</span>
-                                  <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem' }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
+                          {contentClients.length === 0 ? (
+                            <div className="ws-files-empty">No output yet.</div>
+                          ) : contentClients.map(slug => (
+                            <div key={slug} style={{ fontSize: '0.82rem', marginBottom: '0.3rem' }}>
+                              <div className="ws-file-group-header" onClick={() => { const next = !contentExpanded[slug]; setContentExpanded(prev => ({ ...prev, [slug]: next })); if (next && !contentFiles[slug]) fetchContentFiles(slug); }}>
+                                {contentExpanded[slug] ? '▼' : '▶'} {slug}
+                              </div>
+                              {contentExpanded[slug] && (
+                                <div style={{ paddingLeft: '0.7rem' }}>
+                                  {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
+                                  {contentFiles[slug]?.map(f => (
+                                    <div key={f.path} className="ws-file-row">
+                                      <span>{f.path}</span>
+                                      <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem' }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="ws-files-empty">No output files available.</div>
+                      )}
+                    </div>
                   )}
 
-                  {!dockerStatus?.workspace?.configured && !EXPERIENCE_TOOLS[selectedExperience] && (
-                    <div className="ws-files-empty">No files available.</div>
-                  )}
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+          {(wsLayout !== 'single' || activeTab !== 'workspace') && (
             <div className="chat-column">
               {activeSessionData ? (
                 <>
