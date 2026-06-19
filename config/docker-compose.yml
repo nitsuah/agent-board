@@ -136,15 +136,39 @@ services:
         sed -i 's/start_persistent_gateway_log_mirror || exit 1/start_persistent_gateway_log_mirror || true/g' \
           /usr/local/bin/nemoclaw-start
 
-        # 4. Allow root to traverse /sandbox/.openclaw so recover_openclaw_config_if_empty
-        #    can stat openclaw.json (o+x on dir) and read it to verify it has content.
-        #    Without cap_dac_override, root is treated as "other" for DAC checks.
-        #    Also chown the config file to uid 999 (gateway user) so the gateway can
-        #    read it after normalize_mutable_config_perms resets the file mode to 660
-        #    (which strips o+r). As owner, gateway retains rw via the 6xx owner bits.
+        # 4. Patch nemoclaw-start to inject chmod o+x (dir) and chmod o+r (file) right
+        #    after the normalize_mutable_config_perms call. normalize resets the dir to
+        #    2770 (no other-x) and may re-chown the file to sandbox:sandbox, locking out
+        #    the gateway (uid 999, not in sandbox group). We inject the fix here (with
+        #    full root capabilities) so it runs as part of the re-execed nemoclaw-start
+        #    after normalize completes. chmod o+x on the dir allows root (as other) to
+        #    enter it to run chmod o+r on the file; gateway (uid 999, "other") can then
+        #    enter the dir and read the file as well.
+        node -e "
+          var fs=require('fs');
+          var src=fs.readFileSync('/usr/local/bin/nemoclaw-start','utf8');
+          var hit=0;
+          var patched=src.replace(
+            /^(\s*)normalize_mutable_config_perms(\s*)$/m,
+            function(m,pre){
+              hit++;
+              return m +
+                '\n' + pre + 'chmod o+x /sandbox/.openclaw 2>/dev/null || true' +
+                '\n' + pre + 'chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true';
+            }
+          );
+          if(!hit){
+            process.stderr.write('[setup] WARNING: normalize_mutable_config_perms call not found — skipping patch\n');
+          } else {
+            fs.writeFileSync('/usr/local/bin/nemoclaw-start',patched);
+            process.stderr.write('[setup] normalize_mutable_config_perms: injected o+x dir + o+r config\n');
+          }
+        " 2>&1 || echo '[setup] WARNING: normalize patch script failed'
+
+        # Also set o+x/o+r now so recover_openclaw_config_if_empty (which runs before
+        # normalize) can stat/read the file as root (treated as "other" without cap_dac_override).
         chmod o+x /sandbox/.openclaw 2>/dev/null || true
         chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true
-        chown 999 /sandbox/.openclaw/openclaw.json 2>/dev/null || true
 
         # 5. Backup / restore openclaw.json using the nemoclaw_data volume (/workspace).
         #    The gateway process can truncate openclaw.json to 0 bytes on a crash.
@@ -160,7 +184,6 @@ services:
           if [ -f "$$_BAK" ]; then
             echo "[setup] openclaw.json empty/invalid — restoring from volume backup" >&2
             cp "$$_BAK" "$$_CFG"
-            chown 999 "$$_CFG" 2>/dev/null || true
             chmod 664 "$$_CFG" 2>/dev/null || true
           else
             echo "[setup] WARNING: openclaw.json is empty and no backup exists." >&2
