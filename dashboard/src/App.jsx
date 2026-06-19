@@ -34,11 +34,11 @@ const ENDPOINT_META = {
 
 // ── Experience definitions (mirrors server EXPERIENCE_CONFIGS) ─────────────
 const EXPERIENCE_META = {
-  developer:   { icon: '💻', name: 'Developer Assistant', description: 'Full model access, standard safety.' },
-  research:    { icon: '🔬', name: 'Research Mode',        description: 'Long-form reasoning. Slightly looser rails.' },
-  safechat:    { icon: '🛡️', name: 'Safe Chat',            description: 'Strict safety. Simple UI for any user.' },
-  content_gen: { icon: '🎬', name: 'Content Studio',       description: 'Generate AI short videos (content-gen tool).' },
-  website:     { icon: '🌐', name: 'Website Agent',        description: 'Lead discovery + B2B site generation (website tool).' },
+  developer:   { icon: '💻', name: 'Developer', description: 'Full model access, standard safety.' },
+  research:    { icon: '🔬', name: 'Researcher', description: 'Long-form reasoning. Slightly looser rails.' },
+  safechat:    { icon: '🛡️', name: 'Safe Chat',  description: 'Strict safety. Simple UI for any user.' },
+  content_gen: { icon: '🎬', name: 'Content Studio', description: 'Generate AI short videos (content-gen tool).' },
+  website:     { icon: '🌐', name: 'Website Agent',  description: 'Lead discovery + B2B site generation (website tool).' },
 };
 
 const EXPERIENCE_ENDPOINTS = {
@@ -458,7 +458,9 @@ function App() {
   const [modelPulls, setModelPulls] = useState({});
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showNewSessionMenu, setShowNewSessionMenu] = useState(false);
+  const newSessionMenuRef = useRef(null);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
@@ -1302,6 +1304,13 @@ function App() {
   const activeSessionData = activeSession ? sessions.find(s => s.id === activeSession) : null;
 
   useEffect(() => {
+    if (!showNewSessionMenu) return;
+    const handle = (e) => { if (!newSessionMenuRef.current?.contains(e.target)) setShowNewSessionMenu(false); };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showNewSessionMenu]);
+
+  useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSessionMessages]);
 
@@ -1362,43 +1371,109 @@ function App() {
     <div className="app">
       <div className="topbar">
         <div className="topbar-left">
-          <button
-            className="icon-btn"
-            onClick={() => setShowSidebar(prev => !prev)}
-            title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-          >☰</button>
           <span className="topbar-title">🤖 Agent Board</span>
+          <div className="topbar-tabs">
+            <button
+              className={`icon-btn ${activeTab === 'chat' ? 'active' : ''}`}
+              onClick={() => setActiveTab('chat')}
+              title="Chat"
+            >💬</button>
+            <button
+              className={`icon-btn ${activeTab === 'metrics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('metrics')}
+              title="Metrics"
+            >📊</button>
+            <button
+              className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchArtifacts(); }}
+              title="Workspace"
+            >🗂️</button>
+          </div>
+          <div className="topbar-divider" />
         </div>
 
         <div className="topbar-center">
-          {demoMode.enabled && <span className="pill pill-demo">Public Demo Mode</span>}
-          <span className="pill">
-            {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-          </span>
+          {demoMode.enabled && <span className="pill pill-demo">Demo</span>}
+
+          {/* Experience dropdown */}
+          <select
+            className="topbar-select"
+            value={selectedExperience}
+            onChange={e => setSelectedExperience(e.target.value)}
+            disabled={demoMode.enabled}
+            title="Switch experience"
+          >
+            {Object.entries(EXPERIENCE_META)
+              .filter(([key]) => !demoMode.enabled || key === 'safechat')
+              .map(([key, exp]) => (
+                <option key={key} value={key}>{exp.icon} {exp.name}</option>
+              ))}
+          </select>
+
+          {/* Model dropdown (purple) */}
+          <select
+            className="topbar-select topbar-select-model"
+            value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
+            onChange={e => handleEndpointSelection(e.target.value)}
+            disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
+            title="Switch model"
+          >
+            {selectableEndpointKeys.length === 0 ? (
+              <option value="">No models online</option>
+            ) : selectableEndpointKeys.map(key => (
+              <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
+            ))}
+          </select>
+
+          {/* Session switcher */}
+          {sessions.length > 0 && (
+            <select
+              className="topbar-select topbar-select-session"
+              value={activeSession || ''}
+              onChange={e => { if (e.target.value) { setActiveSession(e.target.value); fetchSessionDetails(e.target.value); } }}
+              title="Switch session"
+            >
+              {!activeSession && <option value="">Select session…</option>}
+              {sessions.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} · {allEndpointMeta[s.endpoint]?.label || s.endpoint}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* New session dropdown */}
+          <div className="topbar-new-wrap" ref={newSessionMenuRef}>
+            <button
+              className="topbar-new-btn"
+              onClick={() => setShowNewSessionMenu(p => !p)}
+            >+ New ▾</button>
+            {showNewSessionMenu && (
+              <div className="topbar-new-panel">
+                <div className="topbar-new-summary">
+                  {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
+                  <span className="topbar-new-dot">·</span>
+                  {allEndpointMeta[selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || currentEndpoint)]?.label || currentEndpoint}
+                </div>
+                <button
+                  className="btn-primary"
+                  style={{ width: '100%', fontSize: '0.8rem', marginTop: '0.2rem' }}
+                  onClick={() => { createSession(); setShowNewSessionMenu(false); }}
+                >
+                  Create Session
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="topbar-right">
           <span className={`pill ${wsConnected ? 'ok' : 'off'}`}>
             <span className="status-dot" /> {wsConnected ? 'Live feed' : 'Offline'}
           </span>
           <span className="pill">
             {totalServices > 0 ? `Services ${runningServices}/${totalServices}` : 'Services …'}
           </span>
-        </div>
-
-        <div className="topbar-right">
-          <button
-            className={`icon-btn ${activeTab === 'chat' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chat')}
-            title="Chat"
-          >💬</button>
-          <button
-            className={`icon-btn ${activeTab === 'metrics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metrics')}
-            title="Metrics"
-          >📊</button>
-          <button
-            className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchArtifacts(); }}
-            title="Workspace"
-          >🗂️</button>
           <button
             className={`icon-btn ${showSystemPanel ? 'active' : ''}`}
             onClick={() => {
@@ -1429,7 +1504,7 @@ function App() {
           <div className="onboarding-copy">
             <strong>Welcome to Agent Board.</strong>
             <span>
-              Start in <strong>{EXPERIENCE_META[selectedExperience]?.name}</strong>, then create a session and send a prompt.
+              Choose an experience, pick a model, then click <strong>+ New ▾</strong> to create a session.
               {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}
               {demoMode.enabled && ' Demo mode is locked to Safe Chat and the primary model endpoint.'}
             </span>
@@ -1442,119 +1517,6 @@ function App() {
       )}
 
       <div className="layout">
-        {/* Left drawer: workspace selectors, sessions, tasks */}
-        <aside className={`drawer drawer-left ${showSidebar ? '' : 'collapsed'}`}>
-          <div className="drawer-section">
-            <h3>Workspace</h3>
-            <div className="field">
-              <label className="field-label">Experience</label>
-              <select
-                className="select"
-                value={selectedExperience}
-                onChange={e => setSelectedExperience(e.target.value)}
-                title="Switch experience mode"
-                disabled={demoMode.enabled}
-              >
-                {Object.entries(EXPERIENCE_META)
-                  .filter(([key]) => !demoMode.enabled || key === 'safechat')
-                  .map(([key, exp]) => (
-                  <option key={key} value={key}>{exp.icon} {exp.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">Model Endpoint</label>
-              <select
-                className="select"
-                value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
-                onChange={e => handleEndpointSelection(e.target.value)}
-                title="Choose model endpoint"
-                disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
-              >
-                {selectableEndpointKeys.length === 0 ? (
-                  <option value="">No models online</option>
-                ) : (
-                  selectableEndpointKeys.map((key) => (
-                    <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
-                  ))
-                )}
-              </select>
-            </div>
-          </div>
-
-          {/* Output Files — visible when a tool-backed experience is active */}
-          {EXPERIENCE_TOOLS[selectedExperience] && (
-            <div className="drawer-section">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3>Output Files</h3>
-                <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={fetchContentClients}>↻</button>
-              </div>
-              {contentClients.length === 0 ? (
-                <div style={{ fontSize: '0.73rem', opacity: 0.45 }}>No output yet.</div>
-              ) : contentClients.map(slug => (
-                <div key={slug} style={{ fontSize: '0.73rem' }}>
-                  <div
-                    style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}
-                    onClick={() => {
-                      const next = !contentExpanded[slug];
-                      setContentExpanded(prev => ({ ...prev, [slug]: next }));
-                      if (next && !contentFiles[slug]) fetchContentFiles(slug);
-                    }}
-                  >
-                    {contentExpanded[slug] ? '▼' : '▶'} {slug}
-                  </div>
-                  {contentExpanded[slug] && (
-                    <div style={{ paddingLeft: '0.7rem' }}>
-                      {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
-                      {contentFiles[slug]?.map(f => (
-                        <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.1rem 0' }}>
-                          <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>{f.path}</span>
-                          <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem', flexShrink: 0 }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="drawer-section">
-            <h3>Sessions</h3>
-            <button className="btn-primary" onClick={createSession}>+ New Session</button>
-            <div className="sessions-list">
-              {sessions.map(session => {
-                const isActive = activeSession === session.id;
-                return (
-                  <AgentStatusCard
-                    key={session.id}
-                    session={session}
-                    isActive={isActive}
-                    isStreaming={loadingSessions.has(session.id)}
-                    queueCount={queueLengths[session.id] || 0}
-                    isPaused={pausedSessions.has(session.id)}
-                    onClick={() => {
-                      setActiveSession(session.id);
-                      fetchSessionDetails(session.id);
-                    }}
-                    onDelete={deleteSession}
-                    onStop={stopSession}
-                    endpointLabel={allEndpointMeta[session.endpoint]?.label}
-                  />
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="drawer-collapse-btn">
-            <button
-              className="icon-btn"
-              onClick={() => setShowSidebar(false)}
-              title="Collapse sidebar"
-            >‹ Hide</button>
-          </div>
-        </aside>
-
         {/* Main content: workspace, chat, or metrics */}
         <div className="content">
           {activeTab === 'workspace' ? (
@@ -1743,6 +1705,42 @@ function App() {
                   ))}
                 </div>
               )}
+
+              {EXPERIENCE_TOOLS[selectedExperience] && (
+                <div className="workspace-artifacts">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <h2 style={{ margin: 0 }}>Output Files</h2>
+                    <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={fetchContentClients}>↻</button>
+                  </div>
+                  {contentClients.length === 0 ? (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-faint)' }}>No output yet.</div>
+                  ) : contentClients.map(slug => (
+                    <div key={slug} style={{ fontSize: '0.82rem', marginBottom: '0.3rem' }}>
+                      <div
+                        style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}
+                        onClick={() => {
+                          const next = !contentExpanded[slug];
+                          setContentExpanded(prev => ({ ...prev, [slug]: next }));
+                          if (next && !contentFiles[slug]) fetchContentFiles(slug);
+                        }}
+                      >
+                        {contentExpanded[slug] ? '▼' : '▶'} {slug}
+                      </div>
+                      {contentExpanded[slug] && (
+                        <div style={{ paddingLeft: '0.7rem' }}>
+                          {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
+                          {contentFiles[slug]?.map(f => (
+                            <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.1rem 0' }}>
+                              <span style={{ opacity: 0.8 }}>{f.path}</span>
+                              <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem' }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : activeTab === 'metrics' ? (
             <div className="metrics-view">
@@ -1906,6 +1904,11 @@ function App() {
                         title={pausedSessions.has(activeSession) ? 'Responses paused — click to resume' : 'Pause auto-response'}
                         onClick={() => togglePause(activeSession)}
                       >{pausedSessions.has(activeSession) ? '▶ Resume' : '⏸ Pause'}</button>
+                      <button
+                        className="btn-secondary btn-sm"
+                        title="Delete session"
+                        onClick={() => deleteSession(activeSession)}
+                      >✕ Delete</button>
                     </div>
                   </div>
 
