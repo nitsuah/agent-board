@@ -480,12 +480,25 @@ function App() {
   const [workspacePath, setWorkspacePath] = useState('');
   const [workspaceLs, setWorkspaceLs] = useState(null);
   const [workspaceFileView, setWorkspaceFileView] = useState(null);
+  const [workspaceFileEdit, setWorkspaceFileEdit] = useState(false); // edit mode
+  const [workspaceFileContent, setWorkspaceFileContent] = useState(''); // editable buffer
   const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
+  const [workspaceBranches, setWorkspaceBranches] = useState({ branches: [], remotes: [], current: '' });
+  const [wsNewBranch, setWsNewBranch] = useState('');
+  const [wsGitBusy, setWsGitBusy] = useState(''); // 'pull'|'checkout'|'discard'|''
+  const [wsGitMsg, setWsGitMsg] = useState('');
   const [workspaceCommitMsg, setWorkspaceCommitMsg] = useState('');
-  const [workspaceActions, setWorkspaceActions] = useState({ committing: false, pushing: false, error: null });
+  const [workspaceActions, setWorkspaceActions] = useState({ committing: false, pushing: false, saving: false, error: null });
   const [artifactFiles, setArtifactFiles] = useState([]);
   const [wsShowExplorer, setWsShowExplorer] = useState(true);
   const [wsShowGit, setWsShowGit] = useState(true);
+  const [wsSearch, setWsSearch] = useState('');
+  const [wsSearchResults, setWsSearchResults] = useState(null); // null = not searched
+  const [wsSearchBusy, setWsSearchBusy] = useState(false);
+  const [wsNewName, setWsNewName] = useState(''); // for create file/dir
+  const [wsCreateMode, setWsCreateMode] = useState(''); // 'file'|'dir'|''
+  const [wsRenaming, setWsRenaming] = useState(null); // { name, newName }
+  const [showMetricsPanel, setShowMetricsPanel] = useState(false);
 
   // Theme toggle (dark default)
   const [darkMode, setDarkMode] = useState(() => {
@@ -696,7 +709,11 @@ function App() {
     try {
       const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
       const data = await res.json();
-      if (!data.error) setWorkspaceFileView(data);
+      if (!data.error) {
+        setWorkspaceFileView(data);
+        setWorkspaceFileContent(data.content);
+        setWorkspaceFileEdit(false);
+      }
     } catch (err) { console.error('Workspace read failed:', err); }
   };
 
@@ -752,6 +769,142 @@ function App() {
     } catch (err) {
       setWorkspaceActions(p => ({ ...p, pushing: false, error: err.message }));
     }
+  };
+
+  const saveWorkspaceFile = async () => {
+    if (!workspaceFileView) return;
+    setWorkspaceActions(p => ({ ...p, saving: true, error: null }));
+    try {
+      const res = await fetch('/api/workspace/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: workspaceFileView.path, content: workspaceFileContent }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setWorkspaceActions(p => ({ ...p, saving: false, error: data.error }));
+      } else {
+        setWorkspaceFileView(v => ({ ...v, content: workspaceFileContent }));
+        setWorkspaceFileEdit(false);
+        setWorkspaceActions(p => ({ ...p, saving: false, error: null }));
+        refreshWorkspaceGit();
+      }
+    } catch (err) {
+      setWorkspaceActions(p => ({ ...p, saving: false, error: err.message }));
+    }
+  };
+
+  const deleteWorkspaceEntry = async (path) => {
+    if (!window.confirm(`Delete ${path}?`)) return;
+    try {
+      await fetch(`/api/workspace/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+      if (workspaceFileView?.path === path) setWorkspaceFileView(null);
+      browseWorkspace(workspacePath);
+      refreshWorkspaceGit();
+    } catch (err) { console.error('Delete failed:', err); }
+  };
+
+  const createWorkspaceEntry = async (type) => {
+    if (!wsNewName.trim()) return;
+    const newPath = workspacePath ? `${workspacePath}/${wsNewName.trim()}` : wsNewName.trim();
+    if (type === 'dir') {
+      await fetch('/api/workspace/mkdir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newPath }),
+      });
+    } else {
+      await fetch('/api/workspace/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newPath, content: '' }),
+      });
+    }
+    setWsNewName('');
+    setWsCreateMode('');
+    browseWorkspace(workspacePath);
+  };
+
+  const renameWorkspaceEntry = async (oldName, newName) => {
+    if (!newName.trim() || newName === oldName) { setWsRenaming(null); return; }
+    const basePath = workspacePath;
+    const fromPath = basePath ? `${basePath}/${oldName}` : oldName;
+    const toPath = basePath ? `${basePath}/${newName.trim()}` : newName.trim();
+    await fetch('/api/workspace/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: fromPath, to: toPath }),
+    });
+    setWsRenaming(null);
+    if (workspaceFileView?.path === fromPath) setWorkspaceFileView(null);
+    browseWorkspace(workspacePath);
+  };
+
+  const searchWorkspace = async () => {
+    if (!wsSearch.trim()) return;
+    setWsSearchBusy(true);
+    setWsSearchResults(null);
+    try {
+      const res = await fetch('/api/workspace/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: wsSearch }),
+      });
+      const data = await res.json();
+      setWsSearchResults(data.files || []);
+    } catch { setWsSearchResults([]); }
+    finally { setWsSearchBusy(false); }
+  };
+
+  const fetchBranches = async () => {
+    try {
+      const res = await fetch('/api/workspace/git/branches');
+      const data = await res.json();
+      if (!data.error) setWorkspaceBranches(data);
+    } catch { /* ignore */ }
+  };
+
+  const checkoutBranch = async (branch, create = false) => {
+    setWsGitBusy('checkout');
+    setWsGitMsg('');
+    try {
+      const res = await fetch('/api/workspace/git/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch, create }),
+      });
+      const data = await res.json();
+      if (data.error) { setWsGitMsg(`✗ ${data.error}`); }
+      else { setWsGitMsg(`✓ On ${data.branch}`); setWsNewBranch(''); refreshWorkspaceGit(); fetchBranches(); browseWorkspace(''); }
+    } catch (err) { setWsGitMsg(`✗ ${err.message}`); }
+    finally { setWsGitBusy(''); }
+  };
+
+  const pullBranch = async () => {
+    setWsGitBusy('pull');
+    setWsGitMsg('');
+    try {
+      const res = await fetch('/api/workspace/git/pull', { method: 'POST' });
+      const data = await res.json();
+      if (data.error) setWsGitMsg(`✗ ${data.error}`);
+      else { setWsGitMsg(`✓ ${data.result || 'Up to date'}`); refreshWorkspaceGit(); }
+    } catch (err) { setWsGitMsg(`✗ ${err.message}`); }
+    finally { setWsGitBusy(''); }
+  };
+
+  const discardFile = async (file) => {
+    setWsGitBusy('discard');
+    try {
+      const res = await fetch('/api/workspace/git/discard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file }),
+      });
+      const data = await res.json();
+      if (data.error) setWsGitMsg(`✗ ${data.error}`);
+      else { refreshWorkspaceGit(); if (workspaceFileView?.path === file) openWorkspaceFile(file); }
+    } catch { /* ignore */ }
+    finally { setWsGitBusy(''); }
   };
 
   const runServiceAction = async (serviceKey, action) => {
@@ -1412,7 +1565,7 @@ function App() {
             >💬</button>
             <button
               className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchArtifacts(); }}
+              onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }}
               title="Workspace"
             >🗂️</button>
           </div>
@@ -1498,6 +1651,15 @@ function App() {
             <span className="live-dot" />
           </span>
 
+          {/* 📊 Metrics panel toggle */}
+          <button
+            className={`icon-btn ${showMetricsPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowMetricsPanel(p => { if (!p) setShowSystemPanel(false); return !p; });
+            }}
+            title="Metrics"
+          >📊</button>
+
           {/* Combined ⚙️ + service count */}
           <button
             className={`icon-btn svc-cog-btn ${showSystemPanel ? 'active' : ''}`}
@@ -1505,6 +1667,7 @@ function App() {
               setShowSystemPanel(prev => {
                 const next = !prev;
                 if (next) {
+                  setShowMetricsPanel(false);
                   if (dockerStatus?.workspace?.configured) {
                     browseWorkspace('');
                     refreshWorkspaceGit();
@@ -1516,13 +1679,6 @@ function App() {
             }}
             title={`System — ${runningServices}/${totalServices} services`}
           >⚙️ <span className="svc-cog-count">{totalServices > 0 ? `${runningServices}/${totalServices}` : '…'}</span></button>
-
-          {/* Metrics — moved from left tabs */}
-          <button
-            className={`icon-btn ${activeTab === 'metrics' ? 'active' : ''}`}
-            onClick={() => setActiveTab('metrics')}
-            title="Metrics"
-          >📊</button>
         </div>
       </div>
 
@@ -1578,7 +1734,7 @@ function App() {
                         onClick={() => setWsShowGit(p => !p)}
                         title="Toggle Source Control"
                       >⎇</button>
-                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); }}>↻ Refresh</button>
+                      <button className="btn-docker-action" onClick={() => { browseWorkspace(workspacePath); refreshWorkspaceGit(); fetchBranches(); }}>↻ Refresh</button>
                     </>
                   )}
                 </div>
@@ -1597,10 +1753,58 @@ function App() {
               ) : (
                 <div className={`ws-ide ${wsShowExplorer ? 'show-explorer' : ''} ${wsShowGit ? 'show-git' : ''}`}>
 
-                  {/* Explorer panel */}
+                  {/* ── Explorer panel ─────────────────────────────────── */}
                   {wsShowExplorer && (
                     <div className="ws-panel ws-explorer-panel">
-                      <div className="ws-panel-title">EXPLORER</div>
+                      <div className="ws-panel-title">
+                        EXPLORER
+                        <div className="ws-explorer-actions">
+                          <button className="icon-btn" title="New file" onClick={() => { setWsCreateMode('file'); setWsNewName(''); }}>+F</button>
+                          <button className="icon-btn" title="New folder" onClick={() => { setWsCreateMode('dir'); setWsNewName(''); }}>+D</button>
+                        </div>
+                      </div>
+
+                      {/* Search bar */}
+                      <div className="ws-search-row">
+                        <input
+                          className="ws-search-input"
+                          type="text"
+                          placeholder="Search files…"
+                          value={wsSearch}
+                          onChange={e => { setWsSearch(e.target.value); if (!e.target.value) setWsSearchResults(null); }}
+                          onKeyDown={e => e.key === 'Enter' && searchWorkspace()}
+                        />
+                        {wsSearch && (
+                          <button className="icon-btn" style={{ fontSize: '0.7rem' }} onClick={searchWorkspace} disabled={wsSearchBusy}>
+                            {wsSearchBusy ? '…' : '⌕'}
+                          </button>
+                        )}
+                        {wsSearchResults !== null && (
+                          <button className="icon-btn" style={{ fontSize: '0.65rem' }} onClick={() => { setWsSearchResults(null); setWsSearch(''); }}>✕</button>
+                        )}
+                      </div>
+
+                      {/* Create input */}
+                      {wsCreateMode && (
+                        <div className="ws-create-row">
+                          <input
+                            className="ws-create-input"
+                            autoFocus
+                            type="text"
+                            placeholder={wsCreateMode === 'dir' ? 'folder name…' : 'filename…'}
+                            value={wsNewName}
+                            onChange={e => setWsNewName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') createWorkspaceEntry(wsCreateMode);
+                              if (e.key === 'Escape') setWsCreateMode('');
+                            }}
+                          />
+                          <button className="ws-create-confirm" onClick={() => createWorkspaceEntry(wsCreateMode)}>✓</button>
+                          <button className="ws-create-cancel" onClick={() => setWsCreateMode('')}>✕</button>
+                        </div>
+                      )}
+
+                      {/* Breadcrumb */}
                       <div className="workspace-breadcrumb">
                         <span className="workspace-path-seg" onClick={() => browseWorkspace('')}>root</span>
                         {workspacePath.split('/').filter(Boolean).map((seg, i, arr) => (
@@ -1612,55 +1816,199 @@ function App() {
                           </span>
                         ))}
                       </div>
+
+                      {/* File / search results */}
                       <div className="workspace-entries">
-                        {workspaceLs?.entries?.map(e => (
-                          <div
-                            key={e.name}
-                            className={`workspace-entry ${workspaceFileView?.path === (workspacePath ? `${workspacePath}/${e.name}` : e.name) ? 'selected' : ''}`}
-                            onClick={() => {
-                              const p = workspacePath ? `${workspacePath}/${e.name}` : e.name;
-                              if (e.type === 'dir') browseWorkspace(p); else openWorkspaceFile(p);
-                            }}
-                          >
-                            {e.type === 'dir' ? '📁' : '📄'} {e.name}
-                            {e.size != null && <span className="ws-file-size"> {(e.size / 1024).toFixed(1)}k</span>}
-                          </div>
-                        ))}
-                        {workspaceLs?.entries?.length === 0 && <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0' }}>(empty)</div>}
+                        {wsSearchResults !== null ? (
+                          wsSearchResults.length === 0
+                            ? <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>No matches</div>
+                            : wsSearchResults.map(f => (
+                              <div
+                                key={f}
+                                className={`workspace-entry ${workspaceFileView?.path === f ? 'selected' : ''}`}
+                                onClick={() => openWorkspaceFile(f)}
+                              >
+                                📄 {f}
+                              </div>
+                            ))
+                        ) : (
+                          workspaceLs?.entries?.map(e => {
+                            const fullPath = workspacePath ? `${workspacePath}/${e.name}` : e.name;
+                            const isRenaming = wsRenaming?.name === e.name;
+                            return (
+                              <div
+                                key={e.name}
+                                className={`workspace-entry ${workspaceFileView?.path === fullPath ? 'selected' : ''}`}
+                              >
+                                {isRenaming ? (
+                                  <input
+                                    className="ws-rename-input"
+                                    autoFocus
+                                    value={wsRenaming.newName}
+                                    onChange={ev => setWsRenaming(r => ({ ...r, newName: ev.target.value }))}
+                                    onKeyDown={ev => {
+                                      if (ev.key === 'Enter') renameWorkspaceEntry(e.name, wsRenaming.newName);
+                                      if (ev.key === 'Escape') setWsRenaming(null);
+                                    }}
+                                    onBlur={() => renameWorkspaceEntry(e.name, wsRenaming.newName)}
+                                  />
+                                ) : (
+                                  <span
+                                    className="ws-entry-name"
+                                    onClick={() => { if (e.type === 'dir') browseWorkspace(fullPath); else openWorkspaceFile(fullPath); }}
+                                  >
+                                    {e.type === 'dir' ? '📁' : '📄'} {e.name}
+                                    {e.size != null && <span className="ws-file-size"> {(e.size / 1024).toFixed(1)}k</span>}
+                                  </span>
+                                )}
+                                {!isRenaming && (
+                                  <span className="ws-entry-actions">
+                                    <button
+                                      className="ws-entry-btn"
+                                      title="Rename"
+                                      onClick={ev => { ev.stopPropagation(); setWsRenaming({ name: e.name, newName: e.name }); }}
+                                    >✎</button>
+                                    <button
+                                      className="ws-entry-btn ws-entry-btn-del"
+                                      title="Delete"
+                                      onClick={ev => { ev.stopPropagation(); deleteWorkspaceEntry(fullPath); }}
+                                    >✕</button>
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                        {!wsSearchResults && workspaceLs?.entries?.length === 0 && (
+                          <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>(empty)</div>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {/* Editor / file viewer panel */}
+                  {/* ── Editor panel ───────────────────────────────────── */}
                   <div className="ws-panel ws-editor-panel">
                     {workspaceFileView ? (
                       <>
                         <div className="ws-editor-tab">
-                          <span>{workspaceFileView.path.split('/').pop()}</span>
-                          <button className="icon-btn" onClick={() => setWorkspaceFileView(null)} title="Close">✕</button>
+                          <span className="ws-editor-filename">
+                            {workspaceFileView.path.split('/').pop()}
+                            {workspaceFileEdit && <span className="ws-unsaved-dot" title="Unsaved changes" />}
+                          </span>
+                          <div className="ws-editor-tab-actions">
+                            {workspaceFileEdit ? (
+                              <>
+                                <button
+                                  className="ws-btn-save"
+                                  disabled={workspaceActions.saving}
+                                  onClick={saveWorkspaceFile}
+                                >{workspaceActions.saving ? 'Saving…' : '✓ Save'}</button>
+                                <button
+                                  className="ws-btn-discard"
+                                  onClick={() => { setWorkspaceFileContent(workspaceFileView.content); setWorkspaceFileEdit(false); }}
+                                >✕ Discard</button>
+                              </>
+                            ) : (
+                              <button
+                                className="ws-btn-edit"
+                                onClick={() => { setWorkspaceFileContent(workspaceFileView.content); setWorkspaceFileEdit(true); }}
+                              >✎ Edit</button>
+                            )}
+                            <button className="icon-btn" onClick={() => { setWorkspaceFileView(null); setWorkspaceFileEdit(false); }} title="Close">✕</button>
+                          </div>
                         </div>
-                        <pre className="workspace-file-content">{workspaceFileView.content}</pre>
+                        {workspaceActions.error && (
+                          <div className="ws-editor-error">{workspaceActions.error}</div>
+                        )}
+                        {workspaceFileEdit ? (
+                          <textarea
+                            className="ws-editor-textarea"
+                            value={workspaceFileContent}
+                            onChange={e => setWorkspaceFileContent(e.target.value)}
+                            spellCheck={false}
+                          />
+                        ) : (
+                          <pre className="workspace-file-content">{workspaceFileView.content}</pre>
+                        )}
                       </>
                     ) : (
                       <div className="ws-editor-empty">
-                        <div style={{ opacity: 0.35, fontSize: '0.85rem' }}>Select a file to view</div>
+                        <div style={{ opacity: 0.3, fontSize: '0.85rem' }}>Select a file to view or edit</div>
                       </div>
                     )}
                   </div>
 
-                  {/* Git / source control panel */}
+                  {/* ── Git panel ──────────────────────────────────────── */}
                   {wsShowGit && (
                     <div className="ws-panel ws-git-panel">
                       <div className="ws-panel-title">SOURCE CONTROL</div>
-                      {workspaceGitStatus ? (
-                        <>
-                          {workspaceGitStatus.files.length > 0 ? (
+
+                      {/* Branch switcher */}
+                      <div className="ws-git-section">
+                        <div className="ws-git-section-label">BRANCH</div>
+                        <select
+                          className="ws-branch-select"
+                          value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
+                          onChange={e => checkoutBranch(e.target.value)}
+                          disabled={wsGitBusy === 'checkout'}
+                        >
+                          {workspaceBranches.branches.map(b => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                          {workspaceBranches.remotes.filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, ''))).map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                        <div className="ws-new-branch-row">
+                          <input
+                            className="workspace-commit-msg"
+                            type="text"
+                            placeholder="new-branch-name"
+                            value={wsNewBranch}
+                            onChange={e => setWsNewBranch(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && wsNewBranch && checkoutBranch(wsNewBranch, true)}
+                          />
+                          <button
+                            className="btn-docker-action"
+                            disabled={!wsNewBranch || wsGitBusy === 'checkout'}
+                            onClick={() => checkoutBranch(wsNewBranch, true)}
+                          >+ Create</button>
+                        </div>
+                      </div>
+
+                      {/* Pull */}
+                      <div className="ws-git-section">
+                        <button
+                          className="btn-docker-action ws-git-full-btn"
+                          disabled={wsGitBusy === 'pull'}
+                          onClick={pullBranch}
+                        >{wsGitBusy === 'pull' ? 'Pulling…' : '↓ Pull'}</button>
+                      </div>
+
+                      {wsGitMsg && (
+                        <div className={`ws-git-msg ${wsGitMsg.startsWith('✗') ? 'err' : 'ok'}`}>{wsGitMsg}</div>
+                      )}
+
+                      {/* Changed files + commit */}
+                      <div className="ws-git-section">
+                        <div className="ws-git-section-label">CHANGES</div>
+                        {workspaceGitStatus ? (
+                          workspaceGitStatus.files.length > 0 ? (
                             <>
                               <div className="workspace-changed-files">
                                 {workspaceGitStatus.files.map(f => (
                                   <div key={f.file} className="workspace-changed-file">
                                     <code className="ws-git-status-code">{f.status}</code>
-                                    <span>{f.file}</span>
+                                    <span
+                                      className="ws-changed-file-name"
+                                      onClick={() => openWorkspaceFile(f.file)}
+                                    >{f.file}</span>
+                                    <button
+                                      className="ws-entry-btn ws-entry-btn-del"
+                                      title="Discard changes"
+                                      disabled={wsGitBusy === 'discard'}
+                                      onClick={() => discardFile(f.file)}
+                                    >↩</button>
                                   </div>
                                 ))}
                               </div>
@@ -1681,21 +2029,24 @@ function App() {
                               </div>
                             </>
                           ) : (
-                            <div style={{ fontSize: '0.78rem', opacity: 0.5, padding: '0.4rem 0' }}>Working tree clean</div>
-                          )}
-                          <button
-                            className="btn-docker-action"
-                            disabled={workspaceActions.pushing}
-                            onClick={pushWorkspace}
-                            style={{ marginTop: '0.5rem', width: '100%' }}
-                          >{workspaceActions.pushing ? 'Pushing…' : '↑ Push'}</button>
-                          {workspaceActions.error && (
-                            <div className="docker-service-error" style={{ marginTop: '0.4rem' }}>{workspaceActions.error}</div>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ opacity: 0.35, fontSize: '0.78rem' }}>Loading…</div>
-                      )}
+                            <div style={{ fontSize: '0.75rem', opacity: 0.45, padding: '0.3rem 0' }}>Working tree clean</div>
+                          )
+                        ) : (
+                          <div style={{ opacity: 0.35, fontSize: '0.75rem' }}>Loading…</div>
+                        )}
+                      </div>
+
+                      {/* Push */}
+                      <div className="ws-git-section">
+                        <button
+                          className="btn-docker-action ws-git-full-btn"
+                          disabled={workspaceActions.pushing}
+                          onClick={pushWorkspace}
+                        >{workspaceActions.pushing ? 'Pushing…' : '↑ Push'}</button>
+                        {workspaceActions.error && (
+                          <div className="docker-service-error" style={{ marginTop: '0.4rem' }}>{workspaceActions.error}</div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1826,144 +2177,6 @@ function App() {
                   )}
                 </div>
               </div>
-            </div>
-          ) : activeTab === 'metrics' ? (
-            <div className="metrics-view">
-              <div className="metric-cards">
-                {[
-                  { label: 'Total Sessions', value: metricsSummary?.totalSessions ?? '…' },
-                  { label: 'Active Sessions', value: metricsSummary?.activeSessions ?? '…' },
-                  { label: 'Total Messages', value: metricsSummary?.totalMessages ?? '…' },
-                  { label: 'Avg Msgs / Session', value: metricsSummary?.avgMessagesPerSession ?? '…' },
-                  { label: 'Inputs Blocked', value: metricsSafety?.totalBlocked ?? '…' },
-                  { label: 'Outputs Filtered', value: metricsSafety?.totalOutputsFiltered ?? '…' },
-                  { label: '👍 Positive', value: metricsFeedback?.totalPositive ?? '…' },
-                  { label: '👎 Negative', value: metricsFeedback?.totalNegative ?? '…' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="metric-card">
-                    <div className="metric-value">{value}</div>
-                    <div className="metric-label">{label}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="metric-grid">
-                {/* Model distribution */}
-                <div className="metric-panel">
-                  <h3>Model Usage Distribution</h3>
-                  {metricsSummary?.modelDistribution && Object.keys(metricsSummary.modelDistribution).length > 0 ? (
-                    Object.entries(metricsSummary.modelDistribution).map(([model, count]) => {
-                      const total = Object.values(metricsSummary.modelDistribution).reduce((a, b) => a + b, 0);
-                      return (
-                        <div key={model} className="metric-row">
-                          <span className="metric-row-label">{model}</span>
-                          {renderBar(count, total, 'var(--accent)')}
-                          <span className="metric-row-value">{count}</span>
-                        </div>
-                      );
-                    })
-                  ) : <p className="task-empty">No data yet. Send a message to start.</p>}
-                </div>
-
-                {/* Experience distribution */}
-                <div className="metric-panel">
-                  <h3>Sessions by Experience</h3>
-                  {metricsSummary?.experienceDistribution && Object.keys(metricsSummary.experienceDistribution).length > 0 ? (
-                    Object.entries(metricsSummary.experienceDistribution).map(([exp, count]) => {
-                      const total = Object.values(metricsSummary.experienceDistribution).reduce((a, b) => a + b, 0);
-                      const meta = EXPERIENCE_META[exp] || { icon: '?', name: exp };
-                      return (
-                        <div key={exp} className="metric-row">
-                          <span className="metric-row-label">{meta.icon} {meta.name}</span>
-                          {renderBar(count, total, 'var(--purple)')}
-                          <span className="metric-row-value">{count}</span>
-                        </div>
-                      );
-                    })
-                  ) : <p className="task-empty">No data yet.</p>}
-                </div>
-
-                {/* Safety breakdown */}
-                <div className="metric-panel">
-                  <h3>Input Classification Breakdown</h3>
-                  {metricsSafety?.classificationBreakdown ? (
-                    Object.entries(metricsSafety.classificationBreakdown).map(([cat, count]) => {
-                      const total = metricsSafety.totalClassified || 1;
-                      const color = cat === 'blocked' ? 'var(--red)' : cat === 'sensitive' ? 'var(--yellow)' : 'var(--green)';
-                      return (
-                        <div key={cat} className="metric-row">
-                          <span className="metric-row-label" style={{ textTransform: 'capitalize', width: 80 }}>{cat}</span>
-                          {renderBar(count, total, color)}
-                          <span className="metric-row-value">{count}</span>
-                        </div>
-                      );
-                    })
-                  ) : <p className="task-empty">No data yet.</p>}
-                </div>
-
-                {/* Feedback by model */}
-                <div className="metric-panel">
-                  <h3>Feedback by Model</h3>
-                  {metricsFeedback?.byModel && Object.keys(metricsFeedback.byModel).length > 0 ? (
-                    Object.entries(metricsFeedback.byModel).map(([model, fb]) => (
-                      <div key={model} style={{ marginBottom: '0.6rem' }}>
-                        <div className="metric-row-label" style={{ width: 'auto', marginBottom: '0.2rem' }}>{model}</div>
-                        <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem' }}>
-                          <span style={{ color: 'var(--green)' }}>👍 {fb.positive}</span>
-                          <span style={{ color: 'var(--red)' }}>👎 {fb.negative}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : <p className="task-empty">No feedback recorded yet.</p>}
-                </div>
-
-                {/* Error summary */}
-                <div className="metric-panel">
-                  <h3>Error Summary</h3>
-                  {metricsErrors ? (
-                    <div>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Total errors: <strong style={{ color: 'var(--text)' }}>{metricsErrors.total}</strong> &nbsp;|&nbsp;
-                        Rate: <strong style={{ color: 'var(--text)' }}>{metricsErrors.errorRatePercent}%</strong> &nbsp;|&nbsp;
-                        Last 5 min: <strong style={{ color: metricsErrors.recentCount > 0 ? 'var(--red)' : 'var(--green)' }}>{metricsErrors.recentCount}</strong>
-                      </p>
-                      {metricsErrors.recent?.length > 0 && (
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-faint)', marginBottom: '0.25rem' }}>Recent errors:</div>
-                          {metricsErrors.recent.slice(-3).map((e, i) => (
-                            <div key={i} style={{ fontSize: '0.73rem', color: 'var(--red)', marginBottom: '0.2rem' }}>
-                              [{new Date(e.timestamp).toLocaleTimeString()}] {e.model}: {e.error?.slice(0, ERROR_DISPLAY_MAX_LEN)}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : <p className="task-empty">No data yet.</p>}
-                </div>
-
-                <div className="metric-panel live-event-panel">
-                  <h3>Live Event Stream</h3>
-                  {liveEvents.length > 0 ? (
-                    <div className="live-events-list">
-                      {liveEvents.slice(0, 12).map((event) => (
-                        <div key={event.event_id} className="live-event-item">
-                          <div className="live-event-meta">
-                            <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
-                            <strong>{event.event_type}</strong>
-                          </div>
-                          <div className="live-event-detail">
-                            {event.experience || 'unknown'} • {event.endpoint || 'n/a'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="task-empty">No live events yet.</p>}
-                </div>
-              </div>
-
-              <button className="btn-primary" style={{ alignSelf: 'flex-start' }} onClick={fetchMetrics}>
-                ↻ Refresh Metrics
-              </button>
             </div>
           ) : (
             <div className="chat-column">
@@ -2176,6 +2389,119 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Right drawer: metrics panel */}
+        {showMetricsPanel && (
+          <aside className="drawer drawer-right drawer-metrics">
+            <div className="drawer-header">
+              <h2>Metrics</h2>
+              <button className="icon-btn" onClick={fetchMetrics} title="Refresh">↻</button>
+              <button className="icon-btn" onClick={() => setShowMetricsPanel(false)} title="Close">✕</button>
+            </div>
+
+            <div className="metrics-sidebar-cards">
+              {[
+                { label: 'Sessions', value: metricsSummary?.totalSessions ?? '…' },
+                { label: 'Active', value: metricsSummary?.activeSessions ?? '…' },
+                { label: 'Messages', value: metricsSummary?.totalMessages ?? '…' },
+                { label: 'Blocked', value: metricsSafety?.totalBlocked ?? '…' },
+                { label: '👍', value: metricsFeedback?.totalPositive ?? '…' },
+                { label: '👎', value: metricsFeedback?.totalNegative ?? '…' },
+              ].map(({ label, value }) => (
+                <div key={label} className="metrics-sidebar-card">
+                  <div className="metric-value">{value}</div>
+                  <div className="metric-label">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: '0 1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="metric-panel">
+                <h3>Model Usage</h3>
+                {metricsSummary?.modelDistribution && Object.keys(metricsSummary.modelDistribution).length > 0
+                  ? Object.entries(metricsSummary.modelDistribution).map(([model, count]) => {
+                    const total = Object.values(metricsSummary.modelDistribution).reduce((a, b) => a + b, 0);
+                    return (
+                      <div key={model} className="metric-row">
+                        <span className="metric-row-label">{model}</span>
+                        {renderBar(count, total, 'var(--accent)')}
+                        <span className="metric-row-value">{count}</span>
+                      </div>
+                    );
+                  })
+                  : <p className="task-empty">No data yet.</p>}
+              </div>
+
+              <div className="metric-panel">
+                <h3>By Experience</h3>
+                {metricsSummary?.experienceDistribution && Object.keys(metricsSummary.experienceDistribution).length > 0
+                  ? Object.entries(metricsSummary.experienceDistribution).map(([exp, count]) => {
+                    const total = Object.values(metricsSummary.experienceDistribution).reduce((a, b) => a + b, 0);
+                    const meta = EXPERIENCE_META[exp] || { icon: '?', name: exp };
+                    return (
+                      <div key={exp} className="metric-row">
+                        <span className="metric-row-label">{meta.icon} {meta.name}</span>
+                        {renderBar(count, total, 'var(--purple)')}
+                        <span className="metric-row-value">{count}</span>
+                      </div>
+                    );
+                  })
+                  : <p className="task-empty">No data yet.</p>}
+              </div>
+
+              <div className="metric-panel">
+                <h3>Safety</h3>
+                {metricsSafety?.classificationBreakdown
+                  ? Object.entries(metricsSafety.classificationBreakdown).map(([cat, count]) => {
+                    const total = metricsSafety.totalClassified || 1;
+                    const color = cat === 'blocked' ? 'var(--red)' : cat === 'sensitive' ? 'var(--yellow)' : 'var(--green)';
+                    return (
+                      <div key={cat} className="metric-row">
+                        <span className="metric-row-label" style={{ textTransform: 'capitalize' }}>{cat}</span>
+                        {renderBar(count, total, color)}
+                        <span className="metric-row-value">{count}</span>
+                      </div>
+                    );
+                  })
+                  : <p className="task-empty">No data yet.</p>}
+              </div>
+
+              <div className="metric-panel">
+                <h3>Errors</h3>
+                {metricsErrors ? (
+                  <>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                      Total: <strong>{metricsErrors.total}</strong> · Rate: <strong>{metricsErrors.errorRatePercent}%</strong>
+                      {metricsErrors.recentCount > 0 && <span style={{ color: 'var(--red)' }}> · {metricsErrors.recentCount} recent</span>}
+                    </div>
+                    {metricsErrors.recent?.slice(-3).map((e, i) => (
+                      <div key={i} style={{ fontSize: '0.7rem', color: 'var(--red)', marginBottom: '0.2rem' }}>
+                        [{new Date(e.timestamp).toLocaleTimeString()}] {e.error?.slice(0, 80)}
+                      </div>
+                    ))}
+                  </>
+                ) : <p className="task-empty">No data yet.</p>}
+              </div>
+
+              <div className="metric-panel live-event-panel">
+                <h3>Live Events</h3>
+                {liveEvents.length > 0 ? (
+                  <div className="live-events-list">
+                    {liveEvents.slice(0, 10).map((event) => (
+                      <div key={event.event_id} className="live-event-item">
+                        <div className="live-event-meta">
+                          <span>{new Date(event.timestamp).toLocaleTimeString()}</span>
+                          <strong>{event.event_type}</strong>
+                        </div>
+                        <div className="live-event-detail">{event.experience || 'unknown'} · {event.endpoint || 'n/a'}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="task-empty">No live events yet.</p>}
+              </div>
+            </div>
+          </aside>
+        )}
 
         {/* Right drawer: system management */}
         {showSystemPanel && (

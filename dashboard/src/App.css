@@ -2357,3 +2357,288 @@ code {
 .svc-status-dim { font-size: 0.72rem; color: var(--text-faint); }
 .svc-expand-icon { font-size: 0.8rem; opacity: 0.5; }
 
+/* ===== Workspace CRUD: explorer actions ===== */
+.ws-explorer-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+.ws-explorer-actions .icon-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* Search row */
+.ws-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ws-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.74rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.ws-search-input:focus { outline: none; border-color: var(--accent); }
+
+/* Create row */
+.ws-create-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ws-create-input {
+  flex: 1;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.74rem;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.ws-create-input:focus { outline: none; }
+.ws-create-confirm {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.7rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.ws-create-cancel {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.7rem;
+  background: transparent;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* Entry row with hover actions */
+.ws-explorer-panel .workspace-entry {
+  display: flex;
+  align-items: center;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.78rem;
+  cursor: default;
+  user-select: none;
+  gap: 0;
+}
+.ws-entry-name {
+  flex: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-entry-actions {
+  display: none;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+.ws-explorer-panel .workspace-entry:hover .ws-entry-actions {
+  display: flex;
+}
+.ws-entry-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0.08rem 0.25rem;
+  border-radius: 3px;
+  line-height: 1;
+}
+.ws-entry-btn:hover { background: var(--surface-3); color: var(--text); }
+.ws-entry-btn-del:hover { color: var(--red); }
+
+.ws-rename-input {
+  flex: 1;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.78rem;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--text);
+}
+
+/* Editor: edit mode */
+.ws-editor-filename {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ws-unsaved-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  display: inline-block;
+}
+.ws-editor-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.ws-btn-edit, .ws-btn-save, .ws-btn-discard {
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  transition: background 0.1s;
+}
+.ws-btn-edit {
+  background: transparent;
+  color: var(--text-muted);
+}
+.ws-btn-edit:hover { background: var(--surface-2); color: var(--text); }
+.ws-btn-save {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.ws-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.ws-btn-discard {
+  background: transparent;
+  color: var(--text-faint);
+}
+.ws-btn-discard:hover { color: var(--red); border-color: var(--red); }
+
+.ws-editor-textarea {
+  flex: 1;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  background: var(--bg);
+  color: var(--text);
+  border: none;
+  resize: none;
+  outline: none;
+  tab-size: 2;
+}
+.ws-editor-error {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  color: var(--red);
+  background: rgba(244,113,113,0.08);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Git panel extensions */
+.ws-git-section {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ws-git-section-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+}
+.ws-branch-select {
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+}
+.ws-branch-select:focus { outline: none; border-color: var(--accent); }
+.ws-new-branch-row {
+  display: flex;
+  gap: 0.3rem;
+}
+.ws-new-branch-row .workspace-commit-msg {
+  flex: 1;
+  padding: 0.22rem 0.4rem;
+  font-size: 0.72rem;
+}
+.ws-git-full-btn {
+  width: 100%;
+}
+.ws-git-msg {
+  margin: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+.ws-git-msg.ok { color: var(--green); background: rgba(137,201,127,0.08); }
+.ws-git-msg.err { color: var(--red); background: rgba(244,113,113,0.08); }
+.ws-changed-file-name {
+  flex: 1;
+  cursor: pointer;
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-changed-file-name:hover { color: var(--accent); }
+.ws-git-panel .workspace-changed-file {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* ===== Metrics sidebar drawer ===== */
+.drawer-metrics {
+  width: 320px;
+}
+.metrics-sidebar-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.metrics-sidebar-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.4rem;
+  text-align: center;
+}
+.metrics-sidebar-card .metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.metrics-sidebar-card .metric-label {
+  font-size: 0.62rem;
+  color: var(--text-faint);
+  margin-top: 0.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
