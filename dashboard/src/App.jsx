@@ -1435,9 +1435,7 @@ function App() {
             >
               {!activeSession && <option value="">Select session…</option>}
               {sessions.map(s => (
-                <option key={s.id} value={s.id}>
-                  {s.name} · {allEndpointMeta[s.endpoint]?.label || s.endpoint}
-                </option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           )}
