@@ -31,7 +31,7 @@ const PORT    = parseInt(process.env.CONTENT_GEN_PORT || '3200', 10);
 const MPT_API = process.env.MPT_API_URL   || 'http://localhost:8080';
 const MPT_UI  = process.env.MPT_UI_URL    || 'http://localhost:8501';
 const MPT_COMPOSE = process.env.MONEYPRINTERTURBO_COMPOSE
-  || path.join(__dirname, 'modules', 'MoneyPrinterTurbo', 'docker-compose.yml');
+  || join(__dirname, 'modules', 'MoneyPrinterTurbo', 'docker-compose.yml');
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS  = 600_000;  // 10 min
@@ -55,13 +55,10 @@ async function ensureMptRunning() {
   try {
     await execAsync(`docker compose -f "${MPT_COMPOSE}" up -d`, { timeout: 10_000 });
   } catch (err) {
-    if (err.message.includes('Cannot connect') || err.message.includes('socket')) {
-      throw new Error(
-        'MoneyPrinterTurbo is not running and Docker socket is not mounted.\n' +
-        `Start it manually on the host:\n  docker compose -f "${MPT_COMPOSE}" up -d`
-      );
-    }
-    throw err;
+    throw new Error(
+      'MoneyPrinterTurbo is not running and could not be started automatically.\n' +
+      `Start it manually on the host:\n  docker compose -f "${MPT_COMPOSE}" up -d`
+    );
   }
 
   const deadline = Date.now() + 30_000;
