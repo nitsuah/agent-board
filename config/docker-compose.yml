@@ -137,38 +137,40 @@ services:
           /usr/local/bin/nemoclaw-start
 
         # 4. Allow root to traverse /sandbox/.openclaw so recover_openclaw_config_if_empty
-        #    can stat openclaw.json (o+x on dir) and read it to verify it has content
-        #    (o+r on file). Without cap_dac_override, root is treated as "other" for DAC
-        #    checks — without these bits grep fails and NemoClaw incorrectly reports empty.
-        #    normalize_mutable_config_perms resets dir to 2770 later, but the emptiness
-        #    check runs before that at line 3456 of nemoclaw-start.
+        #    can stat openclaw.json (o+x on dir) and read it to verify it has content.
+        #    Without cap_dac_override, root is treated as "other" for DAC checks.
+        #    Also chown the config file to uid 999 (gateway user) so the gateway can
+        #    read it after normalize_mutable_config_perms resets the file mode to 660
+        #    (which strips o+r). As owner, gateway retains rw via the 6xx owner bits.
         chmod o+x /sandbox/.openclaw 2>/dev/null || true
         chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true
+        chown 999 /sandbox/.openclaw/openclaw.json 2>/dev/null || true
 
         # 5. Backup / restore openclaw.json using the nemoclaw_data volume (/workspace).
         #    The gateway process can truncate openclaw.json to 0 bytes on a crash.
         #    We save a known-good copy to the persistent volume and restore it on the
         #    next start if the active file is empty.
+        #    NOTE: Use $$ prefix on shell vars to prevent docker-compose interpolation.
         _CFG=/sandbox/.openclaw/openclaw.json
         _BAK=/workspace/.nemoclaw-setup/openclaw.json.bak
         mkdir -p /workspace/.nemoclaw-setup 2>/dev/null || true
-        if node -e "JSON.parse(require('fs').readFileSync('$_CFG','utf8'))" 2>/dev/null; then
-          cp "$_CFG" "$_BAK" 2>/dev/null || true
+        if node -e "JSON.parse(require('fs').readFileSync('$$_CFG','utf8'))" 2>/dev/null; then
+          cp "$$_CFG" "$$_BAK" 2>/dev/null || true
         else
-          if [ -f "$_BAK" ]; then
+          if [ -f "$$_BAK" ]; then
             echo "[setup] openclaw.json empty/invalid — restoring from volume backup" >&2
-            cp "$_BAK" "$_CFG"
-            chown sandbox:sandbox "$_CFG" 2>/dev/null || true
-            chmod 664 "$_CFG" 2>/dev/null || true
+            cp "$$_BAK" "$$_CFG"
+            chown 999 "$$_CFG" 2>/dev/null || true
+            chmod 664 "$$_CFG" 2>/dev/null || true
           else
             echo "[setup] WARNING: openclaw.json is empty and no backup exists." >&2
-            echo "[setup] Run: docker compose rm -f nemoclaw  then retry." >&2
+            echo "[setup] Run: docker compose rm -f nemoclaw  then  docker compose --profile sandbox up -d nemoclaw" >&2
           fi
         fi
 
         # 6. Patch openclaw.json to use local Ollama (inference.local = NVIDIA cloud).
         node -e "
-          var fs=require('fs'), f='$_CFG';
+          var fs=require('fs'), f='$$_CFG';
           var raw=fs.readFileSync(f,'utf8').trim();
           if(!raw){process.stderr.write('[setup] WARNING: config still empty, skipping patch\n');process.exit(0);}
           var c=JSON.parse(raw);
@@ -183,11 +185,11 @@ services:
         " 2>&1 || echo '[setup] WARNING: openclaw.json patch failed'
 
         # 7. Save patched config as the new backup baseline
-        node -e "JSON.parse(require('fs').readFileSync('$_CFG','utf8'))" 2>/dev/null && \
-          cp "$_CFG" "$_BAK" 2>/dev/null || true
+        node -e "JSON.parse(require('fs').readFileSync('$$_CFG','utf8'))" 2>/dev/null && \
+          cp "$$_CFG" "$$_BAK" 2>/dev/null || true
 
-        # 8. Restore o+r after the patch write (writeFileSync preserves perms, but be explicit)
-        chmod o+r "$_CFG" 2>/dev/null || true
+        # 8. Re-assert gateway ownership after the patch write
+        chown 999 "$$_CFG" 2>/dev/null || true
 
         exec /usr/local/bin/nemoclaw-start
     volumes:
