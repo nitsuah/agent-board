@@ -2323,18 +2323,20 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-    const { llmUrl, apiStyle, apiKey } = await prepareSessionForLlmCall(session);
+    const prepared = await prepareSessionForLlmCall(session);
     if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
       activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
     }
-    const llmHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
+    const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
+    const llmHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
     const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
     const msgs = [...systemMessages, ...historyMessages];
 
-    const experienceTools = getExperienceTools(session.experience);
+    const experienceTools = useSafeMode ? [] : getExperienceTools(session.experience);
     const { content: assistantMessage, toolLog } = await runAgentLoop(
       msgs, apiStyle, llmUrl, llmHeaders, experienceTools, session
     );

@@ -60,9 +60,10 @@ async function run() {
 
   const configs = await request('/api/experiences');
   if (!configs || typeof configs !== 'object') throw new Error('/api/experiences not an object');
+  const exps = configs.experiences || configs;
   const required = ['developer', 'research', 'safechat', 'content_gen', 'website'];
   for (const exp of required) {
-    if (!configs[exp]) throw new Error(`/api/experiences missing "${exp}"`);
+    if (!exps[exp]) throw new Error(`/api/experiences missing "${exp}"`);
   }
   console.log(`  ✅ /api/experiences contains all 5 experiences: ${required.join(', ')}`);
 
@@ -244,14 +245,16 @@ async function run() {
 
   // Content gen experience has the content_gen tool configured
   const expConfigs = await request('/api/experiences');
-  if (expConfigs.content_gen?.tool !== 'content_gen') {
-    throw new Error(`content_gen experience should declare tool: content_gen, got: ${expConfigs.content_gen?.tool}`);
+  const expMap = expConfigs.experiences || expConfigs;
+  if (expMap.content_gen?.tool !== 'content_gen') {
+    throw new Error(`content_gen experience should declare tool: content_gen, got: ${expMap.content_gen?.tool}`);
   }
   console.log('  ✅ Experience declares tool = content_gen');
 
   // Verify the content_gen tool server presence (may not be running)
-  const tools = await request('/api/tools');
-  const contentTool = Array.isArray(tools) ? tools.find(t => t.key === 'content_gen') : null;
+  const toolsResp = await request('/api/tools');
+  const toolList = Array.isArray(toolsResp) ? toolsResp : (toolsResp.tools || []);
+  const contentTool = toolList.find(t => t.key === 'content_gen');
   if (!contentTool) {
     console.warn('  ⚠️  content_gen tool server not listed — check /api/tools');
   } else {
@@ -284,12 +287,12 @@ async function run() {
   const webSession = await createSession('website');
   console.log(`  ✅ Created website session id=${webSession.id}`);
 
-  if (expConfigs.website?.tool !== 'website') {
-    throw new Error(`website experience should declare tool: website, got: ${expConfigs.website?.tool}`);
+  if (expMap.website?.tool !== 'website') {
+    throw new Error(`website experience should declare tool: website, got: ${expMap.website?.tool}`);
   }
   console.log('  ✅ Experience declares tool = website');
 
-  const websiteTool = Array.isArray(tools) ? tools.find(t => t.key === 'website') : null;
+  const websiteTool = toolList.find(t => t.key === 'website');
   if (!websiteTool) {
     console.warn('  ⚠️  website tool server not listed — check /api/tools');
   } else {

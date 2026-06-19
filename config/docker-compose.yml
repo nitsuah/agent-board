@@ -167,6 +167,9 @@ services:
         # normalize) can stat/read the file as root (treated as "other" without cap_dac_override).
         chmod o+x /sandbox/.openclaw 2>/dev/null || true
         chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true
+        # Fix logs dir ownership so gateway (uid 999) can write config-health.json
+        mkdir -p /sandbox/.openclaw/logs 2>/dev/null || true
+        chown -R 999:999 /sandbox/.openclaw/logs 2>/dev/null || true
 
         # 5. Backup / restore openclaw.json using the nemoclaw_data volume (/workspace).
         #    The gateway process can truncate openclaw.json to 0 bytes on a crash.
