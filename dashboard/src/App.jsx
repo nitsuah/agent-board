@@ -334,14 +334,18 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
         body: JSON.stringify({ name: tool.name, arguments: args }),
       });
       const data = await res.json();
+      setOpenTool(null);
       if (data.success && !data.isError) {
         setCallState({ running: false, tool: tool.name, result: data.content || '(no output)', error: null });
       } else {
         // MCP isError responses carry the explanation in content
         setCallState({ running: false, tool: tool.name, result: null, error: data.content || data.error || 'Tool call failed' });
       }
+      setTimeout(() => document.querySelector('.tool-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     } catch (error) {
+      setOpenTool(null);
       setCallState({ running: false, tool: tool.name, result: null, error: error.message });
+      setTimeout(() => document.querySelector('.tool-result')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
     }
   };
 
@@ -477,6 +481,7 @@ function App() {
   const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
   const [workspaceCommitMsg, setWorkspaceCommitMsg] = useState('');
   const [workspaceActions, setWorkspaceActions] = useState({ committing: false, pushing: false, error: null });
+  const [artifactFiles, setArtifactFiles] = useState([]);
 
   // Theme toggle (dark default)
   const [darkMode, setDarkMode] = useState(() => {
@@ -697,6 +702,14 @@ function App() {
       const data = await res.json();
       if (!data.error) setWorkspaceGitStatus(data);
     } catch (err) { console.error('Workspace git status failed:', err); }
+  };
+
+  const fetchArtifacts = async () => {
+    try {
+      const res = await fetch('/api/workspace/ls?path=artifacts');
+      const data = await res.json();
+      setArtifactFiles(data.error ? [] : (data.entries || []).filter(e => e.type === 'file'));
+    } catch { setArtifactFiles([]); }
   };
 
   const commitWorkspace = async () => {
@@ -1383,7 +1396,7 @@ function App() {
           >📊</button>
           <button
             className={`icon-btn ${activeTab === 'workspace' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); }}
+            onClick={() => { setActiveTab('workspace'); browseWorkspace(''); refreshWorkspaceGit(); fetchArtifacts(); }}
             title="Workspace"
           >🗂️</button>
           <button
@@ -1710,12 +1723,25 @@ function App() {
               </div>
 
               {dockerStatus?.workspace?.configured && (
-                <>
-                  <h2>Artifacts</h2>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    Files in <code>workspace/artifacts/</code> will appear here.
+                <div className="workspace-artifacts">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <h2 style={{ margin: 0 }}>Artifacts</h2>
+                    <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={fetchArtifacts}>↻</button>
                   </div>
-                </>
+                  {artifactFiles.length === 0 ? (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-faint)' }}>No artifacts yet — Research Mode saves files here.</div>
+                  ) : artifactFiles.map(f => (
+                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0', fontSize: '0.82rem' }}>
+                      <span style={{ opacity: 0.85 }}>{f.name}</span>
+                      <a
+                        href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ fontSize: '0.72rem', color: 'var(--accent)', textDecoration: 'none' }}
+                      >↓ view</a>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           ) : activeTab === 'metrics' ? (
