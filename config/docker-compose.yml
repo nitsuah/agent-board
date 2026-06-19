@@ -108,8 +108,7 @@ services:
 
   # ===== SAFETY & SANDBOX =====
   # Opt-in: enable with --profile sandbox
-  # NemoClaw is currently deferred (crash-loops on Windows builds — CRLF in entrypoint).
-  # Gate it behind a profile so it never starts in the default stack.
+  # NemoClaw — sandbox profile (opt-in with --profile sandbox)
   nemoclaw:
     image: nemoclaw:latest
     container_name: nemoclaw
@@ -117,21 +116,119 @@ services:
       - sandbox
     ports:
       - "9000:8080"
-    command: |
-      sh -lc 'node -e "const net=require("net");net.createServer((socket)=>{const upstream=net.connect(18789,"127.0.0.1");socket.pipe(upstream);upstream.pipe(socket);const close=()=>{if(!socket.destroyed) socket.destroy(); if(!upstream.destroyed) upstream.destroy();};socket.on("error",close);upstream.on("error",close);socket.on("close",close);upstream.on("close",close);}).listen(8080,"0.0.0.0");" & exec /usr/local/bin/nemoclaw-wrapper.sh'
+    command:
+      - -c
+      - |
+        # 1. Strip Windows CRLF line endings from all shell scripts
+        sed -i 's/\r//' /usr/local/lib/nemoclaw/sandbox-init.sh \
+          /usr/local/bin/nemoclaw-start /usr/local/bin/docker-entrypoint.sh 2>/dev/null || true
+
+        # 2. Fix gateway.log chown: after capsh drops cap_dac_override, root can't write
+        #    to a gateway:gateway-owned file. Remove the chown so it stays root-owned.
+        sed -i '/^chown gateway:gateway \/tmp\/gateway\.log$/d' /usr/local/bin/nemoclaw-start
+
+        # 3. Make the persistent log-mirror failure non-fatal.
+        #    After normalize_mutable_config_perms resets /sandbox/.openclaw to mode 2770,
+        #    root (no cap_dac_override, not in sandbox group) cannot create files inside
+        #    that directory. The persistent log-mirror exits 1, which kills the container.
+        #    The gateway still logs to /tmp/gateway.log (tailed to stderr), so losing
+        #    the persistent /sandbox/.openclaw/logs/gateway-persistent.log is acceptable.
+        sed -i 's/start_persistent_gateway_log_mirror || exit 1/start_persistent_gateway_log_mirror || true/g' \
+          /usr/local/bin/nemoclaw-start
+
+        # 4. Patch nemoclaw-start to inject chmod o+x (dir) + chmod o+r (file) after BOTH:
+        #    a) normalize_mutable_config_perms — resets dir to 2770 (strips other-x), and
+        #    b) write_openclaw_config_baseline — creates fresh openclaw.json as root:root
+        #       mode 600 (overwriting o+r we set after normalize).
+        #    Gateway (uid 999, "other", not in sandbox group) needs o+x on dir and o+r on
+        #    file to read its config. We inject via node with full root caps so the chmod
+        #    runs in the re-execed nemoclaw-start after each permission-resetting function.
+        node -e "
+          var fs=require('fs');
+          var src=fs.readFileSync('/usr/local/bin/nemoclaw-start','utf8');
+          var hits={norm:0,write:0};
+          var fix=function(m,pre){
+            return m +
+              '\n' + pre + 'chmod o+x /sandbox/.openclaw 2>/dev/null || true' +
+              '\n' + pre + 'chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true';
+          };
+          var patched=src
+            .replace(/^(\s*)normalize_mutable_config_perms(\s*)$$/mg,function(m,pre){hits.norm++;return fix(m,pre);})
+            .replace(/^(\s*)write_openclaw_config_baseline(\s*)$$/mg,function(m,pre){hits.write++;return fix(m,pre);});
+          if(!hits.norm&&!hits.write){
+            process.stderr.write('[setup] WARNING: permission-reset functions not found in nemoclaw-start\n');
+          } else {
+            fs.writeFileSync('/usr/local/bin/nemoclaw-start',patched);
+            process.stderr.write('[setup] nemoclaw-start patched: o+x dir + o+r config after normalize(x'+hits.norm+') write_baseline(x'+hits.write+')\n');
+          }
+        " 2>&1 || echo '[setup] WARNING: nemoclaw-start permission patch failed'
+
+        # Also set o+x/o+r now so recover_openclaw_config_if_empty (which runs before
+        # normalize) can stat/read the file as root (treated as "other" without cap_dac_override).
+        chmod o+x /sandbox/.openclaw 2>/dev/null || true
+        chmod o+r /sandbox/.openclaw/openclaw.json 2>/dev/null || true
+        # Fix logs dir ownership so gateway (uid 999) can write config-health.json
+        mkdir -p /sandbox/.openclaw/logs 2>/dev/null || true
+        chown -R 999:999 /sandbox/.openclaw/logs 2>/dev/null || true
+
+        # 5. Backup / restore openclaw.json using the nemoclaw_data volume (/workspace).
+        #    The gateway process can truncate openclaw.json to 0 bytes on a crash.
+        #    We save a known-good copy to the persistent volume and restore it on the
+        #    next start if the active file is empty.
+        #    NOTE: Use $$ prefix on shell vars to prevent docker-compose interpolation.
+        _CFG=/sandbox/.openclaw/openclaw.json
+        _BAK=/workspace/.nemoclaw-setup/openclaw.json.bak
+        mkdir -p /workspace/.nemoclaw-setup 2>/dev/null || true
+        if node -e "JSON.parse(require('fs').readFileSync('$$_CFG','utf8'))" 2>/dev/null; then
+          cp "$$_CFG" "$$_BAK" 2>/dev/null || true
+        else
+          if [ -f "$$_BAK" ]; then
+            echo "[setup] openclaw.json empty/invalid — restoring from volume backup" >&2
+            cp "$$_BAK" "$$_CFG"
+            chmod 664 "$$_CFG" 2>/dev/null || true
+          else
+            echo "[setup] WARNING: openclaw.json is empty and no backup exists." >&2
+            echo "[setup] Run: docker compose rm -f nemoclaw  then  docker compose --profile sandbox up -d nemoclaw" >&2
+          fi
+        fi
+
+        # 6. Patch openclaw.json to use local Ollama (inference.local = NVIDIA cloud).
+        node -e "
+          var fs=require('fs'), f='$$_CFG';
+          var raw=fs.readFileSync(f,'utf8').trim();
+          if(!raw){process.stderr.write('[setup] WARNING: config still empty, skipping patch\n');process.exit(0);}
+          var c=JSON.parse(raw);
+          var inf=c.models&&c.models.providers&&c.models.providers.inference;
+          if(inf){inf.baseUrl='http://ollama:8080/v1';inf.apiKey='ollama';}
+          var m='llama3.2:3b';
+          if(c.agents&&c.agents.defaults&&c.agents.defaults.model) c.agents.defaults.model.primary=m;
+          if(inf&&inf.models) inf.models=[{id:m,name:m,reasoning:false,input:['text'],
+            cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:32768,maxTokens:4096}];
+          if(!c.gateway) c.gateway={};
+          if(!c.gateway.controlUi) c.gateway.controlUi={};
+          var ao=c.gateway.controlUi.allowedOrigins;
+          if(!Array.isArray(ao)) c.gateway.controlUi.allowedOrigins=['http://localhost:3000'];
+          else if(!ao.includes('http://localhost:3000')) ao.push('http://localhost:3000');
+          fs.writeFileSync(f,JSON.stringify(c,null,2));
+          process.stderr.write('[setup] openclaw.json patched: inference → Ollama llama3.2:3b + allowedOrigins\n');
+        " 2>&1 || echo '[setup] WARNING: openclaw.json patch failed'
+
+        # 7. Save patched config as the new backup baseline
+        node -e "JSON.parse(require('fs').readFileSync('$$_CFG','utf8'))" 2>/dev/null && \
+          cp "$$_CFG" "$$_BAK" 2>/dev/null || true
+
+        # 8. Re-assert gateway ownership after the patch write
+        chown 999 "$$_CFG" 2>/dev/null || true
+
+        exec /usr/local/bin/nemoclaw-start
     volumes:
       - nemoclaw_data:/workspace
-      - /tmp
     environment:
       - NEMOCLAW_HOME=/workspace
-      - LLM_API_URL=http://ollama:8080
-      - OPENSHELL_ENABLE=true
-    cap_drop:
-      - all
-    cap_add:
-      - NET_BIND_SERVICE
+      - NEMOCLAW_DASHBOARD_PORT=8080
+      - CHAT_UI_URL=http://agent-dashboard:3000
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:false
     # healthcheck disabled because wget/curl is unavailable in this container
     depends_on:
       ollama:

@@ -1125,14 +1125,28 @@ body {
 
 .docker-status-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.6rem;
+  flex-direction: column;
+  padding: 0.55rem 0.6rem;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  flex-wrap: wrap;
+  gap: 0;
+}
+
+.docker-status-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.docker-status-error-zone {
+  margin-top: 0.35rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .docker-status-item.known-offline {
@@ -1145,7 +1159,8 @@ body {
   flex-direction: column;
   gap: 0.15rem;
   flex: 1;
-  min-width: 140px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .docker-service-name {
@@ -1173,9 +1188,33 @@ body {
   font-weight: 600;
 }
 
-.docker-service-status.running { color: var(--green); }
-.docker-service-status.stopped { color: var(--red); }
+.docker-service-status.running  { color: var(--green); }
+.docker-service-status.stopped  { color: var(--red); }
 .docker-service-status.starting { color: var(--yellow); }
+.docker-service-status.disabled { color: var(--text-faint); }
+
+.svc-type-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 0.05rem 0.28rem;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Per-type colors */
+.badge-local   { background: rgba(59,130,246,0.12);  color: #60a5fa; border-color: rgba(59,130,246,0.3);  }
+.badge-mcp     { background: rgba(139,92,246,0.12);  color: #a78bfa; border-color: rgba(139,92,246,0.3);  }
+.badge-sandbox { background: rgba(245,158,11,0.12);  color: #fbbf24; border-color: rgba(245,158,11,0.3);  }
+.badge-runner  { background: rgba(20,184,166,0.12);  color: #2dd4bf; border-color: rgba(20,184,166,0.3);  }
+.badge-custom  { background: rgba(244,63,94,0.12);   color: #fb7185; border-color: rgba(244,63,94,0.3);   }
+
+.svc-disabled {
+  opacity: 0.5;
+}
 
 .docker-service-port {
   font-size: 0.72rem;
@@ -1212,6 +1251,37 @@ body {
   color: var(--text);
 }
 
+.btn-service-icon {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
+}
+
+.btn-service-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-service-icon:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.btn-service-icon.start-btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.btn-service-icon.stop-btn:hover:not(:disabled)   { border-color: var(--red);   color: var(--red); }
+.btn-service-icon.restart-btn:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
+
 .btn-docker-action:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1232,6 +1302,20 @@ body {
 .docker-service-pull-status.pulling { color: var(--yellow); }
 .docker-service-pull-status.completed { color: var(--green); }
 .docker-service-pull-status.failed { color: var(--red); }
+
+.service-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.service-model-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
 
 .system-meta-text {
   font-size: 0.76rem;
@@ -1318,11 +1402,13 @@ code {
   }
 
   .docker-actions {
-    width: 100%;
+    flex-shrink: 0;
   }
 
-  .btn-docker-action {
-    flex: 1;
+  /* Allow service name to wrap on narrow panels */
+  .docker-service-name {
+    white-space: normal;
+    word-break: break-word;
   }
 }
 

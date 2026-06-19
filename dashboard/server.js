@@ -187,6 +187,122 @@ const TOOL_SERVERS = {
   },
 };
 
+// ── Agent tool definitions (passed to LLM for tool-enabled experiences) ─────────
+
+const DEVELOPER_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'bash',
+      description: 'Run a shell command inside WORKSPACE_ROOT. Returns stdout and stderr. Use for file ops, git, npm, node, etc.',
+      parameters: { type: 'object', properties: { command: { type: 'string', description: 'Shell command to run.' } }, required: ['command'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_file',
+      description: 'Read a file in the workspace and return its text content.',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: 'Relative path inside workspace.' } }, required: ['path'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_file',
+      description: 'Create or overwrite a file in the workspace.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Relative path inside workspace.' },
+          content: { type: 'string', description: 'Content to write.' }
+        },
+        required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_files',
+      description: 'List files and directories at a path inside the workspace.',
+      parameters: { type: 'object', properties: { path: { type: 'string', description: 'Directory path (default: workspace root).', default: '' } } }
+    }
+  }
+];
+
+const RESEARCH_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Search the web via DuckDuckGo Instant Answers. Returns abstract, related topics, and direct answer if available.',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query.' } }, required: ['query'] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_artifact',
+      description: 'Save a research artifact (notes, outline, summary) to workspace/artifacts/.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filename: { type: 'string', description: 'Artifact filename (e.g. "report.md").' },
+          content: { type: 'string', description: 'Artifact text content.' }
+        },
+        required: ['filename', 'content']
+      }
+    }
+  }
+];
+
+const WEBSITE_AGENT_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'discover_leads',
+      description: 'Find local businesses in a location that may need a website.',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string', description: 'City/area to search (e.g. "Austin TX").' },
+          business_type: { type: 'string', description: 'Category of business (e.g. "restaurant").' }
+        },
+        required: ['location']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_website_file',
+      description: 'Save a generated HTML/CSS/JS file for a client site under their slug.',
+      parameters: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string', description: 'Client slug (e.g. "joes-pizza-90210").' },
+          filename: { type: 'string', description: 'File to save (e.g. "index.html").' },
+          content: { type: 'string', description: 'File content.' }
+        },
+        required: ['slug', 'filename', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_website_files',
+      description: 'List saved files for a client site slug.',
+      parameters: {
+        type: 'object',
+        properties: { slug: { type: 'string', description: 'Client slug.' } },
+        required: ['slug']
+      }
+    }
+  }
+];
+
 // generate_video polls MoneyPrinterTurbo for up to 10 minutes server-side, so
 // tool calls need a much longer budget than chat requests.
 const TOOL_CALL_TIMEOUT_MS = Number(process.env.TOOL_CALL_TIMEOUT_MS || 11 * 60_000);
@@ -360,7 +476,7 @@ function getServiceRegistry() {
   return {
     ollama: {
       key: 'ollama',
-      label: 'Ollama (local)',
+      label: 'Ollama',
       backendType: 'ollama-container',
       composeService: 'ollama',
       ports: '8081:8080',
@@ -371,7 +487,7 @@ function getServiceRegistry() {
     },
     nemoclaw: {
       key: 'nemoclaw',
-      label: 'NemoClaw (sandbox)',
+      label: 'NemoClaw',
       backendType: 'sandbox',
       composeService: 'nemoclaw',
       composeProfile: 'sandbox',
@@ -383,7 +499,7 @@ function getServiceRegistry() {
     },
     bb_mcp: {
       key: 'bb_mcp',
-      label: 'Blackboard Learn MCP',
+      label: 'Blackboard MCP',
       backendType: 'mcp',
       composeService: 'bb-mcp',
       ports: '3100:3100',
@@ -395,7 +511,7 @@ function getServiceRegistry() {
     },
     llm_openllm: {
       key: 'llm_openllm',
-      label: 'OpenLLM (custom models)',
+      label: 'OpenLLM',
       backendType: 'openllm-container',
       composeService: 'llm_openllm',
       composeProfile: 'openllm',
@@ -408,7 +524,7 @@ function getServiceRegistry() {
     },
     tool_content_gen: {
       key: 'tool_content_gen',
-      label: 'Content Gen (MCP tool)',
+      label: 'Content Gen',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.content_gen.composeService,
       composeProfile: 'tools',
@@ -420,7 +536,7 @@ function getServiceRegistry() {
     },
     tool_website: {
       key: 'tool_website',
-      label: 'Website Agent (MCP tool)',
+      label: 'Website Agent',
       backendType: 'mcp',
       composeService: TOOL_SERVERS.website.composeService,
       composeProfile: 'tools',
@@ -455,7 +571,7 @@ async function runComposeAction(action, serviceName, composeProfile = null) {
     } catch (error) {
       lastError = error;
       const details = `${error.message || ''}\n${error.stderr || ''}`;
-      const binaryMissing = /(not found|is not recognized|docker-compose: not found|docker: not found|is not a docker command|unknown shorthand flag:\s*'f'\s*in -f)/i.test(details);
+      const binaryMissing = error.code === 'ENOENT' || /(not found|is not recognized|docker-compose: not found|docker: not found|is not a docker command|unknown shorthand flag:\s*'f'\s*in -f)/i.test(details);
       if (!binaryMissing) {
         throw error;
       }
@@ -797,27 +913,38 @@ const SAFETY_CONFIGS = {
 const EXPERIENCE_CONFIGS = {
   developer: {
     name: 'Developer Assistant',
-    description: 'Full model access, standard safety, session history.',
+    description: 'Full model access, standard safety, workspace bash/file access.',
     icon: '💻',
     safetyMode: 'standard',
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
-    systemPromptSuffix: 'You are assisting a software developer. Be precise, prefer code examples.'
+    systemPromptSuffix:
+      'You are a developer assistant with workspace tool access. ' +
+      'You have four tools: bash (run shell commands), read_file, write_file, and list_files — all sandboxed to the mounted workspace. ' +
+      'Use them to inspect code, run tests, edit files, and execute git commands. ' +
+      'Always describe what you are about to do before calling a tool. ' +
+      'After running a command, share the output and explain what it means. ' +
+      'Prefer working code over lengthy explanations.'
   },
   research: {
     name: 'Research Mode',
-    description: 'Long-form reasoning and document analysis. Slightly looser rails — opt-in.',
+    description: 'Long-form reasoning with web search and workspace artifact creation.',
     icon: '🔬',
     safetyMode: 'research',
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
-    systemPromptSuffix: 'You are a research assistant. Prioritise depth, cite your reasoning, and flag uncertainties.'
+    systemPromptSuffix:
+      'You are a research assistant. You have two tools: web_search (DuckDuckGo) and write_artifact (saves notes to workspace/artifacts/). ' +
+      'Use web_search to find current information, then write_artifact to preserve findings for the user. ' +
+      'Prioritise depth, cite your reasoning, and flag areas of uncertainty.'
   },
   safechat: {
     name: 'Safe Chat',
-    description: 'Strict safety, simple UI, no model switching. Built for users who don\'t know what Ollama is.',
+    description: 'Strict safety, simple UI, no tools or workspace access.',
     icon: '🛡️',
     safetyMode: 'strict',
     availableEndpoints: ['primary'],
-    systemPromptSuffix: 'You are a friendly, safe assistant helping everyday users.'
+    systemPromptSuffix:
+      'You are a friendly, safe assistant helping everyday users. ' +
+      'You can answer questions and provide information, but you cannot execute commands, access files, or use any external tools.'
   },
   // Tool-driven experiences: chat is paired with a workbench panel that lists
   // and executes the tool server's MCP tools (see /api/tools routes). The
@@ -839,20 +966,18 @@ const EXPERIENCE_CONFIGS = {
   },
   website: {
     name: 'Website Agent',
-    description: 'Discover local-business leads and generate/deploy B2B client sites via the website tool server.',
+    description: 'Lead discovery and B2B site generation with safe workspace build space.',
     icon: '🌐',
     safetyMode: 'standard',
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix:
-      'You are a B2B website agency assistant. Help the user with lead discovery, pitch copy, site content, and invoicing. ' +
-      'CRITICAL RULE: never paste raw HTML, CSS, or large code blocks directly into this chat. ' +
-      'When you generate site content, always save it using the save_file tool — describe what you are creating ' +
-      'in plain language first, then call the tool. ' +
-      'Workflow: (1) discover_leads to find prospects, (2) write pitch copy in plain text here, ' +
-      '(3) save_file to store generated HTML under the client slug, ' +
-      '(4) list_client_files to confirm what was saved, (5) deploy_site when approved. ' +
-      'Use a slug format like "business-name-zipcode" (e.g. "joes-pizza-90210"). ' +
-      'The user can also trigger tools directly from the Website Agent tool panel on the right.',
+      'You are a B2B website agency assistant. You have three tools: discover_leads, save_website_file, and list_website_files. ' +
+      'CRITICAL RULE: never paste raw HTML or large code blocks directly into chat — always save them with save_website_file. ' +
+      'Workflow: (1) discover_leads to find prospects, (2) discuss the pitch in plain text here, ' +
+      '(3) save_website_file to store HTML/CSS/JS under the client slug, ' +
+      '(4) list_website_files to confirm what was saved. ' +
+      'Use slugs like "business-name-zipcode" (e.g. "joes-pizza-90210"). ' +
+      'Do NOT call deploy_site — that step requires explicit user approval from the tool panel.',
     tool: 'website'
   }
 };
@@ -1211,7 +1336,7 @@ app.get('/api/docker/status', async (req, res) => {
   const serviceChecks = [
     {
       name: 'ollama',
-      label: 'Ollama (local)',
+      label: 'Ollama',
       url: `${primaryResolution.url}/api/tags`,
       ports: '8081:8080',
       backendType: 'ollama-container',
@@ -1228,7 +1353,7 @@ app.get('/api/docker/status', async (req, res) => {
     },
     {
       name: 'nemoclaw',
-      label: 'NemoClaw (sandbox)',
+      label: 'NemoClaw',
       url: `${NEMOCLAW_URL}/`,
       ports: '9000:8080',
       backendType: 'sandbox',
@@ -1236,7 +1361,7 @@ app.get('/api/docker/status', async (req, res) => {
     },
     {
       name: 'llm_openllm',
-      label: 'OpenLLM (custom models)',
+      label: 'OpenLLM',
       url: `${LLM_CONFIG.openllm.url}/v1/models`,
       ports: '8082:3000',
       backendType: 'openllm-container',
@@ -1247,7 +1372,7 @@ app.get('/api/docker/status', async (req, res) => {
   if (BB_MCP_ENABLED) {
     serviceChecks.push({
       name: 'bb-mcp',
-      label: 'Blackboard Learn MCP',
+      label: 'Blackboard MCP',
       url: `${BB_MCP_URL}/health`,
       ports: '3100:3100',
       backendType: 'mcp',
@@ -1308,7 +1433,18 @@ app.get('/api/docker/status', async (req, res) => {
       };
     } else if (config.backendType === 'docker-runner') {
       const modelLoaded = runnerLive && checkModelInRunnerList(runnerModels, config.defaultModel);
-      endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+      // On laptop profile, 16GB Docker Runner models exceed 8GB VRAM — mark as
+      // disabled so the UI doesn't show them as available.
+      const tooLargeForDevice = DEVICE_PROFILE === 'laptop' || DEVICE_PROFILE === 'minimal';
+      if (tooLargeForDevice) {
+        endpoints[key] = {
+          name: config.name, model: config.defaultModel, backendType: config.backendType,
+          live: false, modelLoaded, runnerLive, fallback: true,
+          disabledReason: `${config.defaultModel} requires ≥16GB VRAM (${DEVICE_PROFILE} profile has 8GB)`,
+        };
+      } else {
+        endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: modelLoaded, modelLoaded, runnerLive, fallback: !modelLoaded };
+      }
     } else if (config.backendType === 'openllm-container') {
       const openllmUp = containers['llm_openllm']?.running ?? false;
       endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
@@ -1376,7 +1512,8 @@ app.get('/api/system/services', async (req, res) => {
 
     const serviceEntries = await Promise.all(
       Object.values(registry).map(async (service) => {
-        if (service.key === 'bb_mcp' && !BB_MCP_ENABLED) {
+        // Any service explicitly disabled via env var (controllable=false + disabledReason set)
+        if (!service.controllable && service.disabledReason) {
           return [
             service.key,
             {
@@ -1587,7 +1724,9 @@ async function startDockerModelPull(endpoint, modelName, pullKey) {
     pullStatus.set(pullKey, completed);
     eventBus.emit('model_pull_completed', { endpoint, model: modelName, metadata: completed });
   } catch (error) {
-    const details = `${error.message || ''}\n${error.stderr || ''}`.trim();
+    const details = error.code === 'ENOENT'
+      ? `docker CLI not in container — pull from host: docker model pull ${modelName}`
+      : `${error.message || ''}\n${error.stderr || ''}`.trim();
     const failed = { endpoint, model: modelName, status: 'failed', error: details, startedAt, completedAt: new Date().toISOString() };
     pullStatus.set(pullKey, failed);
     eventBus.emit('model_pull_failed', { endpoint, model: modelName, metadata: failed });
@@ -1673,6 +1812,14 @@ app.post('/api/models/pull-all', async (req, res) => {
         skipped.push({ endpoint: endpointKey, model: modelName, reason: 'docker_control_disabled' });
         continue;
       }
+      // Skip if already loaded in the runner (avoids noisy ENOENT errors for existing models)
+      try {
+        const runnerModels = await fetchDockerRunnerModels(DOCKER_RUNNER_URL);
+        if (runnerModels.some(m => m.id === modelName)) {
+          skipped.push({ endpoint: endpointKey, model: modelName, reason: 'already_loaded' });
+          continue;
+        }
+      } catch { /* runner offline — proceed with pull attempt */ }
       startDockerModelPull(endpointKey, modelName, pullKey);
       initiated.push({ endpoint: endpointKey, model: modelName });
     } else {
@@ -2176,35 +2323,24 @@ app.post('/api/sessions/:id/message', async (req, res) => {
   const msgStart = Date.now();
 
   try {
-    const { llmUrl, apiStyle, apiKey } = await prepareSessionForLlmCall(session);
+    const prepared = await prepareSessionForLlmCall(session);
     if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
       activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
     }
-    const llmHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    // NemoClaw is a WebSocket UI, not a REST API — safe mode uses primary LLM with strict filters
+    const llmUrl = prepared.llmUrl;
+    const apiStyle = prepared.apiStyle;
+    const llmHeaders = prepared.apiKey ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
 
     // ── Prompt Wrapping ───────────────────────────────────────────────────────
     const systemMessages = buildSystemMessages({ ...session, safetyMode });
     const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
     const msgs = [...systemMessages, ...historyMessages];
 
-    let response;
-    if (apiStyle === 'openai') {
-      response = await axios.post(
-        `${llmUrl}/chat/completions`,
-        { model: session.model, messages: msgs, stream: false },
-        // CPU-bound generation under strict safety prompts (longer disclaimers)
-        // can take 45-60s+ on this host; match the streaming timeout below.
-        { headers: llmHeaders, timeout: 120000 }
-      );
-    } else {
-      response = await axios.post(
-        `${llmUrl}/api/chat`,
-        { model: session.model, messages: msgs, stream: false },
-        { headers: llmHeaders, timeout: 120000 }
-      );
-    }
-
-    const assistantMessage = response.data.message?.content || response.data.choices?.[0]?.message?.content || 'No response received';
+    const experienceTools = useSafeMode ? [] : getExperienceTools(session.experience);
+    const { content: assistantMessage, toolLog } = await runAgentLoop(
+      msgs, apiStyle, llmUrl, llmHeaders, experienceTools, session
+    );
     const latencyMs = Date.now() - msgStart;
 
     // ── Response Filter ───────────────────────────────────────────────────────
@@ -2232,6 +2368,7 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       filterFlags: sanitizedResponse.flags,
       blocked: sanitizedResponse.blocked,
       redacted: sanitizedResponse.redacted,
+      toolLog: toolLog?.length ? toolLog : undefined,
       feedback: null
     });
     session.updatedAt = new Date();
@@ -2269,7 +2406,8 @@ app.post('/api/sessions/:id/message', async (req, res) => {
       classification,
       filterFlags: sanitizedResponse.flags,
       endpoint: useSafeMode ? `${session.endpoint} (safe)` : session.endpoint,
-      messageCount: session.messages.length
+      messageCount: session.messages.length,
+      toolLog: toolLog?.length ? toolLog : undefined
     });
   } catch (error) {
     logStructured('error', 'llm_call_failed', {
@@ -2344,14 +2482,46 @@ if (session.endpoint === 'primary') {
   if (LLM_CONFIG[session.endpoint]?.backendType === 'docker-runner') {
     activeDockerRunnerModel = { key: session.endpoint, model: session.model, at: new Date() };
   }
-  const llmUrl = useSafeMode ? NEMOCLAW_URL : prepared.llmUrl;
-  const apiStyle = useSafeMode ? 'ollama' : prepared.apiStyle;
-  const streamHeaders = (!useSafeMode && prepared.apiKey) ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
+  // NemoClaw is a WebSocket UI, not a REST API — safe mode uses primary LLM with strict filters
+  const llmUrl = prepared.llmUrl;
+  const apiStyle = prepared.apiStyle;
+  const streamHeaders = prepared.apiKey ? { Authorization: `Bearer ${prepared.apiKey}` } : {};
   const systemMessages = buildSystemMessages({ ...session, safetyMode });
   const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
   const msgs = [...systemMessages, ...historyMessages];
 
+  const experienceStreamTools = useSafeMode ? [] : getExperienceTools(session.experience);
   let fullContent = '';
+
+  // For tool-enabled experiences, run the agentic loop synchronously first,
+  // then emit the result as SSE tokens so the client sees a streamed response.
+  if (experienceStreamTools.length > 0 && !useSafeMode) {
+    try {
+      const { content: loopContent, toolLog: loopToolLog } = await runAgentLoop(
+        msgs, apiStyle, llmUrl, streamHeaders, experienceStreamTools, session
+      );
+      fullContent = loopContent;
+      if (loopToolLog?.length) {
+        for (const entry of loopToolLog) {
+          send({ type: 'tool_call', tool: entry.name, args: entry.args, result: entry.result });
+        }
+      }
+      send({ type: 'token', content: fullContent });
+      session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date(), toolLog: loopToolLog?.length ? loopToolLog : undefined });
+      session.updatedAt = new Date();
+      upsertSessionContext(session, logStructured);
+      send({ type: 'done', messageCount: session.messages.length });
+      res.end();
+    } catch (error) {
+      const errMsg = `[Error] Agent loop failed: ${error.message}`;
+      session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
+      session.updatedAt = new Date();
+      upsertSessionContext(session, logStructured);
+      send({ type: 'error', message: errMsg });
+      res.end();
+    }
+    return;
+  }
 
   try {
     const streamResponse = await axios.post(
@@ -3430,6 +3600,189 @@ async function gitInWorkspace(...args) {
   return stdout.trim();
 }
 
+// ── Agent tool harness ─────────────────────────────────────────────────────────
+
+function getExperienceTools(experience) {
+  switch (experience) {
+    case 'developer': return WORKSPACE_ROOT ? DEVELOPER_TOOLS : [];
+    case 'research': return RESEARCH_TOOLS;
+    case 'website': return WEBSITE_AGENT_TOOLS;
+    default: return [];
+  }
+}
+
+// Blocked commands for the bash tool — crude but effective for container use.
+const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
+
+async function callAgentTool(toolName, toolArgs, session) {
+  try {
+    // ── Workspace tools (developer experience) ───────────────────────────────
+    if (toolName === 'bash') {
+      if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted (WORKSPACE_ROOT not set)' });
+      const { command } = toolArgs;
+      if (BASH_BLOCKLIST.some(p => String(command).includes(p))) {
+        return JSON.stringify({ error: 'Command blocked by safety policy' });
+      }
+      try {
+        const { stdout, stderr } = await execAsync(String(command), { cwd: WORKSPACE_ROOT, timeout: 30000, shell: true });
+        return JSON.stringify({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 });
+      } catch (err) {
+        return JSON.stringify({ stdout: (err.stdout || '').trim(), stderr: (err.stderr || err.message).trim(), exitCode: err.code || 1 });
+      }
+    }
+
+    if (toolName === 'read_file') {
+      if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted' });
+      const abs = resolveWorkspacePath(toolArgs.path);
+      if (!abs) return JSON.stringify({ error: 'Invalid path (path traversal detected)' });
+      try {
+        const s = await stat(abs);
+        if (s.size > 512 * 1024) return JSON.stringify({ error: 'File too large (> 512 KB)' });
+        const content = await readFile(abs, 'utf8');
+        return JSON.stringify({ content, path: toolArgs.path });
+      } catch (err) {
+        return JSON.stringify({ error: err.message });
+      }
+    }
+
+    if (toolName === 'write_file') {
+      if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted' });
+      const abs = resolveWorkspacePath(toolArgs.path);
+      if (!abs) return JSON.stringify({ error: 'Invalid path' });
+      try {
+        await mkdir(resolvePath(abs, '..'), { recursive: true });
+        await writeFile(abs, String(toolArgs.content), 'utf8');
+        return JSON.stringify({ success: true, path: toolArgs.path, bytes: Buffer.byteLength(String(toolArgs.content), 'utf8') });
+      } catch (err) {
+        return JSON.stringify({ error: err.message });
+      }
+    }
+
+    if (toolName === 'list_files') {
+      if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted' });
+      const abs = resolveWorkspacePath(toolArgs.path || '');
+      if (!abs) return JSON.stringify({ error: 'Invalid path' });
+      try {
+        const entries = await readdir(abs, { withFileTypes: true });
+        return JSON.stringify({ entries: entries.map(e => ({ name: e.name, type: e.isDirectory() ? 'dir' : 'file' })) });
+      } catch (err) {
+        return JSON.stringify({ error: err.message });
+      }
+    }
+
+    // ── Research tools ────────────────────────────────────────────────────────
+    if (toolName === 'web_search') {
+      const query = String(toolArgs.query || '').slice(0, 200);
+      const resp = await axios.get(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+        { timeout: 8000 }
+      );
+      const d = resp.data;
+      return JSON.stringify({
+        answer: d.Answer || '',
+        abstract: d.AbstractText || '',
+        abstractSource: d.AbstractSource || '',
+        abstractUrl: d.AbstractURL || '',
+        relatedTopics: (d.RelatedTopics || []).slice(0, 6).map(t => ({ text: t.Text, url: t.FirstURL })).filter(t => t.text)
+      });
+    }
+
+    if (toolName === 'write_artifact') {
+      if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted' });
+      const filename = String(toolArgs.filename || 'artifact.md').replace(/[/\\]/g, '-');
+      const abs = resolvePath(WORKSPACE_ROOT, 'artifacts', filename);
+      if (!abs.startsWith(WORKSPACE_ROOT)) return JSON.stringify({ error: 'Invalid filename' });
+      try {
+        await mkdir(resolvePath(abs, '..'), { recursive: true });
+        await writeFile(abs, String(toolArgs.content), 'utf8');
+        return JSON.stringify({ success: true, path: `artifacts/${filename}` });
+      } catch (err) {
+        return JSON.stringify({ error: err.message });
+      }
+    }
+
+    // ── Website MCP tools ─────────────────────────────────────────────────────
+    if (toolName === 'save_website_file') {
+      const result = await mcpRequest(TOOL_SERVERS.website.url, 'tools/call', {
+        name: 'save_file',
+        arguments: { slug: toolArgs.slug, filename: toolArgs.filename, content: toolArgs.content }
+      });
+      const text = (result?.content || []).filter(i => i?.type === 'text').map(i => i.text).join('\n');
+      return JSON.stringify({ success: true, content: text || 'File saved.' });
+    }
+
+    if (toolName === 'list_website_files') {
+      const result = await mcpRequest(TOOL_SERVERS.website.url, 'tools/call', {
+        name: 'list_client_files',
+        arguments: { slug: toolArgs.slug }
+      });
+      const text = (result?.content || []).filter(i => i?.type === 'text').map(i => i.text).join('\n');
+      return JSON.stringify({ files: text });
+    }
+
+    if (toolName === 'discover_leads') {
+      const result = await mcpRequest(TOOL_SERVERS.website.url, 'tools/call', {
+        name: 'discover_leads',
+        arguments: { location: toolArgs.location, business_type: toolArgs.business_type }
+      });
+      const text = (result?.content || []).filter(i => i?.type === 'text').map(i => i.text).join('\n');
+      return JSON.stringify({ leads: text });
+    }
+
+    return JSON.stringify({ error: `Unknown tool: ${toolName}` });
+  } catch (err) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) {
+  const MAX_ITERATIONS = 5;
+  const toolLog = [];
+  const localMsgs = [...msgs];
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const reqBody = { model: session.model, messages: localMsgs, stream: false };
+    if (tools.length > 0) reqBody.tools = tools;
+
+    const response = await (apiStyle === 'openai'
+      ? axios.post(`${llmUrl}/chat/completions`, reqBody, { headers: llmHeaders, timeout: 120000 })
+      : axios.post(`${llmUrl}/api/chat`, reqBody, { headers: llmHeaders, timeout: 120000 }));
+
+    const msg = response.data.message || response.data.choices?.[0]?.message;
+    const toolCalls = msg?.tool_calls || [];
+
+    if (toolCalls.length === 0) {
+      return { content: msg?.content || 'No response received', toolLog };
+    }
+
+    localMsgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls });
+
+    for (const tc of toolCalls) {
+      const name = tc.function?.name || tc.name;
+      const rawArgs = tc.function?.arguments || tc.arguments || '{}';
+      const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
+      const callId = tc.id || randomUUID();
+
+      const result = await callAgentTool(name, args, session);
+      toolLog.push({ name, args, result: JSON.parse(result), callId });
+
+      if (apiStyle === 'openai') {
+        localMsgs.push({ role: 'tool', tool_call_id: callId, content: result });
+      } else {
+        localMsgs.push({ role: 'tool', content: result });
+      }
+    }
+  }
+
+  // Max iterations reached — ask for summary without tool parameter
+  const reqBody = { model: session.model, messages: localMsgs, stream: false };
+  const response = await (apiStyle === 'openai'
+    ? axios.post(`${llmUrl}/chat/completions`, reqBody, { headers: llmHeaders, timeout: 120000 })
+    : axios.post(`${llmUrl}/api/chat`, reqBody, { headers: llmHeaders, timeout: 120000 }));
+  const msg = response.data.message || response.data.choices?.[0]?.message;
+  return { content: msg?.content || 'No response received', toolLog };
+}
+
 app.get('/api/workspace/status', async (req, res) => {
   if (!WORKSPACE_ROOT) {
     return res.json({ configured: false });
@@ -3565,6 +3918,21 @@ app.post('/api/workspace/git/push', async (req, res) => {
     res.json({ branch });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/workspace/exec', express.json(), async (req, res) => {
+  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+  const { command } = req.body || {};
+  if (!command) return res.status(400).json({ error: 'command is required' });
+  if (BASH_BLOCKLIST.some(p => String(command).includes(p))) {
+    return res.status(403).json({ error: 'Command blocked by safety policy' });
+  }
+  try {
+    const { stdout, stderr } = await execAsync(String(command), { cwd: WORKSPACE_ROOT, timeout: 30000, shell: true });
+    res.json({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 });
+  } catch (err) {
+    res.json({ stdout: (err.stdout || '').trim(), stderr: (err.stderr || err.message).trim(), exitCode: err.code || 1 });
   }
 });
 
