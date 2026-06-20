@@ -14,7 +14,7 @@ Last Updated: 2026-06-17
 ## 2026 Q2 - Quality Reset
 
 - [x] P1: Validate safety-layer behavior with tests and examples.
-- [x] P2: Finish API documentation for lifecycle and security flows.
+- [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
 - [ ] `[deferred/P3]` Unblock NemoClaw sandbox container — Ollama is the active local runtime; revisit if NemoClaw becomes relevant.
 - [ ] `[deferred/P3]` Replace OpenLLM endpoint — CPU-incompatible with current workflow; Ollama + tools/ cover needs. `OPENLLM_ENABLED=false` stays.
@@ -70,10 +70,10 @@ Last Updated: 2026-06-17
 
 ## Notes
 
-- The stack remains local-first and Docker-native.
-- 2027 Q1 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
-- 2027 Q2 focuses heavily on the Blackboard frontend layer once bb-mcp establishes a stable MCP provider contract.
-- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding model portfolio breadth.
+- The stack is still local-first and Docker-native.
+- Q3 critical path: (1) Docker optimization + GPU → (2) service lifecycle + workspace file access → (3) plugin architecture + BYOK → (4) MCP container manager.
+- Q4 picks up the Blackboard frontend layer once bb-mcp has a stable MCP provider contract.
+- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding more model portfolio breadth.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--
