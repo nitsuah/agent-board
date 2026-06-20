@@ -35,25 +35,38 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ## Quick Start
 
+Minimal stack (dashboard + Ollama + DB — fits a 16 GB host):
+
 ```powershell
 cd C:\Users\$env:USERNAME\code\agent-board
-docker compose -f config/docker-compose.yml up -d
+docker compose -f config/docker-compose.yml --project-directory . up -d
 ```
 
-Enable Blackboard MCP only when needed:
+Open [http://localhost:3000](http://localhost:3000) — that's it.
+
+Add opt-in profiles as needed:
 
 ```powershell
-$env:BB_MCP_ENABLED='true'
-docker compose -f config/docker-compose.yml --profile bb-mcp up -d
+# Distributed tracing (Jaeger UI at :16686)
+$env:OTEL_ENABLED='true'
+docker compose -f config/docker-compose.yml --project-directory . --profile observability up -d jaeger
+
+# Blackboard MCP
+docker compose -f config/docker-compose.yml --project-directory . --profile bb-mcp up -d bb-mcp
+
+# MCP tool servers (Content Studio / Website Agent)
+docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d tool-content-gen tool-website
 ```
 
-Open these endpoints:
+Default endpoints (minimal stack):
 
 - [Dashboard](http://localhost:3000)
-- [Jaeger UI](http://localhost:16686)
 - [Ollama API](http://localhost:8081)
-- [NemoClaw](http://localhost:9000) (currently crash-loops on Windows builds — see TASKS.md "Unblock NemoClaw sandbox container")
-- [OpenLLM API (opt-in, see [OpenLLM (optional)](#openllm-optional))](http://localhost:8082)
+
+Optional endpoints (require profile flags above):
+
+- [Jaeger UI](http://localhost:16686) — `--profile observability`
+- [OpenLLM API](http://localhost:8082) — `--profile openllm` (deferred — GPU-only catalog)
 
 ## What You Can Do In 2 Minutes
 

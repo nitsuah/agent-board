@@ -107,14 +107,23 @@ services:
       - agent-network
 
   # ===== SAFETY & SANDBOX =====
-  
+  # Opt-in: enable with --profile sandbox
+  # NemoClaw is currently deferred (crash-loops on Windows builds — CRLF in entrypoint).
+  # Gate it behind a profile so it never starts in the default stack.
   nemoclaw:
     image: nemoclaw:latest
     container_name: nemoclaw
+    profiles:
+      - sandbox
     ports:
       - "9000:8080"
-    command: |
-      sh -lc 'node -e "const net=require("net");net.createServer((socket)=>{const upstream=net.connect(18789,"127.0.0.1");socket.pipe(upstream);upstream.pipe(socket);const close=()=>{if(!socket.destroyed) socket.destroy(); if(!upstream.destroyed) upstream.destroy();};socket.on("error",close);upstream.on("error",close);socket.on("close",close);upstream.on("close",close);}).listen(8080,"0.0.0.0");" & exec /usr/local/bin/nemoclaw-wrapper.sh'
+    command:
+      - sh
+      - -c
+      - >-
+          sed -i 's/\r//' /usr/local/bin/nemoclaw-wrapper.sh 2>/dev/null || true;
+          node -e "const net=require('net');net.createServer(function(socket){var upstream=net.connect(18789,'127.0.0.1');socket.pipe(upstream);upstream.pipe(socket);var close=function(){if(!socket.destroyed)socket.destroy();if(!upstream.destroyed)upstream.destroy();};socket.on('error',close);upstream.on('error',close);socket.on('close',close);upstream.on('close',close);}).listen(8080,'0.0.0.0');" &
+          exec /usr/local/bin/nemoclaw-wrapper.sh
     volumes:
       - nemoclaw_data:/workspace
       - /tmp
@@ -197,8 +206,8 @@ services:
       - AGENT_BOARD_ENABLE_DOCKER_CONTROL=${AGENT_BOARD_ENABLE_DOCKER_CONTROL:-false}
       - PORT=3000
       - DATABASE_URL=postgresql://agent:[REDACTED]@agent-db:5432/agent_board
-      - OTEL_ENABLED=true
-      - OTEL_ENDPOINT=http://jaeger:4318
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_ENDPOINT=${OTEL_ENDPOINT:-http://jaeger:4318}
     volumes:
       - ../:/workspace-root:ro
     # Docker socket access is intentionally not mounted by default.
@@ -215,8 +224,6 @@ services:
     depends_on:
       agent-db:
         condition: service_healthy
-      jaeger:
-        condition: service_healthy
     networks:
       - agent-network
 
@@ -225,10 +232,13 @@ services:
   # Jaeger all-in-one — accepts OTLP and provides a trace UI.
   # View traces at http://localhost:16686
   # OTLP/HTTP endpoint (used by agent-dashboard): http://jaeger:4318
+  # Opt-in: enable with --profile observability  (also set OTEL_ENABLED=true)
   jaeger:
     image: jaegertracing/all-in-one:1.55
     container_name: jaeger
     restart: unless-stopped
+    profiles:
+      - observability
     ports:
       - "16686:16686"  # Jaeger UI
       - "4318:4318"    # OTLP/HTTP ingest

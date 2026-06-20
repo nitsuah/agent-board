@@ -59,10 +59,93 @@ const EXPERIENCE_TOOLS = {
 // ── Safety mode badge colours ──────────────────────────────────────────────
 const SAFETY_COLORS = { strict: 'var(--red)', standard: 'var(--yellow)', research: 'var(--green)' };
 
+function escHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Markdown — lightweight renderer for AI responses.
+ * Handles code blocks (with Copy button), inline code, bold, headers, bullet lists, line breaks.
+ */
+function Markdown({ content }) {
+  const [copied, setCopied] = React.useState(null);
+
+  const copyCode = (code, idx) => {
+    navigator.clipboard?.writeText(code).catch(() => {});
+    setCopied(idx);
+    setTimeout(() => setCopied(c => c === idx ? null : c), 1500);
+  };
+
+  // Collect code blocks first so we can render them as React elements (not dangerouslySetInnerHTML)
+  const segments = React.useMemo(() => {
+    if (!content) return [];
+    const parts = [];
+    let remaining = content;
+    let codeIdx = 0;
+    const codeBlockRe = /```(\w*)\n?([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+    codeBlockRe.lastIndex = 0;
+    while ((match = codeBlockRe.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ type: 'text', value: content.slice(lastIndex, match.index) });
+      }
+      parts.push({ type: 'code', lang: match[1] || 'text', value: match[2].trim(), idx: codeIdx++ });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) parts.push({ type: 'text', value: content.slice(lastIndex) });
+    return parts;
+  }, [content]);
+
+  const renderText = (text) => {
+    let html = escHtml(text);
+    // Bold
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // Italic
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    // Inline code (already HTML-escaped, so backticks are safe)
+    html = html.replace(/`([^`\n]+)`/g, '<code class="md-code-inline">$1</code>');
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+    // Bullet list items — wrap groups in <ul>
+    html = html.replace(/^[-*•] (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>[\s\S]*?<\/li>)(?=\s*(?:<li>|$))/g, '$1');
+    html = html.replace(/(<li>[\s\S]*<\/li>)/g, '<ul class="md-ul">$1</ul>');
+    // Double newline → paragraph break, single newline → line break
+    html = html.replace(/\n\n/g, '</p><p class="md-p">');
+    html = html.replace(/\n/g, '<br>');
+    html = `<p class="md-p">${html}</p>`;
+    html = html.replace(/<p class="md-p"><\/p>/g, '');
+    return html;
+  };
+
+  return (
+    <div className="md-content">
+      {segments.map((seg, i) =>
+        seg.type === 'code' ? (
+          <div key={i} className="md-code-block">
+            <div className="md-code-header">
+              <span className="md-code-lang">{seg.lang}</span>
+              <button className="md-copy-btn" onClick={() => copyCode(seg.value, seg.idx)}>
+                {copied === seg.idx ? '✓ Copied' : 'Copy'}
+              </button>
+            </div>
+            <pre><code>{seg.value}</code></pre>
+          </div>
+        ) : (
+          <span key={i} dangerouslySetInnerHTML={{ __html: renderText(seg.value) }} />
+        )
+      )}
+    </div>
+  );
+}
+
 /**
  * AgentStatusCard — compact card showing a single session's live status.
  */
-function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, endpointLabel }) {
+function AgentStatusCard({ session, isActive, isStreaming, queueCount, isPaused, onClick, onDelete, onStop, endpointLabel }) {
   const ago = (date) => {
     const secs = Math.floor((Date.now() - new Date(date)) / 1000);
     if (secs < 60) return `${secs}s ago`;
@@ -84,6 +167,13 @@ function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, en
       <div className="agent-card-header">
         <span className={`agent-status-dot ${statusClass}`} title={statusLabel} />
         <span className="agent-card-name">{session.name}</span>
+        {isStreaming && onStop && (
+          <button
+            className="btn-stop"
+            title="Stop responding"
+            onClick={(e) => { e.stopPropagation(); onStop(session.id); }}
+          >■</button>
+        )}
         <button
           className="btn-delete"
           title="Delete session"
@@ -92,14 +182,11 @@ function AgentStatusCard({ session, isActive, isStreaming, onClick, onDelete, en
       </div>
       <div className="agent-card-meta">
         <span className="agent-card-endpoint">{endpointLabel || session.endpoint}</span>
-        <span className="agent-card-msgs">{session.messageCount} msg{session.messageCount !== 1 ? 's' : ''}</span>
-        <span className="agent-card-time">{ago(session.updatedAt || session.createdAt)}</span>
+        <span className="agent-card-msgs">{session.messageCount}m</span>
+        {queueCount > 0 && <span className="agent-card-queue">{queueCount}q</span>}
+        {isPaused && <span className="agent-card-paused">⏸</span>}
+        {isStreaming && <span style={{ color: 'var(--accent)' }}>⟳</span>}
       </div>
-      {isStreaming && (
-        <div className="agent-card-streaming">
-          <span className="streaming-indicator">⟳ receiving response…</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -356,10 +443,13 @@ function App() {
   const [currentEndpoint, setCurrentEndpoint] = useState('primary');
   const [messageInput, setMessageInput] = useState('');
   const [useNemoClaw, setUseNemoClaw] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
+  // Per-session streaming state — tracks which sessions are actively receiving a response
+  const [loadingSessions, setLoadingSessions] = useState(new Set());
+  const [streamingBySession, setStreamingBySession] = useState({});
+  const streamAbortControllersRef = useRef(new Map());
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(() => window.innerWidth > 900);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [serviceActionErrors, setServiceActionErrors] = useState({});
   const [modelPulls, setModelPulls] = useState({});
@@ -369,6 +459,16 @@ function App() {
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
   const [liveEvents, setLiveEvents] = useState([]);
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Content file browser (website agent output)
+  const [contentClients, setContentClients] = useState([]);
+  const [contentFiles, setContentFiles] = useState({}); // slug -> file list
+  const [contentExpanded, setContentExpanded] = useState({}); // slug -> bool
+
+  // Known pulled models persisted in localStorage so tiles survive container restarts
+  const [knownModels, setKnownModels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('agent_board_pulled_models') || '{}'); } catch { return {}; }
+  }); // { "endpointKey:model": { endpointKey, model, pulledAt } }
 
   // Workspace file I/O
   const [workspacePath, setWorkspacePath] = useState('');
@@ -412,8 +512,18 @@ function App() {
   const [taskTitle, setTaskTitle] = useState('');
   const [taskPriority, setTaskPriority] = useState('medium');
 
+  // Per-session message queue: queued messages waiting to be sent after current response
+  const messageQueuesRef = useRef({}); // { sessionId: string[] } — source of truth
+  const [queueLengths, setQueueLengths] = useState({}); // mirrors ref for UI re-renders
+  // Paused sessions won't auto-process the next queued message after a response ends
+  const pausedSessionsRef = useRef(new Set());
+  const [pausedSessions, setPausedSessions] = useState(new Set());
+
   const chatBottomRef = useRef(null);
-  const activeStreamRef = useRef(null);
+
+  // Derived per-active-session helpers (backwards-compat with single-session UI)
+  const loading = loadingSessions.has(activeSession);
+  const streamingContent = streamingBySession[activeSession] || '';
 
   // Merge static ENDPOINT_META with any custom endpoints reported by the server.
   // Custom endpoints (backendType: 'custom') are dynamically registered via
@@ -671,6 +781,14 @@ function App() {
       const data = await res.json();
       if (!data.success) {
         setServiceActionErrors(prev => ({ ...prev, [actionId]: data.error || 'Pull failed' }));
+      } else {
+        // Record the pull in localStorage so the tile persists if the container restarts
+        const record = { endpointKey: endpoint, model, pulledAt: new Date().toISOString() };
+        setKnownModels(prev => {
+          const next = { ...prev, [pullKey]: record };
+          try { localStorage.setItem('agent_board_pulled_models', JSON.stringify(next)); } catch { /* storage full */ }
+          return next;
+        });
       }
       await fetchModelPullStatus();
     } catch (error) {
@@ -678,6 +796,43 @@ function App() {
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
     }
+  };
+
+  const unloadDockerModel = async (model) => {
+    try {
+      const res = await fetch('/api/models/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model })
+      });
+      const data = await res.json();
+      if (!data.success) console.error('Unload failed:', data.error);
+      else await fetchDockerStatus();
+    } catch (err) { console.error('Unload error:', err); }
+  };
+
+  const fetchContentClients = async () => {
+    try {
+      const res = await fetch('/api/content/clients');
+      const data = await res.json();
+      if (data.success) setContentClients(data.clients || []);
+    } catch { /* ignore */ }
+  };
+
+  const fetchContentFiles = async (slug) => {
+    try {
+      const res = await fetch(`/api/content/clients/${encodeURIComponent(slug)}/files`);
+      const data = await res.json();
+      if (data.success) setContentFiles(prev => ({ ...prev, [slug]: data.files || [] }));
+    } catch { /* ignore */ }
+  };
+
+  const downloadContentFile = (slug, filePath) => {
+    const url = `/api/content/download/${encodeURIComponent(slug)}/${filePath}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filePath.split('/').pop();
+    a.click();
   };
 
   const fetchDemoMode = async () => {
@@ -827,37 +982,84 @@ function App() {
     } catch (error) { console.error('Error fetching session details:', error); }
   };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!activeSession || !messageInput.trim()) return;
+  // ── Queue helpers ─────────────────────────────────────────────────────────
+  const enqueueMessage = (sessionId, message) => {
+    if (!messageQueuesRef.current[sessionId]) messageQueuesRef.current[sessionId] = [];
+    messageQueuesRef.current[sessionId].push(message);
+    setQueueLengths(prev => ({ ...prev, [sessionId]: (messageQueuesRef.current[sessionId] || []).length }));
+  };
 
-    // Cancel any active stream
-    if (activeStreamRef.current) {
-      activeStreamRef.current.abort();
-      activeStreamRef.current = null;
+  const dequeueNext = (sessionId) => {
+    const queue = messageQueuesRef.current[sessionId];
+    if (!queue || queue.length === 0) return null;
+    const msg = queue.shift();
+    setQueueLengths(prev => {
+      const len = (messageQueuesRef.current[sessionId] || []).length;
+      const next = { ...prev };
+      if (len === 0) delete next[sessionId]; else next[sessionId] = len;
+      return next;
+    });
+    return msg;
+  };
+
+  const clearQueue = (sessionId) => {
+    messageQueuesRef.current[sessionId] = [];
+    setQueueLengths(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
+  };
+
+  const togglePause = (sessionId) => {
+    const next = new Set(pausedSessionsRef.current);
+    if (next.has(sessionId)) {
+      next.delete(sessionId);
+      pausedSessionsRef.current = next;
+      setPausedSessions(next);
+      // Resume: immediately process queued message if any
+      const nextMsg = dequeueNext(sessionId);
+      if (nextMsg) sendMessageCore(sessionId, nextMsg);
+    } else {
+      next.add(sessionId);
+      pausedSessionsRef.current = next;
+      setPausedSessions(next);
     }
+  };
 
-    const optimisticMsg = { role: 'user', content: messageInput.trim(), timestamp: new Date() };
-    setActiveSessionMessages(prev => [...prev, optimisticMsg]);
-    const sentMessage = messageInput;
-    setMessageInput('');
-    setLoading(true);
-    setStreamingContent('');
+  const stopSession = (sessionId) => {
+    const ctrl = streamAbortControllersRef.current.get(sessionId);
+    if (ctrl) {
+      ctrl.abort();
+      streamAbortControllersRef.current.delete(sessionId);
+    }
+    setLoadingSessions(prev => { const next = new Set(prev); next.delete(sessionId); return next; });
+    setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
+  };
+
+  const forceSend = (sessionId) => {
+    stopSession(sessionId);
+    const nextMsg = dequeueNext(sessionId);
+    if (nextMsg) setTimeout(() => sendMessageCore(sessionId, nextMsg), 50);
+  };
+
+  // Core send: sends one message directly to the API, then processes the queue on completion.
+  const sendMessageCore = async (sessionId, messageText) => {
+    const optimisticMsg = { role: 'user', content: messageText, timestamp: new Date() };
+    if (sessionId === activeSession) {
+      setActiveSessionMessages(prev => [...prev, optimisticMsg]);
+    }
+    setLoadingSessions(prev => new Set([...prev, sessionId]));
+    setStreamingBySession(prev => ({ ...prev, [sessionId]: '' }));
 
     const controller = new AbortController();
-    activeStreamRef.current = controller;
+    streamAbortControllersRef.current.set(sessionId, controller);
 
     try {
-      const res = await fetch(`/api/sessions/${activeSession}/stream`, {
+      const res = await fetch(`/api/sessions/${sessionId}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw }),
+        body: JSON.stringify({ message: messageText, useSafeMode: useNemoClaw }),
         signal: controller.signal
       });
 
-      if (!res.ok || !res.body) {
-        throw new Error(`Stream request failed: ${res.status}`);
-      }
+      if (!res.ok || !res.body) throw new Error(`Stream request failed: ${res.status}`);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -867,11 +1069,9 @@ function App() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete last line
-
+        buffer = lines.pop();
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const json = line.slice(6).trim();
@@ -880,55 +1080,67 @@ function App() {
             const event = JSON.parse(json);
             if (event.type === 'token') {
               accumulated += event.content;
-              setStreamingContent(accumulated);
-            } else if (event.type === 'done') {
-              setStreamingContent('');
+              setStreamingBySession(prev => ({ ...prev, [sessionId]: accumulated }));
+            } else if (event.type === 'done' || event.type === 'error') {
+              if (event.type === 'error') console.error('LLM stream error:', event.message);
+              setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
-              fetchSessionDetails(activeSession);
-            } else if (event.type === 'error') {
-              console.error('LLM stream error:', event.message);
-              setStreamingContent('');
-              fetchSessions();
-              fetchSessionDetails(activeSession);
+              fetchSessionDetails(sessionId);
             }
-          } catch {
-            // skip malformed SSE line
-          }
+          } catch { /* skip malformed SSE line */ }
         }
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error('Error sending message via stream, falling back:', error);
-        // Fallback to non-streaming endpoint
         try {
-          const res = await fetch(`/api/sessions/${activeSession}/message`, {
+          const res = await fetch(`/api/sessions/${sessionId}/message`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: sentMessage, useSafeMode: useNemoClaw })
+            body: JSON.stringify({ message: messageText, useSafeMode: useNemoClaw })
           });
           const data = await res.json();
           fetchSessions();
-          fetchSessionDetails(activeSession);
+          fetchSessionDetails(sessionId);
           if (!data.success) console.error('LLM error:', data.response);
         } catch (fbErr) {
           console.error('Fallback also failed:', fbErr);
-          setMessageInput(sentMessage);
-          setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
+          if (sessionId === activeSession) {
+            setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
+          }
         }
       }
     } finally {
-      activeStreamRef.current = null;
-      setLoading(false);
-      setStreamingContent('');
+      streamAbortControllersRef.current.delete(sessionId);
+      setLoadingSessions(prev => { const next = new Set(prev); next.delete(sessionId); return next; });
+      setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
+      // Auto-process next queued message for this session (if not paused)
+      if (!pausedSessionsRef.current.has(sessionId)) {
+        const nextMsg = dequeueNext(sessionId);
+        if (nextMsg) setTimeout(() => sendMessageCore(sessionId, nextMsg), 50);
+      }
     }
+  };
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    const sessionId = activeSession;
+    if (!sessionId || !messageInput.trim()) return;
+    const message = messageInput.trim();
+    setMessageInput('');
+
+    if (loadingSessions.has(sessionId)) {
+      // Session already streaming — queue the message
+      enqueueMessage(sessionId, message);
+      return;
+    }
+    sendMessageCore(sessionId, message);
   };
 
   const handleMessageInputKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!loading && activeSession && messageInput.trim()) {
-        sendMessage(e);
-      }
+      if (activeSession && messageInput.trim()) sendMessage(e);
     }
   };
 
@@ -1165,9 +1377,12 @@ function App() {
             onClick={() => {
               setShowSystemPanel(prev => {
                 const next = !prev;
-                if (next && dockerStatus?.workspace?.configured) {
-                  browseWorkspace('');
-                  refreshWorkspaceGit();
+                if (next) {
+                  if (dockerStatus?.workspace?.configured) {
+                    browseWorkspace('');
+                    refreshWorkspaceGit();
+                  }
+                  fetchContentClients();
                 }
                 return next;
               });
@@ -1240,6 +1455,43 @@ function App() {
             </div>
           </div>
 
+          {/* Output Files — visible when a tool-backed experience is active */}
+          {EXPERIENCE_TOOLS[selectedExperience] && (
+            <div className="drawer-section">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3>Output Files</h3>
+                <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={fetchContentClients}>↻</button>
+              </div>
+              {contentClients.length === 0 ? (
+                <div style={{ fontSize: '0.73rem', opacity: 0.45 }}>No output yet.</div>
+              ) : contentClients.map(slug => (
+                <div key={slug} style={{ fontSize: '0.73rem' }}>
+                  <div
+                    style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--accent)' }}
+                    onClick={() => {
+                      const next = !contentExpanded[slug];
+                      setContentExpanded(prev => ({ ...prev, [slug]: next }));
+                      if (next && !contentFiles[slug]) fetchContentFiles(slug);
+                    }}
+                  >
+                    {contentExpanded[slug] ? '▼' : '▶'} {slug}
+                  </div>
+                  {contentExpanded[slug] && (
+                    <div style={{ paddingLeft: '0.7rem' }}>
+                      {!contentFiles[slug] && <div style={{ opacity: 0.5 }}>Loading…</div>}
+                      {contentFiles[slug]?.map(f => (
+                        <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.1rem 0' }}>
+                          <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>{f.path}</span>
+                          <button className="btn-docker-action" style={{ fontSize: '0.65rem', padding: '0.08rem 0.3rem', flexShrink: 0 }} onClick={() => downloadContentFile(slug, f.path)}>↓</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="drawer-section">
             <h3>Sessions</h3>
             <button className="btn-primary" onClick={createSession}>+ New Session</button>
@@ -1251,9 +1503,15 @@ function App() {
                     key={session.id}
                     session={session}
                     isActive={isActive}
-                    isStreaming={isActive && loading}
-                    onClick={() => setActiveSession(session.id)}
+                    isStreaming={loadingSessions.has(session.id)}
+                    queueCount={queueLengths[session.id] || 0}
+                    isPaused={pausedSessions.has(session.id)}
+                    onClick={() => {
+                      setActiveSession(session.id);
+                      fetchSessionDetails(session.id);
+                    }}
                     onDelete={deleteSession}
+                    onStop={stopSession}
                     endpointLabel={allEndpointMeta[session.endpoint]?.label}
                   />
                 );
@@ -1261,7 +1519,7 @@ function App() {
             </div>
           </div>
 
-          <div className="drawer-section">
+          <div className="drawer-section drawer-section-tasks">
             <h3>Task Queue</h3>
             <div className="task-summary-row">
               <span>Total {taskSummary.total || 0}</span>
@@ -1309,6 +1567,14 @@ function App() {
                 <div className="task-empty">No tasks yet.</div>
               )}
             </div>
+          </div>
+
+          <div className="drawer-collapse-btn">
+            <button
+              className="icon-btn"
+              onClick={() => setShowSidebar(false)}
+              title="Collapse sidebar"
+            >‹ Hide</button>
           </div>
         </aside>
 
@@ -1461,11 +1727,21 @@ function App() {
                     <div className="chat-meta">
                       {activeSessionData.endpoint} • {activeSessionData.messageCount} messages
                       {loading && <span className="streaming-badge"> ⟳ streaming</span>}
+                      {queueLengths[activeSession] > 0 && (
+                        <span className="queue-badge">{queueLengths[activeSession]} queued</span>
+                      )}
                       {activeSessionData.safetyMode && (
                         <span style={{ marginLeft: '0.5rem', color: SAFETY_COLORS[activeSessionData.safetyMode], fontWeight: 600, fontSize: '0.75rem' }}>
                           🛡 {activeSessionData.safetyMode}
                         </span>
                       )}
+                    </div>
+                    <div className="chat-header-actions">
+                      <button
+                        className={`btn-secondary btn-sm ${pausedSessions.has(activeSession) ? 'active' : ''}`}
+                        title={pausedSessions.has(activeSession) ? 'Responses paused — click to resume' : 'Pause auto-response'}
+                        onClick={() => togglePause(activeSession)}
+                      >{pausedSessions.has(activeSession) ? '▶ Resume' : '⏸ Pause'}</button>
                     </div>
                   </div>
 
@@ -1483,7 +1759,11 @@ function App() {
                       activeSessionMessages.map((msg, index) => (
                         <div key={index} className={`message ${msg.role}`}>
                           <div className="message-content">
-                            <strong>{msg.role === 'user' ? 'You' : 'AI'}:</strong> {msg.content}
+                            <span className="message-role">{msg.role === 'user' ? 'You' : 'AI'}</span>
+                            {msg.role === 'assistant'
+                              ? <Markdown content={msg.content} />
+                              : <span className="message-text">{msg.content}</span>
+                            }
                             {msg.blocked && (
                               <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--red)' }}>
                                 [blocked by safety filter]
@@ -1522,14 +1802,17 @@ function App() {
                     {loading && streamingContent && (
                       <div className="message assistant streaming">
                         <div className="message-content">
-                          <strong>AI:</strong> {streamingContent}<span className="cursor-blink">▍</span>
+                          <span className="message-role">AI</span>
+                          <Markdown content={streamingContent} />
+                          <span className="cursor-blink">▍</span>
                         </div>
                       </div>
                     )}
                     {loading && !streamingContent && (
                       <div className="message assistant">
                         <div className="message-content" style={{ opacity: 0.6, fontStyle: 'italic' }}>
-                          <strong>AI:</strong> Thinking<span className="dot-pulse">...</span>
+                          <span className="message-role">AI</span>
+                          <span> Thinking<span className="dot-pulse">...</span></span>
                         </div>
                       </div>
                     )}
@@ -1542,9 +1825,8 @@ function App() {
                       value={messageInput}
                       onChange={e => setMessageInput(e.target.value)}
                       onKeyDown={handleMessageInputKeyDown}
-                      placeholder="Type your message..."
+                      placeholder={loading ? 'Type to queue next message…' : 'Type your message…'}
                       maxLength={4000}
-                      disabled={loading}
                     />
                     <span className="input-counter">{messageInput.length}/4000</span>
                     <select
@@ -1552,7 +1834,7 @@ function App() {
                       value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
                       onChange={e => handleEndpointSelection(e.target.value)}
                       title="Choose model endpoint"
-                      disabled={loading || selectableEndpointKeys.length === 0 || demoMode.enabled}
+                      disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
                     >
                       {selectableEndpointKeys.length === 0 ? (
                         <option value="">No models online</option>
@@ -1568,10 +1850,26 @@ function App() {
                         checked={useNemoClaw}
                         onChange={e => setUseNemoClaw(e.target.checked)}
                       />
-                      NemoClaw safe mode
+                      NemoClaw
                     </label>
-                    <button type="submit" disabled={loading} className="btn-send">
-                      {loading ? 'Sending...' : 'Send'}
+                    {loading && queueLengths[activeSession] > 0 && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        title="Stop current response and send next queued message immediately"
+                        onClick={() => forceSend(activeSession)}
+                      >⚡ Force ({queueLengths[activeSession]})</button>
+                    )}
+                    {loading && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        title="Stop responding"
+                        onClick={() => stopSession(activeSession)}
+                      >■ Stop</button>
+                    )}
+                    <button type="submit" className="btn-send">
+                      {loading ? '+ Queue' : 'Send'}
                     </button>
                   </form>
                 </>
@@ -1752,13 +2050,21 @@ function App() {
                 </div>
               )}
 
-              <h3>Workspace</h3>
-              {!dockerStatus?.workspace?.configured ? (
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setWorkspaceExpanded(x => !x)}
+              >
+                <h3 style={{ margin: 0 }}>Workspace</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)', transform: workspaceExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>▼</span>
+              </div>
+              {workspaceExpanded && (!dockerStatus?.workspace?.configured ? (
                 <div className="docker-status-item">
                   <div className="docker-service-info">
-                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Not configured</div>
-                    <div className="docker-service-port" style={{ fontSize: '0.72rem' }}>
-                      Set WORKSPACE_PATH in .env and apply docker-compose.workspace.yml
+                    <div className="docker-service-name" style={{ opacity: 0.55 }}>Optional — not configured</div>
+                    <div className="docker-service-port" style={{ fontSize: '0.72rem', lineHeight: 1.5 }}>
+                      Mount a local project folder so the AI can read, write, and git-commit files.<br />
+                      Set <code>WORKSPACE_PATH=C:/path/to/project</code> in <code>config/.env</code> then apply
+                      <code> docker-compose.workspace.yml</code> overlay.
                     </div>
                   </div>
                 </div>
@@ -1863,81 +2169,141 @@ function App() {
                     </div>
                   )}
                 </>
-              )}
-
-              <h3>LLM Endpoints</h3>
-              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => (
-                <div key={key} className="docker-status-item">
-                  <div className="docker-service-info">
-                    <div className="docker-service-name">{ep.name}</div>
-                    <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
-                      {ep.live ? '● Live' : '● Offline / Fallback'}
-                      {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.7 }}>(API key set)</span>}
-                    </div>
-                    <div className="docker-service-port">{ep.model}</div>
-                  </div>
-                </div>
               ))}
 
-              <h3>Models</h3>
-              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints)
-                .filter(([, ep]) => ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner')
-                .map(([key, ep]) => {
-                  const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
-                  const pullKey = `${key}:${ep.model}`;
-                  const actionId = `pull:${pullKey}`;
-                  const pull = modelPulls[pullKey];
-                  const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
-                  return (
-                    <div key={key} className="docker-status-item">
-                      <div className="docker-service-info">
-                        <div className="docker-service-name">{ep.name}</div>
-                        <div className="docker-service-port">{ep.model || 'no model configured'}</div>
-                        <div className={`docker-service-status ${installed ? 'running' : 'stopped'}`}>
-                          {installed ? '● Installed' : '● Not pulled'}
-                        </div>
-                        {pull && (
-                          <div className={`docker-service-pull-status ${pull.status}`}>
-                            {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
-                            {pull.status === 'completed' && '✓ Pull complete'}
-                            {pull.status === 'failed' && `✗ ${pull.error || 'Pull failed'}`}
-                          </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3>Models &amp; Endpoints</h3>
+                <button
+                  className="btn-docker-action"
+                  style={{ fontSize: '0.72rem' }}
+                  title="Pull all configured models that are not yet installed"
+                  onClick={async () => {
+                    try {
+                      await fetch('/api/models/pull-all', { method: 'POST' });
+                    } catch (err) { console.error('pull-all failed:', err); }
+                  }}
+                >Pull All</button>
+              </div>
+              {dockerStatus?.endpoints && Object.entries(dockerStatus.endpoints).map(([key, ep]) => {
+                const canPull = ep.backendType === 'ollama-container' || ep.backendType === 'docker-runner';
+                const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
+                const pullKey = `${key}:${ep.model}`;
+                const actionId = `pull:${pullKey}`;
+                const pull = modelPulls[pullKey];
+                const pulling = pull?.status === 'pulling' || serviceActionsInFlight[actionId];
+                const isActiveRunner = ep.backendType === 'docker-runner' &&
+                  dockerStatus?.activeDockerRunnerModel?.key === key;
+                const wasKnown = !!knownModels[pullKey];
+                const isOfflineButKnown = wasKnown && !ep.live;
+                const isOnlineNotInstalled = wasKnown && ep.live && !installed;
+                return (
+                  <div key={key} className={`docker-status-item${isOfflineButKnown ? ' known-offline' : ''}`}>
+                    <div className="docker-service-info">
+                      <div className="docker-service-name">
+                        {ep.name}
+                        {isActiveRunner && <span className="badge-active">Active</span>}
+                        {ep.hasApiKey && <span style={{ marginLeft: '0.3rem', opacity: 0.6, fontSize: '0.7rem' }}>(API key)</span>}
+                      </div>
+                      <div className="docker-service-port">{ep.model || 'no model configured'}</div>
+                      <div className={`docker-service-status ${ep.live ? 'running' : 'stopped'}`}>
+                        {ep.live ? '● Live' : '● Offline'}
+                        {canPull && ep.live && (
+                          <span style={{ marginLeft: '0.4rem', opacity: 0.7 }}>
+                            {installed ? '· installed' : '· not pulled'}
+                          </span>
                         )}
-                        {serviceActionErrors[actionId] && (
-                          <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
+                        {isOfflineButKnown && (
+                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· was installed</span>
+                        )}
+                        {isOnlineNotInstalled && (
+                          <span style={{ marginLeft: '0.4rem', color: 'var(--yellow)', fontSize: '0.68rem' }}>· re-pull needed</span>
                         )}
                       </div>
-                      <div className="docker-actions">
+                      {pull && (
+                        <div className={`docker-service-pull-status ${pull.status}`}>
+                          {pull.status === 'pulling' && `Pulling… ${pull.percent != null ? `${pull.percent}%` : pull.message || ''}`}
+                          {pull.status === 'completed' && '✓ Pull complete'}
+                          {pull.status === 'failed' && !installed && `✗ ${pull.error || 'Pull failed'}`}
+                        </div>
+                      )}
+                      {serviceActionErrors[actionId] && (
+                        <div className="docker-service-error">{serviceActionErrors[actionId]}</div>
+                      )}
+                    </div>
+                    <div className="docker-actions">
+                      {canPull && (
                         <button
                           className="btn-docker-action"
                           disabled={pulling || installed === true || !ep.model}
                           onClick={() => pullModel(key, ep.model)}
                         >
-                          {pulling ? 'Pulling…' : installed ? 'Installed' : 'Pull'}
+                          {pulling ? 'Pulling…' : installed ? 'Installed' : isOnlineNotInstalled ? 'Re-pull' : 'Pull'}
                         </button>
-                      </div>
+                      )}
+                      {ep.backendType === 'docker-runner' && installed && (
+                        <button
+                          className="btn-docker-action"
+                          title="Remove model from Docker Runner cache"
+                          onClick={() => unloadDockerModel(ep.model)}
+                        >
+                          Unload
+                        </button>
+                      )}
                     </div>
-                  );
-                })}
+                  </div>
+                );
+              })}
 
               <div className="system-meta-text">
-                <div>
-                  <strong>Primary endpoint resolved:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}
-                </div>
-                {Array.isArray(systemServices?.primaryLlm?.candidates) && (
-                  <div>
-                    <strong>Discovery candidates:</strong> {systemServices.primaryLlm.candidates.join(', ')}
+                <div><strong>Primary:</strong> {systemServices?.primaryLlm?.resolvedUrl || 'N/A'}</div>
+                <div><strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}</div>
+                {dockerStatus?.endpoints && Object.values(dockerStatus.endpoints).some(ep => ep.backendType === 'docker-runner' && !ep.runnerLive) && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.4rem 0.5rem', background: 'var(--surface-3)', borderRadius: '4px', fontSize: '0.72rem', opacity: 0.8 }}>
+                    <strong>Docker Runner offline.</strong> Requires Docker Desktop 4.40+ with Model Runner enabled.<br />
+                    Pull models: <code>docker model pull ai/qwen3-coder:latest</code>
                   </div>
                 )}
-                <div>
-                  <strong>Control API:</strong> {systemServices?.dockerControlEnabled ? 'enabled' : 'disabled'}
-                </div>
               </div>
 
-              <p className="system-meta-text">
-                Docker Runner models: <code>docker model pull ai/glm-4.7-flash:latest</code><br />
-                Manage stack: <code>stack-manager.ps1</code>
-              </p>
+              {/* Generated content file browser — shown when website tool output exists */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem' }}>
+                <h3>Generated Output</h3>
+                <button className="btn-docker-action" style={{ fontSize: '0.72rem' }} onClick={fetchContentClients}>Refresh</button>
+              </div>
+              {contentClients.length === 0 ? (
+                <div style={{ fontSize: '0.78rem', opacity: 0.45, padding: '0.2rem 0' }}>No client output yet. Run the Website Agent to generate files.</div>
+              ) : (
+                contentClients.map(slug => (
+                  <div key={slug} className="docker-status-item" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.3rem' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', width: '100%' }}
+                      onClick={() => {
+                        const next = !contentExpanded[slug];
+                        setContentExpanded(prev => ({ ...prev, [slug]: next }));
+                        if (next && !contentFiles[slug]) fetchContentFiles(slug);
+                      }}
+                    >
+                      <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{contentExpanded[slug] ? '▼' : '▶'} {slug}</span>
+                    </div>
+                    {contentExpanded[slug] && (
+                      <div style={{ paddingLeft: '0.8rem', width: '100%' }}>
+                        {!contentFiles[slug] && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>Loading…</div>}
+                        {contentFiles[slug]?.length === 0 && <div style={{ opacity: 0.5, fontSize: '0.75rem' }}>(empty)</div>}
+                        {contentFiles[slug]?.map(f => (
+                          <div key={f.path} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.15rem 0' }}>
+                            <span style={{ fontSize: '0.73rem', opacity: 0.8 }}>{f.path}</span>
+                            <button
+                              className="btn-docker-action"
+                              style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem' }}
+                              onClick={() => downloadContentFile(slug, f.path)}
+                            >↓</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
               );
             })()}

@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-06-12
+Last Updated: 2026-06-17
 
 ## 2026 Q2 - Persistence and Agent Control
 
@@ -9,14 +9,15 @@ Last Updated: 2026-06-12
 - [ ] Add heartbeat and resource monitoring so agents can report health and resource usage back to the dashboard or if models fail the system can offer the "restart" option.
 - [ ] Finish or investigate for further review the real-time communication bridge that early docs implied.
 - [ ] Discover features from [1code](https://github.com/21st-dev/1code) and evaluate relevant patterns/approaches for local stack adaptation.
+- [ ] **Conversation replay mode** — step-through replay of persisted agent sessions (message-by-message) for debugging decision paths, auditing tool calls, and recording portfolio demos without a live model.
 
 ## 2026 Q2 - Quality Reset
 
 - [x] P1: Validate safety-layer behavior with tests and examples.
 - [ ] P2: Finish API documentation for lifecycle and security flows.
 - [ ] P2: Define a validated production deployment path.
-- [ ] P2: Unblock NemoClaw sandbox container (CRLF/build + stale entrypoint)
-- [ ] Verify source a working OpenLLM or even extensible custom endpoints or APIs stored securely (`OPENLLM_ENABLED=false` pending).
+- [ ] `[deferred/P3]` Unblock NemoClaw sandbox container — Ollama is the active local runtime; revisit if NemoClaw becomes relevant.
+- [ ] `[deferred/P3]` Replace OpenLLM endpoint — CPU-incompatible with current workflow; Ollama + tools/ cover needs. `OPENLLM_ENABLED=false` stays.
 
 ## 2026 Q3 - Extensibility Foundations
 
@@ -24,12 +25,13 @@ Last Updated: 2026-06-12
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
+- [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
 
-## 2027 Q1 - Custom Agents, Stability & MCP Ecosystem
+### Custom Agent System & Safety Guardrails
 
 ### Stability, Resource Optimization & Device Profiling
 
-- [ ] **Docker image optimization**: Make heavy subsystems (bb-mcp, large model pre-loads) opt-in; require only core logging, metrics, and database.
+- [x] **Docker image optimization**: Gated nemoclaw (`sandbox` profile) and jaeger (`observability` profile); minimal default stack is agent-db + ollama + dashboard; all profiles documented in `.env.example` and README.
 - [ ] **Host architecture profiling (Phase 1)**: Profile active hardware specs (host RAM, VRAM, CPU threads, OS overhead) beyond basic laptop/desktop checks.
 - [ ] **Windows host mitigation (Phase 2)**: Establish a lean baseline profile for Windows nodes to account for WSL2/Docker Desktop resource taxes.
 - [x] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
@@ -44,6 +46,7 @@ Last Updated: 2026-06-12
 - [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
 - [ ] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
+- [ ] **Agent skills system**: Loadable first-class skill modules registered and invoked within the agent runtime (similar to Odysseus); skills layer on top of tools/ MCP servers for task-specific capabilities. Lowest priority — after plugin architecture and BYOK.
 - [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
 - [ ] **File & payload guardrails (Phase 2)**: Enforce confirmation prompts, pre-operation snapshots, and gateway-level payload scrubbing (PII, credentials, regex injections).
 - [ ] **Schema validation (Phase 2)**: Guard model responses with structured schema enforcement (JSON/Markdown formatting filters).
