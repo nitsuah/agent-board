@@ -25,6 +25,8 @@ import {
   recordEvent,
   shutdown as shutdownTracing,
 } from './tracing.js';
+import { createWorkspaceRouter } from './routes/workspace.js';
+import { createTasksRouter } from './routes/tasks.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1314,6 +1316,10 @@ function calculateAverageMessagesPerSession(allEvents, activeSessions) {
   const totalMessages = Array.from(sessionMessageCounts.values()).reduce((sum, count) => sum + count, 0);
   return Number((totalMessages / sessionMessageCounts.size).toFixed(1));
 }
+
+// Router instances (initialized after shared state + helpers are declared)
+const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
+const workspaceRouter = createWorkspaceRouter(WORKSPACE_ROOT);
 
 // Middleware
 app.use(cors());
@@ -2739,263 +2745,9 @@ app.post('/api/sessions/:id/feedback', (req, res) => {
   res.json({ success: true, recorded: eventType });
 });
 
-/**
- * Task Queue API
- * Lightweight in-memory queue for visibility and routing.
- */
 
-app.get('/api/tasks', (req, res) => {
-  const { status, sessionId } = req.query;
-  const normalizedStatus = status ? normalizeTaskStatus(status) : null;
-
-  if (status && !normalizedStatus) {
-    return res.status(400).json({ success: false, error: 'Invalid status filter' });
-  }
-
-  const items = Array.from(tasks.values())
-    .filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
-    .filter((task) => (sessionId ? task.sessionId === sessionId : true))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map(buildTaskSummary);
-
-  const byStatus = { pending: 0, in_progress: 0, blocked: 0, completed: 0 };
-  items.forEach((task) => {
-    byStatus[task.status] = (byStatus[task.status] || 0) + 1;
-  });
-
-  res.json({
-    success: true,
-    tasks: items,
-    summary: {
-      total: items.length,
-      byStatus
-    }
-  });
-});
-
-app.post('/api/tasks', (req, res) => {
-  const {
-    title,
-    description = '',
-    priority,
-    sessionId
-  } = req.body || {};
-
-  if (!title || typeof title !== 'string' || !title.trim()) {
-    return res.status(400).json({ success: false, error: 'title is required' });
-  }
-
-  const normalizedPriority = normalizeTaskPriority(priority);
-  if (!normalizedPriority) {
-    return res.status(400).json({ success: false, error: 'Invalid priority' });
-  }
-
-  const assignment = resolveTaskAssignment(sessionId);
-  if (sessionId && !assignment) {
-    return res.status(400).json({ success: false, error: 'Assigned session does not exist' });
-  }
-
-  const taskId = `task_${Date.now()}_${++taskCounter}`;
-  const now = new Date();
-  const task = {
-    id: taskId,
-    title: title.trim().slice(0, 140),
-    description: typeof description === 'string' ? description.trim().slice(0, 2000) : '',
-    status: 'pending',
-    priority: normalizedPriority,
-    sessionId: assignment?.sessionId || null,
-    assignedSessionName: assignment?.assignedSessionName || null,
-    assignedUserId: assignment?.assignedUserId || null,
-    createdAt: now,
-    updatedAt: now,
-    completedAt: null
-  };
-
-  tasks.set(taskId, task);
-
-  eventBus.emit('task_created', {
-    session_id: task.sessionId,
-    user_id: task.assignedUserId || 'anonymous',
-    model: null,
-    endpoint: null,
-    experience: null,
-    metadata: {
-      taskId,
-      status: task.status,
-      priority: task.priority,
-      hasAssignment: Boolean(task.sessionId)
-    }
-  });
-
-  if (task.sessionId) {
-    eventBus.emit('task_routed', {
-      session_id: task.sessionId,
-      user_id: task.assignedUserId || 'anonymous',
-      model: null,
-      endpoint: null,
-      experience: null,
-      metadata: {
-        taskId,
-        toSessionId: task.sessionId
-      }
-    });
-  }
-
-  res.json({ success: true, task: buildTaskSummary(task) });
-});
-
-app.put('/api/tasks/:id', (req, res) => {
-  const task = tasks.get(req.params.id);
-  if (!task) {
-    return res.status(404).json({ success: false, error: 'Task not found' });
-  }
-
-  const {
-    title,
-    description,
-    status,
-    priority,
-    sessionId
-  } = req.body || {};
-
-  if (title !== undefined) {
-    if (typeof title !== 'string' || !title.trim()) {
-      return res.status(400).json({ success: false, error: 'title must be a non-empty string' });
-    }
-    task.title = title.trim().slice(0, 140);
-  }
-
-  if (description !== undefined) {
-    if (typeof description !== 'string') {
-      return res.status(400).json({ success: false, error: 'description must be a string' });
-    }
-    task.description = description.trim().slice(0, 2000);
-  }
-
-  if (priority !== undefined) {
-    const normalizedPriority = normalizeTaskPriority(priority);
-    if (!normalizedPriority) {
-      return res.status(400).json({ success: false, error: 'Invalid priority' });
-    }
-    task.priority = normalizedPriority;
-  }
-
-  if (status !== undefined) {
-    const normalizedStatus = normalizeTaskStatus(status);
-    if (!normalizedStatus) {
-      return res.status(400).json({ success: false, error: 'Invalid status' });
-    }
-
-    if (task.status !== normalizedStatus) {
-      task.status = normalizedStatus;
-      eventBus.emit('task_status_changed', {
-        session_id: task.sessionId,
-        user_id: task.assignedUserId || 'anonymous',
-        model: null,
-        endpoint: null,
-        experience: null,
-        metadata: {
-          taskId: task.id,
-          status: normalizedStatus
-        }
-      });
-    }
-  }
-
-  if (sessionId !== undefined) {
-    const assignment = resolveTaskAssignment(sessionId);
-    if (sessionId && !assignment) {
-      return res.status(400).json({ success: false, error: 'Assigned session does not exist' });
-    }
-
-    const previousSessionId = task.sessionId;
-    task.sessionId = assignment?.sessionId || null;
-    task.assignedSessionName = assignment?.assignedSessionName || null;
-    task.assignedUserId = assignment?.assignedUserId || null;
-
-    if (previousSessionId !== task.sessionId) {
-      eventBus.emit('task_routed', {
-        session_id: task.sessionId,
-        user_id: task.assignedUserId || 'anonymous',
-        model: null,
-        endpoint: null,
-        experience: null,
-        metadata: {
-          taskId: task.id,
-          fromSessionId: previousSessionId,
-          toSessionId: task.sessionId
-        }
-      });
-    }
-  }
-
-  if (task.status === 'completed' && !task.completedAt) {
-    task.completedAt = new Date();
-    eventBus.emit('task_completed', {
-      session_id: task.sessionId,
-      user_id: task.assignedUserId || 'anonymous',
-      model: null,
-      endpoint: null,
-      experience: null,
-      metadata: {
-        taskId: task.id,
-        priority: task.priority
-      }
-    });
-  }
-
-  if (task.status !== 'completed') {
-    task.completedAt = null;
-  }
-
-  task.updatedAt = new Date();
-  tasks.set(task.id, task);
-
-  res.json({ success: true, task: buildTaskSummary(task) });
-});
-
-app.delete('/api/tasks/:id', (req, res) => {
-  const task = tasks.get(req.params.id);
-  if (!task) {
-    return res.status(404).json({ success: false, error: 'Task not found' });
-  }
-
-  tasks.delete(req.params.id);
-  eventBus.emit('task_deleted', {
-    session_id: task.sessionId,
-    user_id: task.assignedUserId || 'anonymous',
-    model: null,
-    endpoint: null,
-    experience: null,
-    metadata: {
-      taskId: task.id,
-      status: task.status
-    }
-  });
-
-  res.json({ success: true, deleted: true });
-});
-
-/**
- * GET /api/sessions/:id/tasks
- * Convenience: return only tasks assigned to a specific session.
- */
-app.get('/api/sessions/:id/tasks', (req, res) => {
-  const session = sessions.get(req.params.id);
-  if (!session) {
-    return res.status(404).json({ success: false, error: 'Session not found' });
-  }
-
-  const sessionTasks = Array.from(tasks.values())
-    .filter((t) => t.sessionId === req.params.id)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .map(buildTaskSummary);
-
-  const byStatus = { pending: 0, in_progress: 0, blocked: 0, completed: 0 };
-  sessionTasks.forEach((t) => { byStatus[t.status] = (byStatus[t.status] || 0) + 1; });
-
-  res.json({ success: true, tasks: sessionTasks, summary: { total: sessionTasks.length, byStatus } });
-});
+// Task routes extracted to routes/tasks.js
+app.use('/api', tasksRouter);
 
 // ============ WEBHOOKS ============
 
@@ -3596,22 +3348,17 @@ app.get('/api/health', async (req, res) => {
   res.json(health);
 });
 
-// ── Workspace file I/O ────────────────────────────────────────────────────────
-// All workspace routes are sandboxed: resolved paths must stay inside WORKSPACE_ROOT.
-// Apply config/docker-compose.workspace.yml to mount a host folder at /workspace.
 
+// Workspace routes extracted to routes/workspace.js
+app.use('/api', workspaceRouter);
+
+// ── Workspace path helper (also used by agent tool harness) ───────────────────
 function resolveWorkspacePath(reqPath) {
   if (!WORKSPACE_ROOT) return null;
   const safe = reqPath ? reqPath.replace(/\\/g, '/').replace(/^\/+/, '') : '';
   const abs = resolvePath(WORKSPACE_ROOT, safe);
-  // Prevent path traversal
   if (abs !== WORKSPACE_ROOT && !abs.startsWith(WORKSPACE_ROOT + '/')) return null;
   return abs;
-}
-
-async function gitInWorkspace(...args) {
-  const { stdout } = await execAsync(['git', ...args].join(' '), { cwd: WORKSPACE_ROOT });
-  return stdout.trim();
 }
 
 // ── Agent tool harness ─────────────────────────────────────────────────────────
@@ -3625,12 +3372,10 @@ function getExperienceTools(experience) {
   }
 }
 
-// Blocked commands for the bash tool — crude but effective for container use.
 const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
 
 async function callAgentTool(toolName, toolArgs, session) {
   try {
-    // ── Workspace tools (developer experience) ───────────────────────────────
     if (toolName === 'bash') {
       if (!WORKSPACE_ROOT) return JSON.stringify({ error: 'Workspace not mounted (WORKSPACE_ROOT not set)' });
       const { command } = toolArgs;
@@ -3684,7 +3429,6 @@ async function callAgentTool(toolName, toolArgs, session) {
       }
     }
 
-    // ── Research tools ────────────────────────────────────────────────────────
     if (toolName === 'web_search') {
       const query = String(toolArgs.query || '').slice(0, 200);
       const resp = await axios.get(
@@ -3715,7 +3459,6 @@ async function callAgentTool(toolName, toolArgs, session) {
       }
     }
 
-    // ── Website MCP tools ─────────────────────────────────────────────────────
     if (toolName === 'save_website_file') {
       const result = await mcpRequest(TOOL_SERVERS.website.url, 'tools/call', {
         name: 'save_file',
@@ -3788,7 +3531,6 @@ async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) 
     }
   }
 
-  // Max iterations reached — ask for summary without tool parameter
   const reqBody = { model: session.model, messages: localMsgs, stream: false };
   const response = await (apiStyle === 'openai'
     ? axios.post(`${llmUrl}/chat/completions`, reqBody, { headers: llmHeaders, timeout: 120000 })
@@ -3796,291 +3538,6 @@ async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) 
   const msg = response.data.message || response.data.choices?.[0]?.message;
   return { content: msg?.content || 'No response received', toolLog };
 }
-
-app.get('/api/workspace/status', async (req, res) => {
-  if (!WORKSPACE_ROOT) {
-    return res.json({ configured: false });
-  }
-  try {
-    await stat(WORKSPACE_ROOT);
-  } catch {
-    return res.json({ configured: false, error: 'WORKSPACE_ROOT path does not exist' });
-  }
-
-  let git = { repo: false };
-  try {
-    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    const dirtyOut = await gitInWorkspace('status', '--porcelain');
-    let ahead = 0;
-    try {
-      const aheadOut = await gitInWorkspace('rev-list', '--count', '@{u}..HEAD');
-      ahead = parseInt(aheadOut, 10) || 0;
-    } catch { /* no upstream */ }
-    git = { repo: true, branch, dirty: dirtyOut.length > 0, ahead };
-  } catch { /* not a git repo */ }
-
-  res.json({ configured: true, root: WORKSPACE_ROOT, git });
-});
-
-app.get('/api/workspace/ls', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const abs = resolveWorkspacePath(req.query.path || '');
-  if (!abs) return res.status(400).json({ error: 'Invalid path' });
-
-  try {
-    const entries = await readdir(abs, { withFileTypes: true });
-    const result = await Promise.all(entries.map(async (e) => {
-      const info = { name: e.name, type: e.isDirectory() ? 'dir' : 'file' };
-      if (!e.isDirectory()) {
-        try {
-          const s = await stat(resolvePath(abs, e.name));
-          info.size = s.size;
-          info.modified = s.mtime.toISOString();
-        } catch { /* ignore */ }
-      }
-      return info;
-    }));
-    result.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    res.json({ path: relativePath(WORKSPACE_ROOT, abs) || '.', entries: result });
-  } catch (err) {
-    res.status(404).json({ error: err.message });
-  }
-});
-
-app.get('/api/workspace/read', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const abs = resolveWorkspacePath(req.query.path || '');
-  if (!abs) return res.status(400).json({ error: 'Invalid path' });
-
-  try {
-    const s = await stat(abs);
-    if (s.isDirectory()) return res.status(400).json({ error: 'Path is a directory' });
-    if (s.size > 1024 * 1024) return res.status(413).json({ error: 'File too large (> 1 MB)' });
-    const content = await readFile(abs, 'utf8');
-    res.json({ path: relativePath(WORKSPACE_ROOT, abs), content });
-  } catch (err) {
-    res.status(404).json({ error: err.message });
-  }
-});
-
-app.post('/api/workspace/write', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { path: reqPath, content } = req.body || {};
-  if (!reqPath || content === undefined) {
-    return res.status(400).json({ error: 'path and content are required' });
-  }
-  const abs = resolveWorkspacePath(reqPath);
-  if (!abs) return res.status(400).json({ error: 'Invalid path' });
-
-  try {
-    await mkdir(resolvePath(abs, '..'), { recursive: true });
-    await writeFile(abs, content, 'utf8');
-    res.json({ path: relativePath(WORKSPACE_ROOT, abs), bytes: Buffer.byteLength(content, 'utf8') });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/workspace/git/status', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  try {
-    const porcelain = await gitInWorkspace('status', '--porcelain');
-    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    const files = porcelain.split('\n').filter(Boolean).map(line => ({
-      status: line.slice(0, 2).trim(),
-      file: line.slice(3),
-    }));
-    res.json({ branch, files });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/workspace/git/commit', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { message, files } = req.body || {};
-  if (!message) return res.status(400).json({ error: 'message is required' });
-
-  try {
-    if (Array.isArray(files) && files.length > 0) {
-      for (const f of files) {
-        const abs = resolveWorkspacePath(f);
-        if (!abs) return res.status(400).json({ error: `Invalid path: ${f}` });
-        await execAsync(`git add "${abs.replace(/"/g, '\\"')}"`, { cwd: WORKSPACE_ROOT });
-      }
-    } else {
-      await execAsync('git add -A', { cwd: WORKSPACE_ROOT });
-    }
-    const safeMsg = message.replace(/"/g, '\\"');
-    await execAsync(`git commit -m "${safeMsg}"`, { cwd: WORKSPACE_ROOT });
-    const sha = await gitInWorkspace('rev-parse', '--short', 'HEAD');
-    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    res.json({ sha, branch, message });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/workspace/git/push', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  try {
-    const branch = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    await execAsync('git push', { cwd: WORKSPACE_ROOT });
-    res.json({ branch });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/workspace/exec', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { command } = req.body || {};
-  if (!command) return res.status(400).json({ error: 'command is required' });
-  if (BASH_BLOCKLIST.some(p => String(command).includes(p))) {
-    return res.status(403).json({ error: 'Command blocked by safety policy' });
-  }
-  try {
-    const { stdout, stderr } = await execAsync(String(command), { cwd: WORKSPACE_ROOT, timeout: 30000, shell: true });
-    res.json({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 });
-  } catch (err) {
-    res.json({ stdout: (err.stdout || '').trim(), stderr: (err.stderr || err.message).trim(), exitCode: err.code || 1 });
-  }
-});
-
-// DELETE /api/workspace/file?path=...  (works for files and dirs)
-app.delete('/api/workspace/file', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const abs = resolveWorkspacePath(req.query.path || '');
-  if (!abs) return res.status(400).json({ error: 'Invalid path' });
-  try {
-    const s = await stat(abs);
-    if (s.isDirectory()) {
-      await rm(abs, { recursive: true, force: true });
-    } else {
-      await unlink(abs);
-    }
-    res.json({ deleted: relativePath(WORKSPACE_ROOT, abs) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/workspace/mkdir  { path }
-app.post('/api/workspace/mkdir', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const abs = resolveWorkspacePath(req.body?.path || '');
-  if (!abs) return res.status(400).json({ error: 'Invalid path' });
-  try {
-    await mkdir(abs, { recursive: true });
-    res.json({ path: relativePath(WORKSPACE_ROOT, abs) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/workspace/rename  { from, to }
-app.post('/api/workspace/rename', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { from: fromPath, to: toPath } = req.body || {};
-  const absFrom = resolveWorkspacePath(fromPath || '');
-  const absTo = resolveWorkspacePath(toPath || '');
-  if (!absFrom || !absTo) return res.status(400).json({ error: 'Invalid path' });
-  try {
-    const { rename } = await import('fs/promises');
-    await rename(absFrom, absTo);
-    res.json({ from: relativePath(WORKSPACE_ROOT, absFrom), to: relativePath(WORKSPACE_ROOT, absTo) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/workspace/search  { query }
-app.post('/api/workspace/search', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { query } = req.body || {};
-  if (!query) return res.status(400).json({ error: 'query is required' });
-  try {
-    const { stdout } = await execAsync(
-      `grep -rl "${query.replace(/"/g, '\\"')}" --include="*" --exclude-dir=".git" --exclude-dir="node_modules" .`,
-      { cwd: WORKSPACE_ROOT, timeout: 10000 }
-    );
-    const files = stdout.split('\n').map(f => f.replace(/^\.\//, '')).filter(Boolean);
-    res.json({ query, files });
-  } catch (err) {
-    // exit code 1 means no matches, not an error
-    if (err.code === 1) return res.json({ query, files: [] });
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /api/workspace/git/branches
-app.get('/api/workspace/git/branches', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  try {
-    const localOut = await gitInWorkspace('branch', '--format=%(refname:short)');
-    const current = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    let remotes = [];
-    try {
-      const remoteOut = await gitInWorkspace('branch', '-r', '--format=%(refname:short)');
-      remotes = remoteOut.split('\n').map(s => s.trim()).filter(Boolean);
-    } catch { /* no remotes */ }
-    const branches = localOut.split('\n').map(s => s.trim()).filter(Boolean);
-    res.json({ branches, remotes, current });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/workspace/git/checkout  { branch, create }
-app.post('/api/workspace/git/checkout', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { branch, create } = req.body || {};
-  if (!branch) return res.status(400).json({ error: 'branch is required' });
-  const safe = branch.replace(/[^a-zA-Z0-9/_.-]/g, '');
-  try {
-    if (create) {
-      await execAsync(`git checkout -b ${safe}`, { cwd: WORKSPACE_ROOT });
-    } else {
-      await execAsync(`git checkout ${safe}`, { cwd: WORKSPACE_ROOT });
-    }
-    const current = await gitInWorkspace('rev-parse', '--abbrev-ref', 'HEAD');
-    res.json({ branch: current });
-  } catch (err) {
-    res.status(500).json({ error: err.stderr || err.message });
-  }
-});
-
-// POST /api/workspace/git/pull
-app.post('/api/workspace/git/pull', async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  try {
-    const { stdout, stderr } = await execAsync('git pull', { cwd: WORKSPACE_ROOT, timeout: 30000 });
-    res.json({ result: (stdout || stderr).trim() });
-  } catch (err) {
-    res.status(500).json({ error: err.stderr || err.message });
-  }
-});
-
-// POST /api/workspace/git/discard  { file? }  — discards one file or all unstaged changes
-app.post('/api/workspace/git/discard', express.json(), async (req, res) => {
-  if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-  const { file } = req.body || {};
-  try {
-    if (file) {
-      const abs = resolveWorkspacePath(file);
-      if (!abs) return res.status(400).json({ error: 'Invalid path' });
-      await execAsync(`git checkout -- "${abs.replace(/"/g, '\\"')}"`, { cwd: WORKSPACE_ROOT });
-    } else {
-      await execAsync('git checkout -- .', { cwd: WORKSPACE_ROOT });
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // Serve SPA
 app.get('/', (req, res) => {
