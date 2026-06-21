@@ -2733,7 +2733,7 @@ function App() {
                                   style={{ fontSize: '0.67rem', padding: '0.1rem 0.35rem' }}
                                   disabled={pulling}
                                   onClick={() => pullModel(epKey, ep.model)}
-                                >{pulling ? '…' : isOnlineNotInstalled ? 'Re-pull' : 'Pull'}</button>
+                                >{pulling ? '…' : !installed ? 'Pull' : 'Re-pull'}</button>
                               )}
                             </div>
                           );
