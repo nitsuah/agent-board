@@ -81,6 +81,8 @@ function App() {
   const [systemServices, setSystemServices] = useState(null);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [serviceActionErrors, setServiceActionErrors] = useState({});
+  const [servicesStarting, setServicesStarting] = useState({});
+  const startingTimeoutsRef = useRef({});
   const [modelPulls, setModelPulls] = useState({});
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
@@ -280,6 +282,34 @@ function App() {
       clearInterval(pullStatusInterval);
     };
   }, []);
+
+  // Fast-poll while any service is starting up
+  useEffect(() => {
+    const anyStarting = Object.values(servicesStarting).some(Boolean);
+    if (!anyStarting) return;
+    const poll = setInterval(() => { fetchDockerStatus(); fetchSystemServices(); }, 2000);
+    return () => clearInterval(poll);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servicesStarting]);
+
+  // Clear starting state once service is confirmed running
+  useEffect(() => {
+    setServicesStarting(prev => {
+      const startingKeys = Object.keys(prev).filter(k => prev[k]);
+      if (startingKeys.length === 0) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const key of startingKeys) {
+        if (dockerStatus?.containers?.[key]?.running || systemServices?.services?.[key]?.running) {
+          next[key] = false;
+          changed = true;
+          clearTimeout(startingTimeoutsRef.current[key]);
+          delete startingTimeoutsRef.current[key];
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [dockerStatus, systemServices]);
 
   const fetchModels = async () => {
     try {
@@ -612,6 +642,13 @@ function App() {
       if (!data.success) {
         console.error('Service action failed:', data.error || 'Unknown error');
         setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
+      } else if (action === 'start') {
+        setServicesStarting(prev => ({ ...prev, [serviceKey]: true }));
+        clearTimeout(startingTimeoutsRef.current[serviceKey]);
+        startingTimeoutsRef.current[serviceKey] = setTimeout(() => {
+          setServicesStarting(prev => ({ ...prev, [serviceKey]: false }));
+          delete startingTimeoutsRef.current[serviceKey];
+        }, 90000);
       }
       await Promise.all([fetchDockerStatus(), fetchSystemServices()]);
     } catch (error) {
@@ -2107,6 +2144,7 @@ function App() {
             onClose={() => setShowSystemPanel(false)}
             serviceActionsInFlight={serviceActionsInFlight}
             serviceActionErrors={serviceActionErrors}
+            servicesStarting={servicesStarting}
             onRunServiceAction={runServiceAction}
             onPullModel={pullModel}
             runningServices={runningServices}

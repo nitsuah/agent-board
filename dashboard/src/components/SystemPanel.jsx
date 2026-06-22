@@ -9,7 +9,7 @@ const SVC_ORDER = ['ollama', 'tool_content_gen', 'tool_website', 'docker-runner'
 function SystemPanel({
   dockerStatus, systemServices, modelPulls, systemInfo,
   darkMode, onToggleTheme, onClose,
-  serviceActionsInFlight, serviceActionErrors,
+  serviceActionsInFlight, serviceActionErrors, servicesStarting,
   onRunServiceAction, onPullModel,
   runningServices, totalServices, knownModels,
 }) {
@@ -20,13 +20,14 @@ function SystemPanel({
     const eps = endpointData || [];
     const typeLabel = BACKEND_TYPE_LABEL[info.backendType] || '';
     const isDisabled = !!info.disabledReason;
+    const isStarting = !info.running && !!servicesStarting?.[serviceKey];
 
     const epErrors = eps
       .map(({ epKey, ep }) => serviceActionErrors[`pull:${epKey}:${ep.model}`])
       .filter(Boolean);
     const allErrors = [...epErrors, serviceActionErrors[serviceKey]].filter(Boolean);
 
-    if (!info.running && !expandedSvcs[serviceKey]) {
+    if (!info.running && !expandedSvcs[serviceKey] && !isStarting) {
       return (
         <div key={serviceKey} className="svc-row-collapsed" onClick={() => setExpandedSvcs(p => ({ ...p, [serviceKey]: true }))}>
           <span className={`status-dot ${isDisabled ? 'disabled' : 'stopped'}`} />
@@ -44,10 +45,10 @@ function SystemPanel({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
               <span className="docker-service-name">{info.label}</span>
               {typeLabel && <span className={`svc-type-badge badge-${typeLabel}`}>{typeLabel}</span>}
-              <span className={`docker-service-status ${info.running ? 'running' : isDisabled ? 'disabled' : 'stopped'}`}>
-                {info.running ? '● Live' : isDisabled ? '● disabled' : `● ${info.status || 'offline'}`}
+              <span className={`docker-service-status ${info.running ? 'running' : isDisabled ? 'disabled' : isStarting ? 'starting' : 'stopped'}`}>
+                {info.running ? '● Live' : isDisabled ? '● disabled' : isStarting ? '● starting…' : `● ${info.status || 'offline'}`}
               </span>
-              {!info.running && expandedSvcs[serviceKey] && (
+              {!info.running && !isStarting && expandedSvcs[serviceKey] && (
                 <button
                   className="btn-docker-action"
                   style={{ fontSize: '0.62rem', padding: '0.05rem 0.25rem', marginLeft: 'auto' }}
@@ -129,6 +130,8 @@ function SystemPanel({
                     onClick={() => onRunServiceAction(serviceKey, 'stop')}
                   >{serviceActionsInFlight[`${serviceKey}:stop`] ? '…' : '■'}</button>
                 </>
+              ) : isStarting ? (
+                <button className="btn-service-icon" disabled title="Starting">…</button>
               ) : (
                 <button
                   className="btn-service-icon start-btn"
