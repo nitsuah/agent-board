@@ -135,6 +135,7 @@ function App() {
   // Layout: split view
   const [wsLayout, setWsLayout] = useState('single'); // 'single'|'split-h'|'split-v'
   const [wsExplorerWidth, setWsExplorerWidth] = useState(220);
+  const [wsBottomHeight, setWsBottomHeight] = useState(220);
   const wsResizingRef = useRef(false);
   const wsGitPopoverRef = useRef(null);
 
@@ -517,6 +518,16 @@ function App() {
     window.addEventListener('mouseup', onUp);
   };
 
+  const startBottomResize = (e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = wsBottomHeight;
+    const onMove = (ev) => setWsBottomHeight(Math.max(80, Math.min(600, startH - (ev.clientY - startY))));
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const deleteWorkspaceEntry = async (path) => {
     if (!window.confirm(`Delete ${path}?`)) return;
     try {
@@ -830,7 +841,10 @@ function App() {
       const availableEndpoints = getAvailableEndpoints(selectedExperience);
       const onlineEndpoints = availableEndpoints.filter((key) => {
         const endpointStatus = dockerStatus?.endpoints?.[key];
-        return endpointStatus ? endpointStatus.live === true : true;
+        // If dockerStatus is loaded, treat unknown endpoints as offline to avoid
+        // silently routing to a stale default (e.g. 'primary' when ollama is down)
+        if (dockerStatus?.endpoints) return endpointStatus ? endpointStatus.live === true : false;
+        return true; // dockerStatus not yet loaded — optimistically include all
       });
       const endpointPool = onlineEndpoints.length ? onlineEndpoints : availableEndpoints;
       const endpoint = endpointPool.includes(currentEndpoint)
@@ -1750,8 +1764,11 @@ function App() {
                 </div>
               )}
 
+              {/* ── Bottom resize handle ─────────────────────────────────── */}
+              <div className="ws-bottom-resize-handle" onMouseDown={startBottomResize} />
+
               {/* ── Bottom tabbed panel ───────────────────────────────────── */}
-              <div className="ws-bottom-panel-outer">
+              <div className="ws-bottom-panel-outer" style={{ height: wsBottomHeight }}>
                 <div className="ws-bottom-tabs-bar">
                   {[
                     { key: 'terminal', label: 'TERMINAL' },
