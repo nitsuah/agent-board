@@ -1341,6 +1341,7 @@ body {
 .docker-service-status.running  { color: var(--green); }
 .docker-service-status.stopped  { color: var(--red); }
 .docker-service-status.starting { color: var(--yellow); }
+.docker-service-status.warning  { color: var(--yellow); }
 .docker-service-status.disabled { color: var(--text-faint); }
 
 .svc-type-badge {

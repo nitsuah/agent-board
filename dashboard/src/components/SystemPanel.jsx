@@ -21,6 +21,7 @@ function SystemPanel({
     const typeLabel = BACKEND_TYPE_LABEL[info.backendType] || '';
     const isDisabled = !!info.disabledReason;
     const isStarting = !info.running && !!servicesStarting?.[serviceKey];
+    const anyModelUnready = info.running && eps.some(({ ep }) => ep.backendType === 'ollama-container' && !ep.modelInstalled);
 
     const epErrors = eps
       .map(({ epKey, ep }) => serviceActionErrors[`pull:${epKey}:${ep.model}`])
@@ -45,8 +46,8 @@ function SystemPanel({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
               <span className="docker-service-name">{info.label}</span>
               {typeLabel && <span className={`svc-type-badge badge-${typeLabel}`}>{typeLabel}</span>}
-              <span className={`docker-service-status ${info.running ? 'running' : isDisabled ? 'disabled' : isStarting ? 'starting' : 'stopped'}`}>
-                {info.running ? '● Live' : isDisabled ? '● disabled' : isStarting ? '● starting…' : `● ${info.status || 'offline'}`}
+              <span className={`docker-service-status ${info.running ? anyModelUnready ? 'warning' : 'running' : isDisabled ? 'disabled' : isStarting ? 'starting' : 'stopped'}`}>
+                {info.running ? anyModelUnready ? '● not ready' : '● Live' : isDisabled ? '● disabled' : isStarting ? '● starting…' : `● ${info.status || 'offline'}`}
               </span>
               {!info.running && !isStarting && expandedSvcs[serviceKey] && (
                 <button
@@ -86,7 +87,7 @@ function SystemPanel({
                   <span className="service-model-name">{ep.model || 'no model configured'}</span>
                   {isActiveRunner && <span className="badge-active">Active</span>}
                   {installed && <span style={{ color: 'var(--green)', fontSize: '0.67rem' }}>✓</span>}
-                  {ep.live && !installed && ep.model && <span style={{ color: 'var(--text-faint)', fontSize: '0.67rem' }}>· not pulled</span>}
+                  {!installed && ep.model && <span style={{ color: 'var(--yellow)', fontSize: '0.67rem' }}>· not pulled</span>}
                   {wasKnown && !ep.live && <span style={{ color: 'var(--yellow)', fontSize: '0.67rem' }}>· was installed</span>}
                   {pull?.status === 'pulling' && (
                     <span className="docker-service-pull-status pulling" style={{ fontSize: '0.67rem' }}>
@@ -233,9 +234,16 @@ function SystemPanel({
       <div className="system-info">
         <div className="system-info-item">
           <h3>Stack Status</h3>
-          <div className={`value ${dockerStatus?.dockerRunning ? '' : 'warning'}`}>
-            {dockerStatus?.dockerRunning ? 'Healthy' : 'Degraded'}
-          </div>
+          {(() => {
+            const anyNotReady = dockerStatus?.endpoints &&
+              Object.values(dockerStatus.endpoints).some(ep => !ep.live && !ep.disabledReason);
+            const healthy = dockerStatus?.dockerRunning && !anyNotReady;
+            return (
+              <div className={`value ${healthy ? '' : anyNotReady ? 'warning' : 'error'}`}>
+                {healthy ? 'Healthy' : anyNotReady ? 'Degraded' : 'Offline'}
+              </div>
+            );
+          })()}
         </div>
         <div className="system-info-item">
           <h3>Active Services</h3>
