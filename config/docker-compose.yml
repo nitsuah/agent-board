@@ -46,6 +46,31 @@ services:
     networks:
       - agent-network
 
+  # Auto-pulls PRIMARY_LLM_MODEL into the ollama volume on every `up`, so
+  # the model is available without manual intervention. Exits 0 when done.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      - OLLAMA_HOST=http://ollama:8080
+      - PRIMARY_LLM_MODEL=${PRIMARY_LLM_MODEL:-llama3.2:3b}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          ollama list >/dev/null 2>&1 && break
+          echo "waiting for ollama... ($$i/30)"
+          sleep 3
+        done
+        echo "pulling $$PRIMARY_LLM_MODEL"
+        ollama pull "$$PRIMARY_LLM_MODEL"
+    restart: "no"
+    networks:
+      - agent-network
+
   # Opt-in: pre-loads PRIMARY_LLM_MODEL into the running `ollama` service right
   # after the stack starts, so the ~15-25s cold model load (see
   # docs/MODEL_LOADING_AUDIT.md) happens during `docker compose up` instead of on

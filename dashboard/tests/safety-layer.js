@@ -8,205 +8,16 @@
  */
 
 import assert from 'assert';
-
-// Mock the SAFETY_CONFIGS and functions from server.js
-const SAFETY_CONFIGS = {
-  strict: {
-    systemPrompt:
-      'You are a safe, helpful assistant. Never provide information about self-harm, illegal activities, ' +
-      'how to extract personal information, or anything that could harm the user or others. ' +
-      'If asked about such topics, politely decline and redirect to appropriate resources.',
-    blockedPatterns: [
-      'ignore previous instructions', 'ignore all previous', 'ignore all rules',
-      'jailbreak', 'you are now', 'pretend you are', 'act as if you have no restrictions',
-      'disregard your instructions', 'forget your instructions', 'bypass your',
-      'dan mode', 'developer mode', 'unrestricted mode'
-    ],
-    sensitivePatterns: [
-      'how to kill', 'how to hurt', 'suicide', 'harm myself', 'self-harm',
-      'drug synthesis', 'make explosives', 'hack into'
-    ],
-    outputHarmKeywords: [
-      'suicide method', 'how to self-harm', 'how to make a bomb',
-      'step-by-step guide to harm', 'instructions for making explosives'
-    ],
-    piiDetection: true
-  },
-  standard: {
-    systemPrompt:
-      'You are a helpful, accurate assistant. Be concise, honest, and safe. ' +
-      'Do not assist with requests that involve illegal activity or harm.',
-    blockedPatterns: [
-      'ignore previous instructions', 'ignore all previous', 'jailbreak',
-      'pretend you have no restrictions', 'dan mode'
-    ],
-    sensitivePatterns: [],
-    outputHarmKeywords: [],
-    piiDetection: false
-  },
-  research: {
-    systemPrompt:
-      'You are a research assistant. Provide thorough, accurate, and nuanced information. ' +
-      'Cite your reasoning and flag areas of uncertainty.',
-    blockedPatterns: [],
-    sensitivePatterns: [],
-    outputHarmKeywords: [],
-    piiDetection: false
-  }
-};
-
-const EXPERIENCE_CONFIGS = {
-  developer: {
-    name: 'Developer Assistant',
-    description: 'Full model access, standard safety, session history.',
-    icon: '💻',
-    safetyMode: 'standard',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
-    systemPromptSuffix: 'You are assisting a software developer. Be precise, prefer code examples.'
-  },
-  research: {
-    name: 'Research Mode',
-    description: 'Long-form reasoning and document analysis. Slightly looser rails — opt-in.',
-    icon: '🔬',
-    safetyMode: 'research',
-    availableEndpoints: ['primary', 'docker_runner', 'glm_flash'],
-    systemPromptSuffix: 'You are a research assistant. Prioritise depth, cite your reasoning, and flag uncertainties.'
-  },
-  safechat: {
-    name: 'Safe Chat',
-    description: 'Strict safety, simple UI, no model switching. Built for users who don\'t know what Ollama is.',
-    icon: '🛡️',
-    safetyMode: 'strict',
-    availableEndpoints: ['primary'],
-    systemPromptSuffix: 'You are a friendly, safe assistant helping everyday users.'
-  }
-};
-
-// ===== IMPLEMENTATIONS (copied from server.js for unit testing) =====
-
-// Strip zero-width characters and collapse whitespace runs (spaces, tabs,
-// newlines) before pattern matching, so adversarial inputs that split a
-// blocked/sensitive phrase with invisible characters or extra whitespace
-// (e.g. inserting U+200B mid-word, or "ignore all previous\ninstructions")
-// can't evade the substring checks below.
-function normalizeForMatching(text) {
-  return text
-    .toLowerCase()
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/\s+/g, ' ');
-}
-
-function classifyInput(text) {
-  const lower = normalizeForMatching(text);
-  const safety = SAFETY_CONFIGS.strict; // use broadest pattern set for classification
-
-  if (safety.blockedPatterns.some(p => lower.includes(p))) {
-    return { category: 'blocked', reason: 'prompt_injection_or_jailbreak' };
-  }
-  if (safety.sensitivePatterns.some(p => lower.includes(p))) {
-    return { category: 'sensitive', reason: 'potentially_harmful_content' };
-  }
-
-  // PII in the input itself
-  const pii = detectPII(text);
-  if (pii.found) {
-    return { category: 'sensitive', reason: 'pii_in_input', pii: pii.types };
-  }
-
-  return { category: 'safe', reason: null };
-}
-
-function detectPII(text) {
-  // Email addresses
-  const emailRe = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
-  // Phone: requires recognisable US/international separators to reduce false positives from other digit strings
-  const phoneRe = /(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g;
-  // SSN: strict dashed format only (NNN-NN-NNNN)
-  const ssnRe = /\b\d{3}-\d{2}-\d{4}\b/g;
-  // Credit cards: 4-group digit pattern with consistent separators.
-  const ccRe = /\b(?:\d{4}[-\s]){3}\d{4}\b/g;
-
-  const emails = (text.match(emailRe) || []);
-  const phones = (text.match(phoneRe) || []);
-  const ssns = (text.match(ssnRe) || []);
-  const ccs = (text.match(ccRe) || []);
-
-  const types = [
-    ...(emails.length ? ['email'] : []),
-    ...(phones.length ? ['phone'] : []),
-    ...(ssns.length ? ['ssn'] : []),
-    ...(ccs.length ? ['credit_card'] : [])
-  ];
-
-  return { found: types.length > 0, types, counts: { emails: emails.length, phones: phones.length, ssns: ssns.length, ccs: ccs.length } };
-}
-
-function buildSystemMessages(session) {
-  const experience = EXPERIENCE_CONFIGS[session.experience] || EXPERIENCE_CONFIGS.developer;
-  const safetyMode = session.safetyMode || experience.safetyMode || 'standard';
-  const safety = SAFETY_CONFIGS[safetyMode] || SAFETY_CONFIGS.standard;
-
-  const systemContent = [
-    safety.systemPrompt,
-    experience.systemPromptSuffix,
-    session.userRole ? `The user has identified as: ${session.userRole}.` : null
-  ].filter(Boolean).join(' ');
-
-  return [{ role: 'system', content: systemContent }];
-}
-
-function filterResponse(text, safetyMode = 'standard') {
-  const safety = SAFETY_CONFIGS[safetyMode] || SAFETY_CONFIGS.standard;
-  const flags = [];
-
-  if (safety.piiDetection) {
-    const pii = detectPII(text);
-    if (pii.found) {
-      flags.push({ type: 'pii_in_output', detail: pii.types });
-    }
-  }
-
-  const lowerText = normalizeForMatching(text);
-  if ((safety.outputHarmKeywords || []).some(k => lowerText.includes(k))) {
-    flags.push({ type: 'harmful_content' });
-  }
-
-  return { flags, flagged: flags.length > 0 };
-}
-
-function redactSensitiveText(text) {
-  return text
-    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, '[redacted email]')
-    .replace(/(?:\+?1[-.\s])?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[redacted phone]')
-    .replace(/\b\d{3}-?\d{2}-?\d{4}\b/g, '[redacted ssn]')
-    .replace(/\b(?:\d{4}[-\s]?){3}\d{4}\b/g, '[redacted credit card]');
-}
-
-function sanitizeResponse(text, safetyMode = 'standard') {
-  const filterResult = filterResponse(text, safetyMode);
-
-  if (!filterResult.flagged) {
-    return { ...filterResult, content: text, blocked: false, redacted: false };
-  }
-
-  const hasHarmfulContent = filterResult.flags.some((flag) => flag.type === 'harmful_content');
-  if (hasHarmfulContent) {
-    return {
-      ...filterResult,
-      content: "I can't provide that response. If you'd like, I can still help with a safer alternative.",
-      blocked: true,
-      redacted: false
-    };
-  }
-
-  const redactedContent = redactSensitiveText(text);
-  return {
-    ...filterResult,
-    content: redactedContent,
-    blocked: false,
-    redacted: redactedContent !== text
-  };
-}
+import {
+  SAFETY_CONFIGS,
+  EXPERIENCE_CONFIGS,
+  classifyInput,
+  detectPII,
+  buildSystemMessages,
+  filterResponse,
+  redactSensitiveText,
+  sanitizeResponse,
+} from '../safety.js';
 
 // ===== UNIT TESTS =====
 
@@ -304,7 +115,7 @@ function testBuildSystemMessages() {
   assert.strictEqual(messages.length, 1, 'Should return single system message');
   assert.strictEqual(messages[0].role, 'system', 'Should be system role');
   assert(messages[0].content.includes('helpful, accurate assistant'), 'Should use standard safety prompt');
-  assert(messages[0].content.includes('software developer'), 'Should include developer suffix');
+  assert(messages[0].content.includes('developer assistant'), 'Should include developer suffix');
 
   // Test 2: Research mode
   session = { experience: 'research', safetyMode: 'research' };
@@ -326,7 +137,7 @@ function testBuildSystemMessages() {
   // Test 5: Default to developer if experience not found
   session = { experience: 'unknown', safetyMode: 'standard' };
   messages = buildSystemMessages(session);
-  assert(messages[0].content.includes('software developer'), 'Should default to developer experience');
+  assert(messages[0].content.includes('developer assistant'), 'Should default to developer experience');
 
   console.log('✓ buildSystemMessages tests passed');
 }
@@ -435,8 +246,8 @@ function testSafetyIntegration() {
   assert.strictEqual(classification.category, 'blocked', 'Complex attack should be blocked');
 
   // Scenario 2: Session with user role and safety mode
-  const session = { 
-    experience: 'developer', 
+  const session = {
+    experience: 'developer',
     safetyMode: 'strict',
     userRole: 'student'
   };
