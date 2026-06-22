@@ -30,6 +30,7 @@ services:
       - AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
       - DOCKER_COMPOSE_FILE=/workspace-root/config/docker-compose.yml
       - DOCKER_PROJECT_DIR=/workspace-root
+      - DOCKER_ENV_FILE=/workspace-root/config/.env
     volumes:
       # Linux/Mac: Unix socket
       - /var/run/docker.sock:/var/run/docker.sock
