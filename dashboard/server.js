@@ -39,6 +39,7 @@ const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
 const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'config', 'docker-compose.yml');
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
+const DOCKER_ENV_FILE = process.env.DOCKER_ENV_FILE || join(__dirname, '..', 'config', '.env');
 
 // Workspace file I/O — user-mounted directory the agent can read/write/git-commit.
 // Set WORKSPACE_ROOT to the path inside the container (default /workspace).
@@ -554,9 +555,9 @@ function getServiceRegistry() {
 async function runComposeAction(action, serviceName, composeProfile = null) {
   const profileFlag = composeProfile ? ['--profile', composeProfile] : [];
   const actionArgs = {
-    start:   ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...profileFlag, 'up', '-d', serviceName],
-    stop:    ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, 'stop', serviceName],
-    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...profileFlag, 'restart', serviceName],
+    start:   ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'up', '-d', serviceName],
+    stop:    ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, 'stop', serviceName],
+    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'restart', serviceName],
   };
 
   const args = actionArgs[action];

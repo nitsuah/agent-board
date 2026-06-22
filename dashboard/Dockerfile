@@ -24,6 +24,7 @@ RUN npm install
 # ---- test stage ----
 FROM base AS test
 COPY server.js persistence.js tracing.js ./
+COPY routes ./routes
 COPY src ./src
 COPY tests ./tests
 ENV AGENT_DASHBOARD_DISABLE_LISTEN=1
@@ -36,6 +37,7 @@ ARG GITHUB_SECRET
 ENV GITHUB_ID=$GITHUB_ID
 ENV GITHUB_SECRET=$GITHUB_SECRET
 COPY server.js persistence.js tracing.js ./
+COPY routes ./routes
 COPY src ./src
 COPY index.html vite.config.js ./
 COPY tests ./tests
