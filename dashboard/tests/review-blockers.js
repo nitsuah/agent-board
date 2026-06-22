@@ -68,9 +68,18 @@ function testMetricsAveraging() {
 }
 
 function testModelCoercion() {
-  // Runner-style model names must coerce to the primary endpoint's default
-  // (env-configurable via PRIMARY_LLM_MODEL; llama3.2:3b when unset).
-  const primaryDefault = process.env.PRIMARY_LLM_MODEL || 'llama3.2:3b';
+  // Runner-style model names must coerce to the primary endpoint's default.
+  // The default is determined by PRIMARY_LLM_MODEL env var, falling back to the
+  // active device profile's general model (minimal='llama3.2:1b', laptop='llama3.2:3b',
+  // desktop='llama3.1:8b'). Mirror the same logic the server uses so the test is
+  // profile-agnostic in CI.
+  const DEVICE_PROFILES = {
+    minimal: 'llama3.2:1b',
+    laptop:  'llama3.2:3b',
+    desktop: 'llama3.1:8b',
+  };
+  const profile = (process.env.DEVICE_PROFILE || 'minimal').toLowerCase();
+  const primaryDefault = process.env.PRIMARY_LLM_MODEL || DEVICE_PROFILES[profile] || 'llama3.2:1b';
   assert.equal(coerceModelForEndpoint('primary', 'ai/qwen3-coder:latest'), primaryDefault);
   assert.equal(coerceModelForEndpoint('primary', 'docker.io/ai/glm-4.7-flash:latest'), primaryDefault);
   assert.equal(coerceModelForEndpoint('docker_runner', 'ai/qwen3-coder:latest'), 'ai/qwen3-coder:latest');

@@ -164,12 +164,38 @@ async function run() {
     if (typeof ep.runnerLive !== 'boolean') {
       throw new Error(`endpoints.${key}.runnerLive should be boolean, got ${typeof ep.runnerLive}`);
     }
-    const expectedLive = ep.runnerLive && ep.modelLoaded;
-    if (ep.live !== expectedLive) {
-      throw new Error(`endpoints.${key}.live (${ep.live}) should equal runnerLive(${ep.runnerLive}) && modelLoaded(${ep.modelLoaded})`);
+    // live === (runnerLive && modelLoaded) unless the device profile has disabled the endpoint
+    // (e.g. laptop profile disables 16GB VRAM models). When disabledReason is set, live must
+    // be false regardless of runnerLive/modelLoaded.
+    if (ep.disabledReason) {
+      if (ep.live !== false) {
+        throw new Error(`endpoints.${key}.live should be false when disabledReason is set ('${ep.disabledReason}')`);
+      }
+    } else {
+      const expectedLive = ep.runnerLive && ep.modelLoaded;
+      if (ep.live !== expectedLive) {
+        throw new Error(`endpoints.${key}.live (${ep.live}) should equal runnerLive(${ep.runnerLive}) && modelLoaded(${ep.modelLoaded})`);
+      }
     }
-    console.log(`  ✅ ${key}: runnerLive=${ep.runnerLive}  modelLoaded=${ep.modelLoaded}  live=${ep.live}`);
+    console.log(`  ✅ ${key}: runnerLive=${ep.runnerLive}  modelLoaded=${ep.modelLoaded}  live=${ep.live}${ep.disabledReason ? `  disabledReason="${ep.disabledReason}"` : ''}`);
   }
+
+  // Primary (ollama) endpoint: live === containerRunning && modelInstalled
+  const primary = dockerStatus?.endpoints?.['primary'];
+  if (!primary) throw new Error('/api/docker/status missing primary endpoint');
+  if (typeof primary.containerRunning !== 'boolean') {
+    throw new Error(`primary.containerRunning should be boolean, got ${typeof primary.containerRunning}`);
+  }
+  if (typeof primary.modelInstalled !== 'boolean') {
+    throw new Error(`primary.modelInstalled should be boolean, got ${typeof primary.modelInstalled}`);
+  }
+  const expectedPrimaryLive = primary.containerRunning && primary.modelInstalled;
+  if (primary.live !== expectedPrimaryLive) {
+    throw new Error(`primary.live (${primary.live}) should equal containerRunning (${primary.containerRunning}) && modelInstalled (${primary.modelInstalled})`);
+  }
+  console.log(`  ✅ primary: containerRunning=${primary.containerRunning}  modelInstalled=${primary.modelInstalled}  live=${primary.live}`);
+
+  console.log('  ✅ /api/docker/status modelLoaded field check passed');
 
   console.log('11) Verifying assistant feedback can only be submitted once...');
   const sessionAfterChat = await request(`/api/sessions/${session.session.id}`);

@@ -100,11 +100,18 @@ async function testDockerStatusModelLoadedField() {
       `endpoints.${key}.modelLoaded should be boolean (was ${typeof ep?.modelLoaded}) — runner-up with no model pulled must show false, not true`);
     assert.equal(typeof ep.runnerLive, 'boolean',
       `endpoints.${key}.runnerLive should be boolean`);
-    // live === (runnerLive && modelLoaded)
-    assert.equal(ep.live, ep.runnerLive && ep.modelLoaded,
-      `endpoints.${key}.live should equal runnerLive && modelLoaded`);
+    // live === (runnerLive && modelLoaded) unless the device profile has disabled the endpoint
+    // (e.g. laptop profile disables 16GB VRAM models). When disabledReason is set, live must
+    // be false regardless of runnerLive/modelLoaded.
+    if (ep.disabledReason) {
+      assert.equal(ep.live, false,
+        `endpoints.${key}.live should be false when disabledReason is set ('${ep.disabledReason}')`);
+    } else {
+      assert.equal(ep.live, ep.runnerLive && ep.modelLoaded,
+        `endpoints.${key}.live should equal runnerLive && modelLoaded`);
+    }
 
-    console.log(`     ${key}: live=${ep.live}  runnerLive=${ep.runnerLive}  modelLoaded=${ep.modelLoaded}`);
+    console.log(`     ${key}: live=${ep.live}  runnerLive=${ep.runnerLive}  modelLoaded=${ep.modelLoaded}${ep.disabledReason ? `  disabledReason="${ep.disabledReason}"` : ''}`);
   }
 
   // primary (ollama-container) must NOT have modelLoaded field — different backendType
@@ -142,16 +149,47 @@ async function testDockerStatusOllamaAlignedWithHealth() {
   ]);
 
   const ollamaContainerUp = status.containers['ollama']?.running ?? false;
-  const primaryEndpointLive = status.endpoints['primary']?.live ?? false;
+  const primary = status.endpoints['primary'];
+  const primaryEndpointLive = primary?.live ?? false;
+  const modelInstalled = primary?.modelInstalled ?? false;
   const healthPrimary = health.endpoints['primary'];
 
-  // Container running → primary.live must be true
-  if (ollamaContainerUp) {
-    assert.equal(primaryEndpointLive, true, 'ollama container running but primary.live is false');
-    assert.equal(healthPrimary, 'healthy', `ollama container running but /api/health shows primary='${healthPrimary}'`);
+  // Container running AND model installed → primary.live must be true
+  // Container running but model NOT installed → primary.live must be false
+  if (ollamaContainerUp && modelInstalled) {
+    assert.equal(primaryEndpointLive, true,
+      'ollama container running and model installed but primary.live is false');
+    assert.equal(healthPrimary, 'healthy',
+      `ollama container running and model installed but /api/health shows primary='${healthPrimary}'`);
+  } else if (ollamaContainerUp && !modelInstalled) {
+    assert.equal(primaryEndpointLive, false,
+      'ollama container running but model not installed — primary.live should be false');
   }
 
-  console.log(`  ✅ ollama container (${ollamaContainerUp}) and primary endpoint (live=${primaryEndpointLive}) are consistent`);
+  console.log(`  ✅ ollama container (${ollamaContainerUp}) modelInstalled (${modelInstalled}) and primary endpoint (live=${primaryEndpointLive}) are consistent`);
+}
+
+async function testDockerStatusOllamaModelFields() {
+  const data = await get('/api/docker/status');
+
+  const primary = data.endpoints['primary'];
+  assert.ok(primary !== undefined, 'endpoints.primary should be present');
+
+  assert.equal(typeof primary.containerRunning, 'boolean',
+    `primary.containerRunning should be boolean, got ${typeof primary.containerRunning}`);
+  assert.equal(typeof primary.modelInstalled, 'boolean',
+    `primary.modelInstalled should be boolean, got ${typeof primary.modelInstalled}`);
+
+  // Key invariant: live === containerRunning && modelInstalled
+  assert.equal(primary.live, primary.containerRunning && primary.modelInstalled,
+    `primary.live (${primary.live}) should equal containerRunning (${primary.containerRunning}) && modelInstalled (${primary.modelInstalled})`);
+
+  // fallback is the inverse of live
+  assert.equal(primary.fallback, !primary.live,
+    `primary.fallback (${primary.fallback}) should equal !primary.live (!${primary.live})`);
+
+  console.log(`     primary: containerRunning=${primary.containerRunning}  modelInstalled=${primary.modelInstalled}  live=${primary.live}  fallback=${primary.fallback}`);
+  console.log('  ✅ /api/docker/status primary ollama model fields check passed');
 }
 
 // ── Runner ──────────────────────────────────────────────────────────────────
@@ -166,6 +204,7 @@ async function run() {
   await testDockerStatusModelLoadedField();
   await testDockerStatusOpenllmAlignedWithContainer();
   await testDockerStatusOllamaAlignedWithHealth();
+  await testDockerStatusOllamaModelFields();
   console.log('Functional health tests passed.');
 }
 
