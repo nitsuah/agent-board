@@ -38,7 +38,7 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const DOCKER_CONTROL_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL);
 const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '..', 'config', 'docker-compose.yml');
-const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..');
+const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..', 'config');
 const DOCKER_ENV_FILE = process.env.DOCKER_ENV_FILE || join(__dirname, '..', 'config', '.env');
 
 // Workspace file I/O — user-mounted directory the agent can read/write/git-commit.
