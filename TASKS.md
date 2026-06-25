@@ -1,17 +1,15 @@
 # TASKS
 
-Last Updated: 2026-06-17
+Last Updated: 2026-06-25
 
 ## Todo
 
 ### P1 - High
 
-- [x] **[Q2-CEO] Docker optimization pass** — gated nemoclaw behind `sandbox` profile and jaeger behind `observability` profile; default stack is now agent-db + ollama + agent-dashboard only; `OTEL_ENABLED` defaults to false; `.env.example` and README document all profiles; `docker compose up` succeeds on a 16 GB host without pulling the 1.92 GB NemoClaw image.
+- [ ] **PERFORMANCE** — setup turbovec to decrease LLM memory usage significantly.
   - Priority: P1
-  - Context: CEO flagged stability issues due to container size and memory usage on laptops and low-memory hosts.
-  - Acceptance Criteria: ✅ `docker compose up` succeeds with a minimal profile on a 16 GB host; optional services are gated behind compose profiles and documented.
-  - [ ] **PERFORMANCE** - setup turbovec to decrease LLM memory usage significantly (separate follow-up)
-  - [x] **COMPETITORS** - Review other LLM products to integrate improvements or work alongside these tools effectively (ex: Thoth, OpenLLM, AirLLM, turbovec, BridgeMind, etc.) — see `docs/AI_STACK_STRATEGY.md` for the full breakdown and integration priority queue.
+  - Context: follow-up from Docker optimization pass; turbovec can reduce per-request memory overhead.
+  - Acceptance Criteria: turbovec integrated and memory usage measurably reduced under load.
 
 ### P2 - Medium
 
@@ -54,11 +52,6 @@ Last Updated: 2026-06-17
   - Priority: P3
   - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
   - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
-
-- [x] Document agent lifecycle APIs.
-  - Priority: P2
-  - Context: README references agent start, stop, restart, and persistence behavior that is not described in `docs/API.md`.
-  - Acceptance Criteria: ✅ `docs/API.md` rewritten — all lifecycle, metrics, experiences, tools, workspace, and status endpoints documented with request/response examples and a quick-reference table.
 
 - [ ] Expand coverage after the reporting baseline is restored.
   - Priority: P2

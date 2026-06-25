@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-06-17
+Last Updated: 2026-06-25
 
 ## 2026 Q2 - Persistence and Agent Control
 
