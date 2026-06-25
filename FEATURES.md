@@ -9,6 +9,9 @@
 - **Persistent Agent History** - Persistence is implemented and validated by integration tests.
 - **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.
 - **Workspace File Engine** - Host-mounted codebase access (`WORKSPACE_ROOT`) providing sandboxed file I/O browsing, editing, and staging/committing/pushing via Git controls.
+- **Workspace IDE** - VSCode-style split layout with file tabs (multi-file editing), integrated terminal pane, compact git panel, and in-browser task dispatch; replaces the earlier single-pane file viewer.
+- **Topbar Command Bar** - Unified top-bar surface replaces the sidebar; session controls, model/endpoint picker, experience selector, and system actions consolidated into a persistent top-bar.
+- **Agent Lifecycle API Documentation** - All lifecycle, metrics, experiences, tools, workspace, and status endpoints documented in `docs/API.md` with request/response examples and a quick-reference table.
 
 ## Integrations & AI Runtimes
 
@@ -56,3 +59,6 @@
 - `[planned]` **Modular Plugin Architecture** - Extend board functionality with custom middleware and UI components.
 - `[planned]` **Hot Reloading for Scripts** - Automatically refresh agent logic when source files are modified during development.
 - **Comprehensive Event Logging** - Structured JSON logging for easier debugging and integration with ELK stacks.
+- **Server/Frontend Refactor** - `server.js` route logic extracted into focused route modules; `App.jsx` UI components extracted to `src/components/`; improves maintainability and test isolation.
+- **Safe Chat Hardening** - Strengthened input validation and error boundary behavior in Safe Chat sessions; prevents partial renders on blocked/filtered responses.
+- **Tool Result Visibility & Artifacts Tab** - MCP tool call results and generated artifacts surface in a dedicated Artifacts tab; tool output no longer hidden behind raw message history.

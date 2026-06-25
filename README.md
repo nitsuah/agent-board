@@ -16,6 +16,8 @@ Agent Board is a local-first control room for multi-model AI workflows. It gives
 - **Model routing**: primary Ollama endpoint, Docker Model Runner endpoints, and server-side endpoint restrictions.
 - **Operations UI**: dark and light themes, system panel controls, live container status, and endpoint health visibility.
 - **Observability stack**: metrics APIs, event bus, persistence status, tracing status, and Jaeger integration.
+- **Workspace IDE**: VSCode-style split layout with file tabs, integrated terminal pane, compact git panel, and task dispatch — all in-browser.
+- **Topbar command bar**: unified top-bar replaces the sidebar; model/endpoint controls, session picker, and system actions accessible from one surface.
 
 ## Screenshots
 
@@ -269,9 +271,9 @@ With the overlay applied:
 
 ```bash
 dashboard/
-├── server.js         # Express API — session mgmt, LLM proxy, Docker status
+├── server.js         # Express API entry point (routes extracted to modules)
 ├── src/
-│   ├── App.jsx       # React frontend
+│   ├── App.jsx       # React root (UI components extracted to src/components/)
 │   ├── App.css       # Styles
 │   └── main.jsx      # Entry point
 ├── tests/
