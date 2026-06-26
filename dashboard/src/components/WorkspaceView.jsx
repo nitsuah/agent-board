@@ -10,7 +10,7 @@ export default function WorkspaceView({
   wsShowExplorer, setWsShowExplorer,
   wsSearch, setWsSearch, wsSearchResults, setWsSearchResults, wsSearchBusy,
   wsNewName, setWsNewName, wsCreateMode, setWsCreateMode, wsRenaming, setWsRenaming,
-  wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
+  wsBottomTab, setWsBottomTab, termHistory, setTermHistory, termInput, setTermInput, termBusy, termEndRef,
   wsExplorerWidth, wsBottomHeight,
   browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts, fetchBranches,
   commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
@@ -479,6 +479,10 @@ export default function WorkspaceView({
               )}
             </button>
           ))}
+          <div className="ws-bottom-tabs-spacer" />
+          {wsBottomTab === 'terminal' && (
+            <button className="ws-bottom-tab-action" onClick={() => setTermHistory([])} title="Clear terminal">⌫ Clear</button>
+          )}
         </div>
         <div className="ws-bottom-tab-content">
 

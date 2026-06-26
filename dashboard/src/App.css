@@ -3214,6 +3214,17 @@ code {
 }
 .ws-bottom-tab-btn:hover { color: var(--text); }
 .ws-bottom-tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+.ws-bottom-tabs-spacer { flex: 1; }
+.ws-bottom-tab-action {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 0.66rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ws-bottom-tab-action:hover { color: var(--text); }
 .ws-tab-badge {
   background: var(--accent);
   color: #fff;

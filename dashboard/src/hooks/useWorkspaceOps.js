@@ -381,7 +381,7 @@ export function useWorkspaceOps() {
     artifactFiles, wsShowExplorer, setWsShowExplorer,
     wsSearch, setWsSearch, wsSearchResults, setWsSearchResults, wsSearchBusy,
     wsNewName, setWsNewName, wsCreateMode, setWsCreateMode, wsRenaming, setWsRenaming,
-    wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
+    wsBottomTab, setWsBottomTab, termHistory, setTermHistory, termInput, setTermInput, termBusy, termEndRef,
     wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsSplitPos, wsGitPopoverRef,
     browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts,
     commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
