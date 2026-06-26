@@ -843,6 +843,36 @@ body {
   cursor: not-allowed;
 }
 
+.task-filter-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.task-filter-tab {
+  background: none;
+  border: none;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.task-filter-tab:hover { background: var(--surface2); color: var(--text); }
+.task-filter-tab.active { background: var(--surface2); color: var(--text); font-weight: 600; }
+.task-filter-count {
+  background: var(--text-faint);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 0 0.3em;
+  font-size: 0.65rem;
+  min-width: 1.2em;
+  text-align: center;
+}
+
 .task-empty {
   font-size: 0.74rem;
   color: var(--text-faint);

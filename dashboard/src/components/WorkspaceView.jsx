@@ -43,6 +43,91 @@ function GitLogTab({ workspaceConfigured }) {
   );
 }
 
+const TASK_FILTERS = [
+  { key: 'active', label: 'Active' },
+  { key: 'all', label: 'All' },
+  { key: 'completed', label: 'Done' },
+];
+
+function TasksPanel({
+  tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
+  taskExperience, setTaskExperience, createTask, updateTaskStatus,
+  deleteTask, dispatchTask, setActiveSession, fetchSessionDetails, setActiveTab,
+}) {
+  const [filter, setFilter] = useState('active');
+
+  const filtered = tasks.filter(t => {
+    if (filter === 'active') return t.status !== 'completed';
+    if (filter === 'completed') return t.status === 'completed';
+    return true;
+  }).slice(0, 30);
+
+  return (
+    <div className="ws-tasks-tab">
+      <div className="task-create-row">
+        <input
+          type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)}
+          placeholder="Add a task…" maxLength={140}
+          onKeyDown={e => e.key === 'Enter' && taskTitle.trim() && createTask(taskExperience)}
+        />
+        <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="urgent">urgent</option>
+        </select>
+        <select value={taskExperience} onChange={e => setTaskExperience(e.target.value)} title="Experience for this task">
+          {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+            <option key={key} value={key}>{exp.icon} {exp.name}</option>
+          ))}
+        </select>
+        <button className="btn-primary" onClick={() => createTask(taskExperience)} disabled={!taskTitle.trim()}>Add</button>
+      </div>
+      <div className="task-filter-tabs">
+        {TASK_FILTERS.map(f => (
+          <button
+            key={f.key}
+            className={`task-filter-tab ${filter === f.key ? 'active' : ''}`}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            {f.key === 'active' && tasks.filter(t => t.status !== 'completed').length > 0 && (
+              <span className="task-filter-count">{tasks.filter(t => t.status !== 'completed').length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+      <div className="task-list">
+        {filtered.map(task => (
+          <div key={task.id} className={`task-item status-${task.status}`}>
+            <div className="task-item-head">
+              <strong>{task.title}</strong>
+              <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+            </div>
+            <div className="task-item-meta">
+              <span>{task.status.replace('_', ' ')}</span>
+              {task.sessionId ? (
+                <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
+              ) : (
+                <span style={{ opacity: 0.4 }}>unassigned</span>
+              )}
+            </div>
+            {task.result && (
+              <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
+            )}
+            <div className="task-item-actions">
+              {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
+              {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>}
+              <button onClick={() => deleteTask(task.id)}>Delete</button>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && <div className="task-empty">{filter === 'completed' ? 'No completed tasks.' : 'No active tasks.'}</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function WorkspaceView({
   dockerStatus,
   workspacePath, workspaceLs, openFiles, setOpenFiles, activeFilePath, setActiveFilePath,
@@ -570,50 +655,15 @@ export default function WorkspaceView({
           )}
 
           {wsBottomTab === 'tasks' && (
-            <div className="ws-tasks-tab">
-              <div className="task-create-row">
-                <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Add a task…" maxLength={140} onKeyDown={e => e.key === 'Enter' && createTask(taskExperience)} />
-                <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                  <option value="urgent">urgent</option>
-                </select>
-                <select value={taskExperience} onChange={e => setTaskExperience(e.target.value)} title="Experience for this task">
-                  {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
-                    <option key={key} value={key}>{exp.icon} {exp.name}</option>
-                  ))}
-                </select>
-                <button className="btn-primary" onClick={() => createTask(taskExperience)}>Add</button>
-              </div>
-              <div className="task-list">
-                {tasks.slice(0, 20).map(task => (
-                  <div key={task.id} className={`task-item status-${task.status}`}>
-                    <div className="task-item-head">
-                      <strong>{task.title}</strong>
-                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                    </div>
-                    <div className="task-item-meta">
-                      <span>{task.status.replace('_', ' ')}</span>
-                      {task.sessionId ? (
-                        <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
-                      ) : (
-                        <span style={{ opacity: 0.4 }}>unassigned</span>
-                      )}
-                    </div>
-                    {task.result && (
-                      <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
-                    )}
-                    <div className="task-item-actions">
-                      {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
-                      <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
-                      <button onClick={() => deleteTask(task.id)}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-                {tasks.length === 0 && <div className="task-empty">No tasks yet.</div>}
-              </div>
-            </div>
+            <TasksPanel
+              tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle}
+              taskPriority={taskPriority} setTaskPriority={setTaskPriority}
+              taskExperience={taskExperience} setTaskExperience={setTaskExperience}
+              createTask={createTask} updateTaskStatus={updateTaskStatus}
+              deleteTask={deleteTask} dispatchTask={dispatchTask}
+              setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
+              setActiveTab={setActiveTab}
+            />
           )}
 
           {wsBottomTab === 'git-log' && (

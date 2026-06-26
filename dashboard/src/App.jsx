@@ -392,6 +392,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) {
+        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+        e.preventDefault();
+        createSession();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [createSession]);
+
+  useEffect(() => {
     if (activeTab === 'metrics') {
       fetchMetrics();
       const interval = setInterval(fetchMetrics, 10000);
