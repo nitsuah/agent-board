@@ -40,29 +40,23 @@ export function createModelsRouter({
     try {
       const models = [];
       const primaryResolution = await resolvePrimaryLlmUrl();
-      let dockerRunnerFetched = false;
-      let dockerRunnerModels = null;
-
       for (const [key, config] of Object.entries(LLM_CONFIG)) {
         try {
           if (config.apiStyle === 'openai') {
-            if (!dockerRunnerFetched) {
-              const response = await axios.get(`${config.url}/models`, { timeout: 5000 });
-              dockerRunnerModels = response.data.data?.map(m => ({
-                id: key,
-                endpoint: config.name,
-                endpointUrl: config.url,
-                backendType: config.backendType,
-                type: config.type,
-                name: m.id,
-                model: m.id,
-                size: 'unknown',
-              })) || [];
-              dockerRunnerFetched = true;
-            }
-            if (dockerRunnerModels) {
-              models.push(...dockerRunnerModels.map(m => ({ ...m, id: key, endpoint: config.name })));
-            }
+            // docker-runner uses /models; standard OpenAI-compat uses /v1/models
+            const modelsPath = config.backendType === 'docker-runner' ? '/models' : '/v1/models';
+            const response = await axios.get(`${config.url}${modelsPath}`, { timeout: 5000 });
+            const endpointModels = response.data.data?.map(m => ({
+              id: key,
+              endpoint: config.name,
+              endpointUrl: config.url,
+              backendType: config.backendType,
+              type: config.type,
+              name: m.id,
+              model: m.id,
+              size: 'unknown',
+            })) || [];
+            models.push(...endpointModels);
           } else {
             const endpointUrl = key === 'primary' ? primaryResolution.url : config.url;
             const response = await axios.get(`${endpointUrl}/api/tags`, { timeout: 5000 });
