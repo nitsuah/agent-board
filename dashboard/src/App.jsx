@@ -420,10 +420,15 @@ function App() {
       if (e.key === '?' && !e.ctrlKey && !e.metaKey && !inInput) {
         setShowShortcuts(p => !p);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm' && !inInput) {
+        e.preventDefault();
+        setShowMetricsPanel(p => !p);
+        setShowSystemPanel(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [createSession]);
+  }, [createSession, setShowMetricsPanel, setShowSystemPanel]);
 
   useEffect(() => {
     if (activeTab === 'metrics') {

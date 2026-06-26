@@ -7,6 +7,7 @@ const SHORTCUTS = [
   { key: 'Ctrl+Enter', desc: 'Send message (alternative)' },
   { key: 'Shift+Enter', desc: 'New line in chat input' },
   { key: '↑ / ↓', desc: 'Navigate terminal history' },
+  { key: 'Ctrl+M', desc: 'Toggle metrics panel' },
   { key: '?', desc: 'Show this keyboard shortcuts reference' },
   { key: 'Esc', desc: 'Close this overlay' },
 ];
