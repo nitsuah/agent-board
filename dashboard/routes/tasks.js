@@ -5,9 +5,10 @@ export function createTasksRouter({ tasks, sessions, eventBus, logStructured, no
   let taskCounter = 0;
 
   router.get('/tasks', (req, res) => {
-    const { status, sessionId, priority } = req.query;
+    const { status, sessionId, priority, q } = req.query;
     const normalizedStatus = status ? normalizeTaskStatus(status) : null;
     const normalizedPriorityFilter = priority ? normalizeTaskPriority(priority) : null;
+    const searchTerm = q && typeof q === 'string' ? q.trim().toLowerCase() : null;
 
     if (status && !normalizedStatus) {
       return res.status(400).json({ success: false, error: 'Invalid status filter' });
@@ -20,6 +21,7 @@ export function createTasksRouter({ tasks, sessions, eventBus, logStructured, no
       .filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
       .filter((task) => (normalizedPriorityFilter ? task.priority === normalizedPriorityFilter : true))
       .filter((task) => (sessionId ? task.sessionId === sessionId : true))
+      .filter((task) => (searchTerm ? task.title.toLowerCase().includes(searchTerm) || task.description.toLowerCase().includes(searchTerm) : true))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map(buildTaskSummary);
 

@@ -60,10 +60,15 @@ function TasksPanel({
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPriority, setEditPriority] = useState('medium');
+  const [taskSearch, setTaskSearch] = useState('');
 
   const filtered = tasks.filter(t => {
-    if (filter === 'active') return t.status !== 'completed';
-    if (filter === 'completed') return t.status === 'completed';
+    if (filter === 'active') { if (t.status === 'completed') return false; }
+    else if (filter === 'completed') { if (t.status !== 'completed') return false; }
+    if (taskSearch.trim()) {
+      const q = taskSearch.toLowerCase();
+      return t.title.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q);
+    }
     return true;
   }).slice(0, 30);
 
@@ -97,6 +102,15 @@ function TasksPanel({
           placeholder="Optional description…"
           maxLength={2000}
           rows={2}
+        />
+      )}
+      {tasks.length > 3 && (
+        <input
+          className="task-search-input"
+          type="search"
+          placeholder="Search tasks…"
+          value={taskSearch}
+          onChange={e => setTaskSearch(e.target.value)}
         />
       )}
       <div className="task-filter-tabs">

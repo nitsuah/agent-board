@@ -927,6 +927,17 @@ body {
   color: var(--text);
 }
 
+.task-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.3rem 0.5rem;
+  background: var(--bg-input, var(--bg2));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.8rem;
+  margin: 0.25rem 0;
+}
 .task-filter-tabs {
   display: flex;
   gap: 0.25rem;
