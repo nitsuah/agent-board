@@ -3416,6 +3416,24 @@ code {
 .ws-ctx-item-danger:hover { background: rgba(244,113,113,0.12); color: var(--red, #f47171); }
 .ws-ctx-divider { height: 1px; background: var(--border); margin: 0.15rem 0; }
 
+/* ── Git log tab ──────────────────────────────────────────────── */
+.ws-git-log-tab { display: flex; flex-direction: column; height: 100%; }
+.ws-git-log-list { overflow-y: auto; flex: 1; }
+.ws-git-log-entry {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.25rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.ws-git-log-entry:hover { background: var(--accent-soft); }
+.ws-git-log-hash { font-family: monospace; color: var(--accent); flex-shrink: 0; }
+.ws-git-log-subject { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-git-log-meta { color: var(--text-faint); white-space: nowrap; font-size: 0.65rem; }
+
 /* ── Toast notifications ─────────────────────────────────────── */
 .toast-container {
   position: fixed;

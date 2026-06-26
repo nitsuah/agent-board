@@ -283,6 +283,25 @@ export function createWorkspaceRouter(WORKSPACE_ROOT) {
     }
   });
 
+  router.get('/workspace/git/log', async (req, res) => {
+    if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    try {
+      const raw = await gitInWorkspace(
+        'log', `--max-count=${limit}`,
+        '--pretty=format:%H\x1f%h\x1f%s\x1f%an\x1f%ar\x1f%ad',
+        '--date=short'
+      );
+      const commits = raw ? raw.split('\n').map(line => {
+        const [hash, short, subject, author, relative, date] = line.split('\x1f');
+        return { hash, short, subject, author, relative, date };
+      }) : [];
+      res.json({ commits });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.post('/workspace/git/discard', express.json(), async (req, res) => {
     if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
     const { file } = req.body || {};

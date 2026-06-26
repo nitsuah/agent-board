@@ -1,6 +1,48 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { EXPERIENCE_TOOLS, EXPERIENCE_META } from '../constants/app-config.js';
 
+function GitLogTab({ workspaceConfigured }) {
+  const [commits, setCommits] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!workspaceConfigured) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/workspace/git/log?limit=30');
+      const data = await res.json();
+      if (data.error) setErr(data.error);
+      else setCommits(data.commits || []);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }, [workspaceConfigured]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!workspaceConfigured) return <div className="ws-files-empty">Workspace not configured.</div>;
+  return (
+    <div className="ws-git-log-tab">
+      <div className="ws-tab-header">
+        <span>GIT LOG</span>
+        <button className="icon-btn" onClick={load} title="Refresh" disabled={busy}>↻</button>
+      </div>
+      {err && <div className="ws-files-empty" style={{ color: 'var(--red)' }}>{err}</div>}
+      {busy && commits.length === 0 && <div className="ws-files-empty">Loading…</div>}
+      {commits.length === 0 && !busy && !err && <div className="ws-files-empty">No commits yet.</div>}
+      <div className="ws-git-log-list">
+        {commits.map(c => (
+          <div key={c.hash} className="ws-git-log-entry" title={c.hash}>
+            <span className="ws-git-log-hash">{c.short}</span>
+            <span className="ws-git-log-subject">{c.subject}</span>
+            <span className="ws-git-log-meta">{c.author} · {c.relative}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function WorkspaceView({
   dockerStatus,
   workspacePath, workspaceLs, openFiles, setOpenFiles, activeFilePath, setActiveFilePath,
@@ -469,6 +511,7 @@ export default function WorkspaceView({
           {[
             { key: 'terminal', label: 'TERMINAL' },
             { key: 'tasks', label: 'TASKS' },
+            { key: 'git-log', label: 'GIT LOG' },
             { key: 'artifacts', label: 'ARTIFACTS' },
             { key: 'output', label: 'OUTPUT' },
           ].map(({ key, label }) => (
@@ -571,6 +614,10 @@ export default function WorkspaceView({
                 {tasks.length === 0 && <div className="task-empty">No tasks yet.</div>}
               </div>
             </div>
+          )}
+
+          {wsBottomTab === 'git-log' && (
+            <GitLogTab workspaceConfigured={!!dockerStatus?.workspace?.configured} />
           )}
 
           {wsBottomTab === 'artifacts' && (
