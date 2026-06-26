@@ -296,6 +296,19 @@ body {
   text-overflow: ellipsis;
   min-width: 0;
 }
+.session-search-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  outline: none;
+  width: 80px;
+  flex-shrink: 0;
+}
+.session-search-input:focus { border-color: var(--accent); width: 120px; transition: width 0.15s; }
+
 .session-tab-close {
   background: none;
   border: none;

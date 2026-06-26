@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { EXPERIENCE_META } from '../constants/app-config.js';
 
 export default function TopBar({
@@ -16,6 +16,11 @@ export default function TopBar({
   runningServices, totalServices,
   createSession,
 }) {
+  const [sessionSearch, setSessionSearch] = useState('');
+  const filteredSessions = sessionSearch.trim()
+    ? sessions.filter(s => s.name.toLowerCase().includes(sessionSearch.toLowerCase()))
+    : sessions;
+
   const isServiceUp = (key) => {
     if (key === 'content_gen') return dockerStatus?.services?.tool_content_gen?.status === 'up';
     if (key === 'website') return dockerStatus?.services?.tool_website?.status === 'up';
@@ -88,7 +93,17 @@ export default function TopBar({
       {/* ── Session tabs inline ── */}
       <div className="topbar-session-tabs">
         {demoMode.enabled && <span className="pill pill-demo">Demo</span>}
-        {sessions.map(s => (
+        {sessions.length > 4 && (
+          <input
+            className="session-search-input"
+            type="search"
+            placeholder="Filter…"
+            value={sessionSearch}
+            onChange={e => setSessionSearch(e.target.value)}
+            title="Filter sessions by name"
+          />
+        )}
+        {filteredSessions.map(s => (
           <div
             key={s.id}
             className={`session-tab ${activeSession === s.id ? 'active' : ''}`}
