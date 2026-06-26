@@ -33,6 +33,7 @@ import { createWebhooksRouter } from './routes/webhooks.js';
 import { createToolsRouter } from './routes/tools.js';
 import { createConnectorsRouter } from './routes/connectors.js';
 import { startTaskRunner } from './task-runner.js';
+import outputsRouter from './routes/outputs.js';
 import {
   isKnownExperience, isKnownSafetyMode, getExperienceConfig, getAllowedEndpoints,
   getPublicExperienceConfigs, isEndpointAllowed, resolveSessionEndpoint,
@@ -428,7 +429,8 @@ app.use('/api', createDockerRouter({
   execFileAsync, pullStatus, eventBus, logStructured, activeDockerRunnerModelRef,
 }));
 
-app.use('/api', createContentRouter({ WEBSITE_OUTPUT_DIR }));
+app.use('/api', createContentRouter({ WEBSITE_OUTPUT_DIR, WORKSPACE_ROOT }));
+app.use('/api', outputsRouter);
 
 app.use('/api', createModelsRouter({
   LLM_CONFIG, resolvePrimaryLlmUrl, PRIMARY_LLM_URL_CANDIDATES,

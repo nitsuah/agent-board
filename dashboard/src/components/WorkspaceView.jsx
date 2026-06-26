@@ -26,6 +26,7 @@ export default function WorkspaceView({
   fetchContentClients, fetchContentFiles, downloadContentFile,
 }) {
   const termInputRef = useRef(null);
+  const [sessionOutputs, setSessionOutputs] = React.useState([]);
 
   // Re-focus terminal input after command finishes or tab switches to terminal
   useEffect(() => {
@@ -33,6 +34,15 @@ export default function WorkspaceView({
       termInputRef.current?.focus();
     }
   }, [termBusy, wsBottomTab]);
+
+  // Fetch session outputs when tab is active and session changes
+  useEffect(() => {
+    if (wsBottomTab !== 'output' || !activeSession) { setSessionOutputs([]); return; }
+    fetch(`/api/sessions/${activeSession}/outputs`)
+      .then(r => r.json())
+      .then(data => setSessionOutputs(Array.isArray(data) ? data : []))
+      .catch(() => setSessionOutputs([]));
+  }, [wsBottomTab, activeSession]);
 
   return (
     <div className="workspace-view">
@@ -463,7 +473,8 @@ export default function WorkspaceView({
               ) : artifactFiles.map(f => (
                 <div key={f.name} className="ws-file-row">
                   <span>{f.name}</span>
-                  <a href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`} target="_blank" rel="noreferrer" className="ws-file-link">↓ view</a>
+                  <a href={`/api/artifacts/${encodeURIComponent(f.name)}/download`} download className="ws-file-link">↓ download</a>
+                  <a href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`} target="_blank" rel="noreferrer" className="ws-file-link">↗ view</a>
                 </div>
               ))}
             </div>
@@ -471,6 +482,22 @@ export default function WorkspaceView({
 
           {wsBottomTab === 'output' && (
             <div className="ws-output-tab">
+              {/* Session-level outputs */}
+              {activeSession && sessionOutputs.length > 0 && (
+                <>
+                  <div className="ws-tab-header">
+                    <span>SESSION OUTPUTS</span>
+                    <button className="icon-btn" onClick={() => fetch(`/api/sessions/${activeSession}/outputs`).then(r => r.json()).then(d => setSessionOutputs(Array.isArray(d) ? d : []))} title="Refresh">↻</button>
+                  </div>
+                  {sessionOutputs.map(f => (
+                    <div key={f.filename} className="ws-file-row">
+                      <span>{f.filename}</span>
+                      <a href={`/api/sessions/${activeSession}/outputs/${encodeURIComponent(f.filename)}`} download className="ws-file-link">↓</a>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Tool-backed content client outputs */}
               {EXPERIENCE_TOOLS[selectedExperience] ? (
                 <>
                   <div className="ws-tab-header">
@@ -498,7 +525,7 @@ export default function WorkspaceView({
                     </div>
                   ))}
                 </>
-              ) : (
+              ) : (!activeSession || sessionOutputs.length === 0) && (
                 <div className="ws-files-empty">No output files available.</div>
               )}
             </div>

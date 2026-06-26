@@ -1,4 +1,6 @@
 import express from 'express';
+import { rmSync } from 'fs';
+import path from 'path';
 import { handleSessionMessage } from './session-message.js';
 import { handleSessionStream } from './session-stream.js';
 
@@ -177,6 +179,10 @@ export function createSessionsRouter({
       upsertSessionContext(session, logStructured);
       markSessionEnded(req.params.id, session.endedAt, logStructured);
       sessions.delete(req.params.id);
+      // Clean up any session output files
+      try {
+        rmSync(path.join(process.cwd(), 'tmp', req.params.id), { recursive: true, force: true });
+      } catch { /* non-fatal */ }
     }
     res.json({ success: true, deleted: exists });
   });

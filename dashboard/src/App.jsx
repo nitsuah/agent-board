@@ -371,6 +371,9 @@ function App() {
         if (eventType?.startsWith('model_pull_') && endpoint && model) {
           setModelPulls((prev) => ({ ...prev, [`${endpoint}:${model}`]: { endpoint, model, ...metadata } }));
         }
+        if (eventType === 'artifact_created') {
+          wsOps.fetchArtifacts?.();
+        }
       } catch { /* ignore malformed payloads */ }
     };
     return () => socket.close();
