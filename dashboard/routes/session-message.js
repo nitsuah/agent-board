@@ -2,6 +2,7 @@ import {
   classifyInput, buildSystemMessages, sanitizeResponse,
   applyOutputControls, normalizePromptText, resolveEffectiveSafetyMode,
 } from '../safety.js';
+import { ensureToolReady, experienceToolKey } from '../modules/tool-lifecycle.js';
 
 export async function handleSessionMessage(req, res, {
   sessions, eventBus, logStructured,
@@ -9,6 +10,7 @@ export async function handleSessionMessage(req, res, {
   runPromptHandlers, prepareSessionForLlmCall,
   getExperienceTools, runAgentLoop,
   upsertSessionContext, activeDockerRunnerModelRef,
+  TOOL_SERVERS, serviceRegistry, dockerControlEnabled, runComposeAction,
 }) {
   const session = sessions.get(req.params.id);
   if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
@@ -79,6 +81,18 @@ export async function handleSessionMessage(req, res, {
     model: session.model, endpoint: session.endpoint, experience: session.experience,
     metadata: { classification: classification.category, messageLength: normalizedMessage.length },
   });
+
+  // JIT tool lifecycle: auto-start MCP tool server if the experience requires one
+  const requiredTool = experienceToolKey(session.experience, TOOL_SERVERS || {});
+  if (requiredTool && TOOL_SERVERS) {
+    const lifecycle = await ensureToolReady(requiredTool, TOOL_SERVERS, serviceRegistry, dockerControlEnabled, runComposeAction, logStructured);
+    if (!lifecycle.ready) {
+      return res.status(503).json({ success: false, error: lifecycle.error || `Tool server for ${session.experience} is unavailable` });
+    }
+    if (lifecycle.started) {
+      eventBus.emit('tool_lifecycle_started', { toolKey: requiredTool, sessionId: session.id });
+    }
+  }
 
   const msgStart = Date.now();
   session.status = 'running';

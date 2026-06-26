@@ -493,6 +493,7 @@ app.use('/api/sessions', createSessionsRouter({
   resolveEndpointUrl, prepareSessionForLlmCall, ensureRunnableModelForSession,
   getExperienceTools, runPromptHandlers, runAgentLoop,
   upsertSessionContext: upsertSessionContextWithSnapshot, markSessionEnded: markSessionEndedWithSnapshot, persistEvent, activeDockerRunnerModelRef,
+  TOOL_SERVERS, serviceRegistry: getServiceRegistry(), dockerControlEnabled: DOCKER_CONTROL_ENABLED, runComposeAction,
 }));
 
 app.use('/api', tasksRouter);
