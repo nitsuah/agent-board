@@ -28,10 +28,10 @@ Last Updated: 2026-06-26
   - Context: the stack is local-first today and still lacks an agreed production deployment contract.
   - Acceptance Criteria: deployment guide or prod compose path exists and secrets handling is documented.
 
-- [ ] **[Q2-CEO] MCP container manager** — design and implement a lightweight manager (container or API) that can spin up/down MCP tool containers (Playwright MCP, Jira/Confluence MCP, bb-mcp) on demand.
+- [x] **[Q2-CEO] MCP container manager** — design and implement a lightweight manager (container or API) that can spin up/down MCP tool containers (Playwright MCP, Jira/Confluence MCP, bb-mcp) on demand.
   - Priority: P2
   - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
-  - Acceptance Criteria: at least one MCP container (e.g., Playwright) can be started, used, and stopped via the manager API; compose integration documented.
+  - Acceptance Criteria: ✅ `config/mcp-registry.json` declarative registry; `GET/POST /api/mcp-registry/:key/ensure` JIT-starts; `POST /api/mcp-registry/:key/stop` stops; `config/docker-compose.stats.yml` opt-in override for socket access. 8 tests passing.
 
 - [ ] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
   - Priority: P2

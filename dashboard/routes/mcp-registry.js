@@ -96,5 +96,26 @@ export function createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRe
       error: healthy ? undefined : `${provider.key} started but health check timed out` });
   });
 
+  router.post('/mcp-registry/:key/stop', async (req, res) => {
+    const { providers } = loadRegistry();
+    const provider = providers.find(p => p.key === req.params.key);
+    if (!provider) return res.status(404).json({ success: false, error: `Unknown MCP provider: ${req.params.key}` });
+
+    if (!DOCKER_CONTROL_ENABLED) {
+      return res.status(503).json({
+        success: false,
+        error: `Docker control disabled. Enable AGENT_BOARD_ENABLE_DOCKER_CONTROL to stop containers.`,
+      });
+    }
+
+    logStructured('info', 'mcp_registry_stop', { key: provider.key, composeService: provider.composeService });
+    try {
+      await runComposeAction('stop', provider.composeService, provider.composeProfile);
+      res.json({ success: true, stopped: true });
+    } catch (err) {
+      res.status(500).json({ success: false, error: `Failed to stop ${provider.key}: ${err.message}` });
+    }
+  });
+
   return router;
 }

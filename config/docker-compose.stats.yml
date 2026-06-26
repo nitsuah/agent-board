@@ -1,0 +1,15 @@
+# docker-compose.stats.yml
+# Opt-in override that mounts the Docker socket so agent-dashboard can run
+# `docker stats` and surface per-container CPU/memory in the System Panel.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.stats.yml up -d
+#
+# Security note: mounting the Docker socket gives the container root-equivalent
+# access to the host. Only use this in trusted local dev environments.
+services:
+  agent-dashboard:
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - AGENT_BOARD_ENABLE_DOCKER_CONTROL=true

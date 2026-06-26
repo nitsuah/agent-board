@@ -63,5 +63,20 @@ const ensure404 = await fetch(`${BASE}/api/mcp-registry/nope/ensure`, { method: 
 assert.strictEqual(ensure404.status, 404);
 console.log('  ✅ ensure unknown provider → 404');
 
+// 7. POST stop — docker control disabled → 503, unknown → 404
+const stopUnknown = await fetch(`${BASE}/api/mcp-registry/nope/stop`, { method: 'POST' });
+assert.strictEqual(stopUnknown.status, 404);
+console.log('  ✅ stop unknown provider → 404');
+
+const stopDisabled = await fetch(`${BASE}/api/mcp-registry/content_gen/stop`, { method: 'POST' });
+assert.ok([200, 503].includes(stopDisabled.status), `stop: expected 200 or 503, got ${stopDisabled.status}`);
+if (stopDisabled.status === 503) {
+  const d = await stopDisabled.json();
+  assert.ok(d.error, 'error message present on disabled stop');
+  console.log('  ✅ stop content_gen (no docker ctrl) → 503 with message');
+} else {
+  console.log('  ✅ stop content_gen (docker ctrl on) → 200');
+}
+
 server.close();
 console.log('MCP registry tests passed.');
