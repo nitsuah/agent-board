@@ -105,18 +105,10 @@ export default function ChatColumn({
                 className="btn-secondary btn-sm"
                 title="Export conversation as Markdown"
                 onClick={() => {
-                  const lines = [`# ${activeSessionData.name}\n`, `*${activeSessionData.experience} · ${activeSessionData.endpoint}*\n`];
-                  for (const m of activeSessionMessages) {
-                    const role = m.role === 'user' ? '**You**' : '**AI**';
-                    const ts = m.timestamp ? ` *(${new Date(m.timestamp).toLocaleString()})*` : '';
-                    lines.push(`\n${role}${ts}\n\n${m.content}`);
-                  }
-                  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
                   const a = document.createElement('a');
-                  a.href = URL.createObjectURL(blob);
-                  a.download = `${activeSessionData.name.replace(/\s+/g, '-')}.md`;
+                  a.href = `/api/sessions/${activeSession}/export`;
+                  a.download = '';
                   a.click();
-                  URL.revokeObjectURL(a.href);
                 }}
               >⬇ Export</button>
               <button
