@@ -29,6 +29,7 @@ export default function ChatColumn({
   sendFeedback,
   togglePause,
   deleteSession,
+  fetchSessionDetails,
   forceSend,
   stopSession,
   handleEndpointSelection,
@@ -111,6 +112,21 @@ export default function ChatColumn({
                   a.click();
                 }}
               >⬇ Export</button>
+              {activeSessionMessages.length > 0 && (
+                <button
+                  className="btn-secondary btn-sm"
+                  title="Clear all messages in this session"
+                  onClick={async () => {
+                    if (!confirm('Clear all messages in this session?')) return;
+                    const res = await fetch(`/api/sessions/${activeSession}/messages`, { method: 'DELETE' });
+                    const data = await res.json().catch(() => ({}));
+                    if (data.success && typeof data.cleared === 'number') {
+                      // Reload session details to reflect empty messages
+                      if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+                    }
+                  }}
+                >⌫ Clear</button>
+              )}
               <button
                 className="btn-secondary btn-sm"
                 title="Delete session"

@@ -829,6 +829,7 @@ function App() {
               togglePause={togglePause}
               deleteSession={deleteSession}
               renameSession={renameSession}
+              fetchSessionDetails={fetchSessionDetails}
               forceSend={forceSend}
               stopSession={stopSession}
               handleEndpointSelection={handleEndpointSelection}

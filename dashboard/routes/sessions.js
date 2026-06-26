@@ -228,6 +228,21 @@ export function createSessionsRouter({
     res.json({ success: true, deleted: exists });
   });
 
+  router.delete('/:id/messages', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    const count = session.messages.length;
+    session.messages = [];
+    session.updatedAt = new Date();
+    logStructured?.('info', 'session_messages_cleared', { sessionId: session.id, cleared: count });
+    eventBus.emit('session_messages_cleared', {
+      session_id: session.id, user_id: session.userId,
+      model: session.model, endpoint: session.endpoint, experience: session.experience,
+      metadata: { cleared: count },
+    });
+    res.json({ success: true, cleared: count });
+  });
+
   router.post('/:id/feedback', (req, res) => {
     const session = sessions.get(req.params.id);
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
