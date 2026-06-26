@@ -104,10 +104,11 @@ export function createSessionsRouter({
   });
 
   router.get('/', (req, res) => {
-    const { experience, userId: filterUserId } = req.query;
+    const { experience, userId: filterUserId, endpoint: filterEndpoint } = req.query;
     let sessionList = Array.from(sessions.values());
     if (experience) sessionList = sessionList.filter(s => s.experience === experience);
     if (filterUserId) sessionList = sessionList.filter(s => s.userId === filterUserId);
+    if (filterEndpoint) sessionList = sessionList.filter(s => s.endpoint === filterEndpoint);
     res.json({
       success: true,
       sessions: sessionList.map(s => ({
