@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '../components/Toast.jsx';
 
 export function useTaskManagement({ activeSession, selectedExperience, wsLayout, setActiveTab, sendMessageCore, getAvailableEndpoints, currentEndpoint, getPreferredModelForEndpoint, fetchSessions, fetchSessionDetails, setActiveSession }) {
   const [tasks, setTasks] = useState([]);
@@ -14,7 +15,7 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
         setTasks(data.tasks || []);
         setTaskSummary(data.summary || { total: 0, byStatus: {} });
       }
-    } catch (error) { console.error('Error fetching tasks:', error); }
+    } catch (error) { toast.error(`Failed to fetch tasks: ${error.message}`); }
   };
 
   const createTask = async (experience) => {
@@ -26,11 +27,11 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
         body: JSON.stringify({ title: taskTitle.trim(), priority: taskPriority, sessionId: activeSession || null, experience: experience || selectedExperience }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error creating task:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to create task'); return; }
       setTaskTitle('');
       setTaskPriority('medium');
       fetchTasks();
-    } catch (error) { console.error('Error creating task:', error); }
+    } catch (error) { toast.error(`Failed to create task: ${error.message}`); }
   };
 
   const updateTaskStatus = async (taskId, status) => {
@@ -41,9 +42,9 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
         body: JSON.stringify({ status }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error updating task status:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to update task'); return; }
       fetchTasks();
-    } catch (error) { console.error('Error updating task status:', error); }
+    } catch (error) { toast.error(`Failed to update task: ${error.message}`); }
   };
 
   const routeTaskToSession = async (taskId) => {
@@ -55,9 +56,9 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
         body: JSON.stringify({ sessionId: activeSession }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error routing task:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to route task'); return; }
       fetchTasks();
-    } catch (error) { console.error('Error routing task:', error); }
+    } catch (error) { toast.error(`Failed to route task: ${error.message}`); }
   };
 
   const dispatchTask = async (task) => {
@@ -84,16 +85,16 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
       if (wsLayout === 'single') setActiveTab('chat');
       sendMessageCore(sessionId, task.title);
       fetchTasks();
-    } catch (err) { console.error('dispatchTask failed:', err); }
+    } catch (err) { toast.error(`Dispatch failed: ${err.message}`); }
   };
 
   const deleteTask = async (taskId) => {
     try {
       const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
       const data = await res.json();
-      if (!data.success) { console.error('Error deleting task:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to delete task'); return; }
       fetchTasks();
-    } catch (error) { console.error('Error deleting task:', error); }
+    } catch (error) { toast.error(`Failed to delete task: ${error.message}`); }
   };
 
   const clearCompletedTasks = async () => {
