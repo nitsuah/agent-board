@@ -718,7 +718,10 @@ function App() {
       )}
 
       <div className="layout">
-        <div className={`content${wsOps.wsLayout !== 'single' ? ` layout-${wsOps.wsLayout}` : ''}`}>
+        <div
+          className={`content${wsOps.wsLayout !== 'single' ? ` layout-${wsOps.wsLayout}` : ''}`}
+          style={wsOps.wsLayout === 'split-h' ? { '--ws-split-pos': `${wsOps.wsSplitPos}%` } : wsOps.wsLayout === 'split-v' ? { '--ws-split-pos': `${wsOps.wsSplitPos}%` } : undefined}
+        >
           {(wsOps.wsLayout !== 'single' || activeTab === 'workspace') && (
             <WorkspaceView
               dockerStatus={dockerStatus}
@@ -737,6 +740,12 @@ function App() {
               fetchContentClients={fetchContentClients} fetchContentFiles={fetchContentFiles}
               downloadContentFile={downloadContentFile}
             />
+          )}
+          {wsOps.wsLayout === 'split-h' && (
+            <div className="ws-split-handle ws-split-handle-h" onMouseDown={wsOps.startSplitResize} title="Drag to resize" />
+          )}
+          {wsOps.wsLayout === 'split-v' && (
+            <div className="ws-split-handle ws-split-handle-v" onMouseDown={wsOps.startSplitResizeV} title="Drag to resize" />
           )}
           {(wsOps.wsLayout !== 'single' || activeTab !== 'workspace') && (
             <ChatColumn

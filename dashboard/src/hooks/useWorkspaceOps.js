@@ -29,6 +29,7 @@ export function useWorkspaceOps() {
   const [wsLayout, setWsLayout] = useState('single');
   const [wsExplorerWidth, setWsExplorerWidth] = useState(220);
   const [wsBottomHeight, setWsBottomHeight] = useState(220);
+  const [wsSplitPos, setWsSplitPos] = useState(50); // percent for horizontal split
   const wsResizingRef = useRef(false);
   const wsGitPopoverRef = useRef(null);
 
@@ -180,6 +181,34 @@ export function useWorkspaceOps() {
     window.addEventListener('mouseup', onUp);
   };
 
+  const startSplitResize = (e) => {
+    e.preventDefault();
+    const container = e.currentTarget.parentElement;
+    const startX = e.clientX;
+    const startPos = wsSplitPos;
+    const onMove = (ev) => {
+      const rect = container.getBoundingClientRect();
+      const pct = Math.max(20, Math.min(80, ((ev.clientX - rect.left) / rect.width) * 100));
+      setWsSplitPos(pct);
+    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const startSplitResizeV = (e) => {
+    e.preventDefault();
+    const container = e.currentTarget.parentElement;
+    const onMove = (ev) => {
+      const rect = container.getBoundingClientRect();
+      const pct = Math.max(20, Math.min(80, ((ev.clientY - rect.top) / rect.height) * 100));
+      setWsSplitPos(pct);
+    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const startBottomResize = (e) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -188,6 +217,17 @@ export function useWorkspaceOps() {
     const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+  };
+
+  const moveWorkspaceEntry = async (fromPath, toPath) => {
+    try {
+      await fetch('/api/workspace/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromPath, to: toPath }),
+      });
+      browseWorkspace(workspacePath);
+    } catch (err) { console.error('Move failed:', err); }
   };
 
   const deleteWorkspaceEntry = async (path) => {
@@ -312,10 +352,11 @@ export function useWorkspaceOps() {
     wsSearch, setWsSearch, wsSearchResults, setWsSearchResults, wsSearchBusy,
     wsNewName, setWsNewName, wsCreateMode, setWsCreateMode, wsRenaming, setWsRenaming,
     wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
-    wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsGitPopoverRef,
+    wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsSplitPos, wsGitPopoverRef,
     browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts,
     commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
-    startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
+    startExplorerResize, startBottomResize, startSplitResize, startSplitResizeV,
+    deleteWorkspaceEntry, createWorkspaceEntry, moveWorkspaceEntry,
     renameWorkspaceEntry, searchWorkspace, fetchBranches, checkoutBranch, pullBranch, discardFile,
   };
 }

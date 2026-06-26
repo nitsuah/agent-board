@@ -15,7 +15,7 @@ export default function WorkspaceView({
   browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts, fetchBranches,
   commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
   startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
-  renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
+  moveWorkspaceEntry, renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
   artifactFiles,
   tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience,
@@ -28,6 +28,23 @@ export default function WorkspaceView({
   const termInputRef = useRef(null);
   const [sessionOutputs, setSessionOutputs] = useState([]);
   const [ctxMenu, setCtxMenu] = useState(null); // { x, y, entry, fullPath }
+  const [showDiff, setShowDiff] = useState(false);
+  const [dragOver, setDragOver] = useState(null); // fullPath being dragged over
+
+  const computeDiff = (original, modified) => {
+    const a = (original || '').split('\n');
+    const b = (modified || '').split('\n');
+    const result = [];
+    const maxLen = Math.max(a.length, b.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (a[i] === b[i]) { result.push({ type: 'same', text: a[i] ?? '' }); }
+      else {
+        if (i < a.length) result.push({ type: 'del', text: a[i] });
+        if (i < b.length) result.push({ type: 'add', text: b[i] });
+      }
+    }
+    return result;
+  };
 
   // Close context menu on outside click
   useEffect(() => {
@@ -264,8 +281,21 @@ export default function WorkspaceView({
                     return (
                       <div
                         key={e.name}
-                        className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''}`}
+                        className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''} ${dragOver === fullPath && e.type === 'dir' ? 'drag-over' : ''}`}
                         onContextMenu={ev => openCtxMenu(ev, e, fullPath)}
+                        draggable={!isRenaming}
+                        onDragStart={ev => { ev.dataTransfer.setData('text/plain', fullPath); ev.dataTransfer.effectAllowed = 'move'; }}
+                        onDragOver={ev => { if (e.type === 'dir') { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; setDragOver(fullPath); } }}
+                        onDragLeave={() => setDragOver(null)}
+                        onDrop={ev => {
+                          ev.preventDefault();
+                          setDragOver(null);
+                          if (e.type !== 'dir') return;
+                          const src = ev.dataTransfer.getData('text/plain');
+                          if (!src || src === fullPath) return;
+                          const srcName = src.split('/').pop();
+                          moveWorkspaceEntry(src, `${fullPath}/${srcName}`);
+                        }}
                       >
                         {isRenaming ? (
                           <input
@@ -375,9 +405,14 @@ export default function WorkspaceView({
                         <button className="ws-btn-save" disabled={workspaceActions.saving} onClick={() => saveWorkspaceFile()}>
                           {workspaceActions.saving ? 'Saving…' : '✓ Save'}
                         </button>
-                        <button className="ws-btn-discard" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: false, editContent: null } : f))}>
+                        <button className="ws-btn-discard" onClick={() => { setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: false, editContent: null } : f)); setShowDiff(false); }}>
                           ✕ Discard
                         </button>
+                        {af.editContent !== null && af.editContent !== af.content && (
+                          <button className={`ws-btn-diff ${showDiff ? 'active' : ''}`} onClick={() => setShowDiff(p => !p)} title="Toggle diff view">
+                            ⊞ Diff
+                          </button>
+                        )}
                       </>
                     ) : (
                       <button className="ws-btn-edit" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: true, editContent: f.content } : f))}>
@@ -386,7 +421,16 @@ export default function WorkspaceView({
                     )}
                   </div>
                   {workspaceActions.error && <div className="ws-editor-error">{workspaceActions.error}</div>}
-                  {af.editing ? (
+                  {af.editing && showDiff && af.editContent !== null && af.editContent !== af.content ? (
+                    <div className="ws-diff-view">
+                      {computeDiff(af.content, af.editContent).map((line, i) => (
+                        <div key={i} className={`ws-diff-line ws-diff-${line.type}`}>
+                          <span className="ws-diff-gutter">{line.type === 'del' ? '−' : line.type === 'add' ? '+' : ' '}</span>
+                          <span className="ws-diff-text">{line.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : af.editing ? (
                     <textarea
                       className="ws-editor-textarea"
                       value={af.editContent ?? af.content}
