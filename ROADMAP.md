@@ -15,7 +15,7 @@ Last Updated: 2026-06-25
 
 - [x] P1: Validate safety-layer behavior with tests and examples.
 - [x] P2: Finish API documentation for lifecycle and security flows.
-- [ ] P2: Define a validated production deployment path.
+- [x] P2: Define a validated production deployment path.
 - [ ] `[deferred/P3]` Unblock NemoClaw sandbox container — Ollama is the active local runtime; revisit if NemoClaw becomes relevant.
 - [ ] `[deferred/P3]` Replace OpenLLM endpoint — CPU-incompatible with current workflow; Ollama + tools/ cover needs. `OPENLLM_ENABLED=false` stays.
 

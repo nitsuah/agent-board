@@ -23,7 +23,7 @@ Last Updated: 2026-06-26
   - Context: once GPU models are added, the system will need a documented load and unload story for reclaiming VRAM.
   - Acceptance Criteria: API design is written down and the dashboard has a defined model-management surface.
 
-- [ ] Document a production deployment path.
+- [x] Document a production deployment path.
   - Priority: P2
   - Context: the stack is local-first today and still lacks an agreed production deployment contract.
   - Acceptance Criteria: deployment guide or prod compose path exists and secrets handling is documented.
