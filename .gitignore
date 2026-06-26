@@ -61,16 +61,16 @@ build/
 *.sqlite
 *.sqlite3
 
-# Tool: generated client output (large, gitignored — stored in Docker volume or local output/)
-tools/website/output/
-tools/content-gen/output/
+# ai gen
+.claude/worktrees/
 
-# Tool: local .env overrides (secrets)
+
+# Tool: local build and .env overrides (secrets)
+tools/content-gen/modules/
 tools/content-gen/.env
 tools/website/.env
 
-# ai gen
-
-.claude/worktrees/
+# Tool: generated client output (large, gitignored — stored in Docker volume or local output/)
+tools/website/output/
+tools/content-gen/output/
 tools/content-gen/examples/
-tools/content-gen/modules/
