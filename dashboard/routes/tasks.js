@@ -1,6 +1,6 @@
 import express from 'express';
 
-export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment }) {
+export function createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment }) {
   const router = express.Router();
   let taskCounter = 0;
 
@@ -65,6 +65,8 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
 
     tasks.set(taskId, task);
 
+    logStructured?.('info', 'task_created', { taskId, priority: task.priority, sessionId: task.sessionId });
+
     eventBus.emit('task_created', {
       session_id: task.sessionId,
       user_id: task.assignedUserId || 'anonymous',
@@ -127,6 +129,7 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
       }
 
       if (task.status !== normalizedStatus) {
+        logStructured?.('info', 'task_status_changed', { taskId: task.id, from: task.status, to: normalizedStatus });
         task.status = normalizedStatus;
         eventBus.emit('task_status_changed', {
           session_id: task.sessionId,
@@ -184,6 +187,7 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
+    logStructured?.('info', 'task_deleted', { taskId: task.id, status: task.status });
     tasks.delete(req.params.id);
     eventBus.emit('task_deleted', {
       session_id: task.sessionId,

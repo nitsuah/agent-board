@@ -1,5 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Markdown from './Markdown.jsx';
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button className="btn-feedback" onClick={copy} title="Copy to clipboard">
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
+}
 
 export default function MessageList({ messages, loading, streamingContent, onFeedback, chatBottomRef }) {
   return (
@@ -21,6 +36,7 @@ export default function MessageList({ messages, loading, streamingContent, onFee
             </div>
             {msg.role === 'assistant' && (
               <div className="message-feedback">
+                <CopyButton text={msg.content} />
                 {msg.feedback ? (
                   <span className="feedback-saved">
                     Feedback saved: {msg.feedback === 'up' ? '👍' : '👎'}

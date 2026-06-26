@@ -397,7 +397,7 @@ async function runPromptHandlers(rawMessage, session, safetyMode) {
 }
 
 // Router instances (initialized after shared state + helpers are declared)
-const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
+const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
 const workspaceRouter = createWorkspaceRouter(WORKSPACE_ROOT);
 
 // Middleware

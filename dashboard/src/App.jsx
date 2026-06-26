@@ -564,7 +564,9 @@ function App() {
   };
 
   const handleMessageInputKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (activeSession && messageInput.trim()) sendMessage(e); }
+    const ctrlSend = (e.ctrlKey || e.metaKey) && e.key === 'Enter';
+    const enterSend = e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+    if (ctrlSend || enterSend) { e.preventDefault(); if (activeSession && messageInput.trim()) sendMessage(e); }
   };
 
   const switchEndpoint = async (endpoint, model) => {
