@@ -1,8 +1,9 @@
 import express from 'express';
 import axios from 'axios';
 import { mcpRequest } from '../modules/mcp-helpers.js';
+import { ensureToolReady } from '../modules/tool-lifecycle.js';
 
-export function createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }) {
+export function createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, serviceRegistry, runComposeAction, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }) {
   const router = express.Router();
 
   router.get('/tools', async (req, res) => {
@@ -32,6 +33,19 @@ export function createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, eventB
       })
     );
     res.json({ success: true, dockerControlEnabled: DOCKER_CONTROL_ENABLED, tools });
+  });
+
+  // POST /api/tools/:toolKey/ensure — JIT spin-up: check health and auto-start if needed
+  router.post('/tools/:toolKey/ensure', async (req, res) => {
+    const tool = TOOL_SERVERS[req.params.toolKey];
+    if (!tool) {
+      return res.status(404).json({ success: false, error: `Unknown tool server: ${req.params.toolKey}` });
+    }
+    const result = await ensureToolReady(req.params.toolKey, TOOL_SERVERS, serviceRegistry, DOCKER_CONTROL_ENABLED, runComposeAction, logStructured);
+    if (result.ready) {
+      return res.json({ success: true, ready: true, alreadyRunning: result.alreadyRunning, started: result.started });
+    }
+    return res.status(503).json({ success: false, ready: false, error: result.error });
   });
 
   router.get('/tools/:toolKey/tools', async (req, res) => {

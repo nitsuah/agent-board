@@ -514,7 +514,7 @@ app.get('/api/experiences', (req, res) => {
   });
 });
 
-app.use('/api', createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }));
+app.use('/api', createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, serviceRegistry: getServiceRegistry(), runComposeAction, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }));
 
 app.use('/api', createConnectorsRouter({ BB_MCP_ENABLED, BB_MCP_URL, logStructured }));
 
@@ -657,7 +657,10 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
     task.sessionId = sessionId;
     return result;
   };
-  startTaskRunner(tasks, eventBus, dispatchTaskMessage);
+  startTaskRunner(tasks, eventBus, dispatchTaskMessage, {
+    TOOL_SERVERS, serviceRegistry: getServiceRegistry(),
+    dockerControlEnabled: DOCKER_CONTROL_ENABLED, runComposeAction, logStructured,
+  });
 
   process.on('SIGTERM', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });
   process.on('SIGINT', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });

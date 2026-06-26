@@ -6,10 +6,18 @@
  * It creates or reuses a session and sends task.title as the first message.
  * Falls back to a stub (for test environments) if not provided.
  */
+import { ensureToolReady, experienceToolKey } from './modules/tool-lifecycle.js';
 
 const PRIORITY_ORDER = { critical: 4, high: 3, normal: 2, medium: 2, low: 1 };
 
-export function startTaskRunner(tasks, eventBus, dispatchMessage, { intervalMs = 5000 } = {}) {
+export function startTaskRunner(tasks, eventBus, dispatchMessage, {
+  intervalMs = 5000,
+  TOOL_SERVERS,
+  serviceRegistry,
+  dockerControlEnabled,
+  runComposeAction,
+  logStructured,
+} = {}) {
   let runnerInterval = null;
 
   const emitStatus = (task, status, extra = {}) => {
@@ -37,6 +45,21 @@ export function startTaskRunner(tasks, eventBus, dispatchMessage, { intervalMs =
 
     if (pending.length === 0) return;
     const task = pending[0];
+
+    // JIT tool lifecycle: auto-start required tool server before dispatching
+    if (TOOL_SERVERS && task.experience) {
+      const requiredTool = experienceToolKey(task.experience, TOOL_SERVERS);
+      if (requiredTool) {
+        const lifecycle = await ensureToolReady(requiredTool, TOOL_SERVERS, serviceRegistry, dockerControlEnabled, runComposeAction, logStructured);
+        if (!lifecycle.ready) {
+          emitStatus(task, 'failed', { error: lifecycle.error || `Tool server for ${task.experience} unavailable` });
+          return;
+        }
+        if (lifecycle.started) {
+          eventBus.emit('tool_lifecycle_started', { toolKey: requiredTool, taskId: task.id });
+        }
+      }
+    }
 
     emitStatus(task, 'running');
 
