@@ -81,6 +81,8 @@ export async function handleSessionMessage(req, res, {
   });
 
   const msgStart = Date.now();
+  session.status = 'running';
+  session.lastActivity = new Date();
 
   try {
     const prepared = await prepareSessionForLlmCall(session);
@@ -114,6 +116,8 @@ export async function handleSessionMessage(req, res, {
       filterFlags: sanitizedResponse.flags, blocked: sanitizedResponse.blocked,
       redacted: sanitizedResponse.redacted, toolLog: toolLog?.length ? toolLog : undefined, feedback: null,
     });
+    session.status = 'idle';
+    session.lastActivity = new Date();
     session.updatedAt = new Date();
     upsertSessionContext(session, logStructured);
 
@@ -142,6 +146,9 @@ export async function handleSessionMessage(req, res, {
     logStructured('error', 'llm_call_failed', { sessionId: session.id, endpoint: session.endpoint, model: session.model, error: error.message });
     const errorMsg = `[Error] Could not reach the configured model service for ${session.endpoint}: ${error.message}`;
     session.messages.push({ role: 'assistant', content: errorMsg, timestamp: new Date() });
+    session.status = 'error';
+    session.lastActivity = new Date();
+    session.errorCount = (session.errorCount || 0) + 1;
     session.updatedAt = new Date();
     upsertSessionContext(session, logStructured);
     eventBus.emit('error', {

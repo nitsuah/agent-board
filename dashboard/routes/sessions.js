@@ -82,6 +82,7 @@ export function createSessionsRouter({
       createdAt: new Date(), updatedAt: new Date(),
       userId: userId || 'anonymous', userRole: userRole || null,
       experience, safetyMode: resolvedSafetyMode, useSafeModeEnabled: false,
+      status: 'idle', lastActivity: new Date(), errorCount: 0,
     };
 
     sessions.set(sessionId, session);
@@ -115,6 +116,7 @@ export function createSessionsRouter({
         id: s.id, name: s.name, model: s.model, endpoint: s.endpoint,
         messageCount: s.messages.length, createdAt: s.createdAt, updatedAt: s.updatedAt,
         userId: s.userId, experience: s.experience, safetyMode: s.safetyMode,
+        status: s.status || 'idle', lastActivity: s.lastActivity, errorCount: s.errorCount || 0,
       })),
     });
   });
@@ -130,6 +132,41 @@ export function createSessionsRouter({
         createdAt: session.createdAt, userId: session.userId, userRole: session.userRole,
         experience: session.experience, safetyMode: session.safetyMode,
         useSafeModeEnabled: session.useSafeModeEnabled,
+        status: session.status || 'idle',
+        lastActivity: session.lastActivity,
+        errorCount: session.errorCount || 0,
+      },
+    });
+  });
+
+  router.get('/:id/health', async (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+
+    // Probe the endpoint to verify reachability
+    let endpointReachable = false;
+    try {
+      const epUrl = session.llmUrl || LLM_CONFIG[session.endpoint]?.url;
+      if (epUrl) {
+        const ctrl = AbortSignal.timeout(2000);
+        const probe = await fetch(`${epUrl}/api/tags`, { signal: ctrl }).catch(() =>
+          fetch(`${epUrl}/v1/models`, { signal: AbortSignal.timeout(2000) }).catch(() => null)
+        );
+        endpointReachable = !!(probe?.ok);
+      }
+    } catch { /* unreachable */ }
+
+    res.json({
+      success: true,
+      health: {
+        sessionId: session.id,
+        status: session.status || 'idle',
+        lastActivity: session.lastActivity || session.updatedAt,
+        messageCount: session.messages.length,
+        errorCount: session.errorCount || 0,
+        endpoint: session.endpoint,
+        endpointReachable,
+        uptime: Math.floor((Date.now() - new Date(session.createdAt).getTime()) / 1000),
       },
     });
   });
