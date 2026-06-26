@@ -513,6 +513,7 @@ app.get('/api/health', async (req, res) => {
     server: { uptime: process.uptime(), memory: process.memoryUsage(), platform: process.platform },
     endpoints: {},
     sessions: { active: sessions.size, totalCreated: sessionCounterRef.current },
+    tasks: { total: tasks.size, pending: Array.from(tasks.values()).filter(t => t.status === 'pending').length, inProgress: Array.from(tasks.values()).filter(t => t.status === 'in_progress').length },
     observability: {
       totalEvents: eventBus.getAll().length,
       recentErrors: recentErrors.length,
