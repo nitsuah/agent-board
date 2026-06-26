@@ -345,11 +345,43 @@ export function createDockerRouter({
       );
       const services = Object.fromEntries(serviceEntries);
 
+      // Fetch per-container resource usage from `docker stats`
+      let containerStats = {};
+      try {
+        const { stdout } = await execFileAsync('docker', [
+          'stats', '--no-stream', '--format',
+          '{"name":"{{.Name}}","cpu":"{{.CPUPerc}}","mem":"{{.MemUsage}}","memPerc":"{{.MemPerc}}","net":"{{.NetIO}}","block":"{{.BlockIO}}"}',
+        ]);
+        for (const line of stdout.trim().split('\n').filter(Boolean)) {
+          try {
+            const entry = JSON.parse(line);
+            // Normalize container name → service key (strip leading slash, project prefix)
+            const rawName = entry.name.replace(/^\//, '');
+            containerStats[rawName] = {
+              cpu: entry.cpu,
+              mem: entry.mem,
+              memPerc: entry.memPerc,
+              net: entry.net,
+              block: entry.block,
+            };
+          } catch { /* skip malformed line */ }
+        }
+        // Attach stats to matching service entries by composeService name
+        for (const svc of Object.values(services)) {
+          if (!svc.composeService) continue;
+          const match = Object.entries(containerStats).find(([name]) =>
+            name === svc.composeService || name.includes(svc.composeService)
+          );
+          if (match) svc.stats = match[1];
+        }
+      } catch { /* docker not available or not running — stats remain absent */ }
+
       res.json({
         success: true,
         dockerControlEnabled: DOCKER_CONTROL_ENABLED,
         inDocker: IN_DOCKER,
         services,
+        containerStats,
         primaryLlm: {
           resolvedUrl: primaryResolution.url,
           discovered: primaryResolution.discovered,

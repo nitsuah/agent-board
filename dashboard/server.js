@@ -36,6 +36,7 @@ import { createConnectorsRouter } from './routes/connectors.js';
 import { createEndpointsRouter } from './routes/endpoints.js';
 import { createDiscoverRouter } from './routes/discover.js';
 import { createChannelsRouter } from './routes/channels.js';
+import { createMcpRegistryRouter } from './routes/mcp-registry.js';
 import { startTaskRunner } from './task-runner.js';
 import outputsRouter from './routes/outputs.js';
 import {
@@ -522,6 +523,7 @@ app.use('/api', createConnectorsRouter({ BB_MCP_ENABLED, BB_MCP_URL, logStructur
 app.use('/api', createEndpointsRouter({ LLM_CONFIG, logStructured }));
 app.use('/api', createDiscoverRouter({ LLM_CONFIG, logStructured }));
 app.use('/api', createChannelsRouter({ eventBus, logStructured }));
+app.use('/api', createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRegistry: getServiceRegistry(), DOCKER_CONTROL_ENABLED, runComposeAction }));
 
 app.get('/api/health', async (req, res) => {
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
