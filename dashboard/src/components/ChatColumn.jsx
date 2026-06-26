@@ -32,6 +32,7 @@ export default function ChatColumn({
   fetchSessionDetails,
   forceSend,
   stopSession,
+  forkSession,
   handleEndpointSelection,
   selectableEndpointKeys,
   currentEndpoint,
@@ -181,6 +182,7 @@ export default function ChatColumn({
             loading={loading}
             streamingContent={streamingContent}
             onFeedback={sendFeedback}
+            onFork={forkSession ? (msgIdx) => forkSession(activeSession, msgIdx) : undefined}
             chatBottomRef={chatBottomRef}
           />
 

@@ -670,6 +670,21 @@ function App() {
     } catch (error) { toast.error(`Delete failed: ${error.message}`); }
   };
 
+  const forkSession = async (sessionId, messageIndex) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atMessageIndex: messageIndex }),
+      });
+      const data = await res.json();
+      if (!data.success) { toast.error(data.error || 'Fork failed'); return; }
+      toast.success?.(`Forked: ${data.session.name} (${data.session.messageCount} messages)`);
+      fetchSessions();
+      setActiveSession(data.session.id);
+    } catch (err) { toast.error(`Fork failed: ${err.message}`); }
+  };
+
   const sendFeedback = async (messageIndex, positive) => {
     if (!activeSession) return;
     const targetMessage = activeSessionMessages[messageIndex];
@@ -835,6 +850,7 @@ function App() {
               sendMessage={sendMessage}
               handleMessageInputKeyDown={handleMessageInputKeyDown}
               sendFeedback={sendFeedback}
+              forkSession={forkSession}
               togglePause={togglePause}
               deleteSession={deleteSession}
               renameSession={renameSession}

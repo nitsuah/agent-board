@@ -36,7 +36,7 @@ function CopyButton({ text }) {
   );
 }
 
-export default function MessageList({ messages, loading, streamingContent, onFeedback, chatBottomRef }) {
+export default function MessageList({ messages, loading, streamingContent, onFeedback, onFork, chatBottomRef }) {
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const visible = query
@@ -87,6 +87,13 @@ export default function MessageList({ messages, loading, streamingContent, onFee
             {msg.role === 'assistant' && (
               <div className="message-feedback">
                 <CopyButton text={msg.content} />
+                {onFork && (
+                  <button
+                    className="btn-feedback"
+                    onClick={() => onFork(index)}
+                    title="Fork conversation from this point"
+                  >⑂</button>
+                )}
                 {msg.feedback ? (
                   <span className="feedback-saved">
                     Feedback saved: {msg.feedback === 'up' ? '👍' : '👎'}

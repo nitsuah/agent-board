@@ -171,6 +171,51 @@ export function createSessionsRouter({
     });
   });
 
+  router.post('/:id/fork', express.json(), (req, res) => {
+    const parent = sessions.get(req.params.id);
+    if (!parent) return res.status(404).json({ success: false, error: 'Session not found' });
+
+    const { atMessageIndex } = req.body || {};
+    const cutoff = typeof atMessageIndex === 'number'
+      ? Math.min(Math.max(0, atMessageIndex + 1), parent.messages.length)
+      : parent.messages.length;
+
+    const forkId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const forkName = `${parent.name} (fork)`.slice(0, 80);
+    const fork = {
+      id: forkId,
+      name: forkName,
+      model: parent.model,
+      endpoint: parent.endpoint,
+      llmUrl: parent.llmUrl,
+      messages: parent.messages.slice(0, cutoff).map(m => ({ ...m })),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      userId: parent.userId,
+      userRole: parent.userRole,
+      experience: parent.experience,
+      safetyMode: parent.safetyMode,
+      useSafeModeEnabled: false,
+      status: 'idle',
+      lastActivity: new Date(),
+      errorCount: 0,
+    };
+
+    sessions.set(forkId, fork);
+    upsertSessionContext(fork, logStructured);
+    eventBus.emit('session_fork', {
+      session_id: forkId, user_id: fork.userId,
+      model: fork.model, endpoint: fork.endpoint, experience: fork.experience,
+      metadata: { parentId: parent.id, cutoff },
+    });
+    logStructured('info', 'session_forked', { parentId: parent.id, forkId, cutoff });
+
+    res.json({
+      success: true,
+      session: { id: forkId, name: forkName, messageCount: fork.messages.length, endpoint: fork.endpoint, model: fork.model, experience: fork.experience },
+    });
+  });
+
   router.post('/:id/restart', (req, res) => {
     const session = sessions.get(req.params.id);
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
