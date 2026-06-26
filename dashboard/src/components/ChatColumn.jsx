@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import MessageList from './MessageList.jsx';
 import ToolWorkbench from './ToolWorkbench.jsx';
+
+function useAutoResize(value) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [value]);
+  return ref;
+}
 
 export default function ChatColumn({
   activeSessionData,
@@ -37,6 +48,8 @@ export default function ChatColumn({
   createSession,
   dockerStatus,
 }) {
+  const textareaRef = useAutoResize(messageInput);
+
   return (
     <div className="chat-column">
       {activeSessionData ? (
@@ -63,6 +76,24 @@ export default function ChatColumn({
               >{pausedSessions.has(activeSession) ? '▶ Resume' : '⏸ Pause'}</button>
               <button
                 className="btn-secondary btn-sm"
+                title="Export conversation as Markdown"
+                onClick={() => {
+                  const lines = [`# ${activeSessionData.name}\n`, `*${activeSessionData.experience} · ${activeSessionData.endpoint}*\n`];
+                  for (const m of activeSessionMessages) {
+                    const role = m.role === 'user' ? '**You**' : '**AI**';
+                    const ts = m.timestamp ? ` *(${new Date(m.timestamp).toLocaleString()})*` : '';
+                    lines.push(`\n${role}${ts}\n\n${m.content}`);
+                  }
+                  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `${activeSessionData.name.replace(/\s+/g, '-')}.md`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                }}
+              >⬇ Export</button>
+              <button
+                className="btn-secondary btn-sm"
                 title="Delete session"
                 onClick={() => deleteSession(activeSession)}
               >✕ Delete</button>
@@ -87,12 +118,14 @@ export default function ChatColumn({
           />
 
           <form className="chat-input-form" onSubmit={sendMessage}>
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              className="chat-textarea"
+              rows={1}
               value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
               onKeyDown={handleMessageInputKeyDown}
-              placeholder={loading ? 'Type to queue next message…' : 'Type your message… (Enter or Ctrl+Enter to send)'}
+              placeholder={loading ? 'Type to queue next message…' : 'Type your message… (Enter or Ctrl+Enter to send, Shift+Enter for newline)'}
               maxLength={4000}
             />
             <span className="input-counter" style={messageInput.length > 3200 ? { color: messageInput.length > 3800 ? 'var(--red)' : 'var(--yellow, orange)' } : undefined}>

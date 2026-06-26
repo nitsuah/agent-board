@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const BACKEND_TYPE_LABEL = {
   'ollama-container': 'local', sandbox: 'sandbox', mcp: 'mcp',
@@ -14,7 +14,9 @@ function SystemPanel({
   runningServices, totalServices, knownModels,
   showMetricsPanel, onToggleMetrics,
 }) {
-  const [expandedSvcs, setExpandedSvcs] = React.useState({});
+  const [expandedSvcs, setExpandedSvcs] = useState({});
+  const [diagResults, setDiagResults] = useState(null);
+  const [diagBusy, setDiagBusy] = useState(false);
 
   const renderServiceRow = (serviceKey, info, endpointData = null) => {
     const canControl = !!(systemServices?.dockerControlEnabled && info.controllable);
@@ -283,6 +285,48 @@ function SystemPanel({
             </span>
           </div>
         </div>
+      </div>
+
+      <div className="docker-status" style={{ marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3>Diagnostics</h3>
+          <button
+            className="btn-docker-action"
+            style={{ fontSize: '0.72rem' }}
+            disabled={diagBusy}
+            onClick={async () => {
+              setDiagBusy(true);
+              try {
+                const res = await fetch('/api/system/config-check');
+                const data = await res.json();
+                setDiagResults(data);
+              } catch (err) { setDiagResults({ error: err.message }); }
+              finally { setDiagBusy(false); }
+            }}
+          >{diagBusy ? '…' : 'Run'}</button>
+        </div>
+        {diagResults && !diagResults.error && (
+          <div style={{ marginTop: '0.4rem', fontSize: '0.68rem' }}>
+            <div style={{ marginBottom: '0.3rem', color: 'var(--text-muted)' }}>
+              {diagResults.summary.passing} passing · {diagResults.summary.failing} failing · {diagResults.summary.disabled} disabled
+              {' · '}<span style={{ color: diagResults.dockerControlEnabled ? 'var(--green)' : 'var(--text-faint)' }}>
+                {diagResults.dockerControlEnabled ? 'control on' : 'control off'}
+              </span>
+            </div>
+            {diagResults.checks.map(c => (
+              <div key={c.key} style={{ display: 'flex', gap: '0.3rem', alignItems: 'baseline', lineHeight: 1.5 }}>
+                <span style={{ color: c.reachable === true ? 'var(--green)' : c.reachable === false ? 'var(--red)' : 'var(--text-faint)' }}>
+                  {c.reachable === true ? '✓' : c.reachable === false ? '✗' : '—'}
+                </span>
+                <span style={{ color: 'var(--text)' }}>{c.label}</span>
+                {c.hint && <span style={{ color: 'var(--text-faint)', fontSize: '0.63rem' }}>— {c.hint}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        {diagResults?.error && (
+          <div style={{ fontSize: '0.68rem', color: 'var(--red)', marginTop: '0.3rem' }}>{diagResults.error}</div>
+        )}
       </div>
 
       <div className="docker-status">
