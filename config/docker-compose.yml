@@ -393,12 +393,8 @@ services:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
       - MPT_UI_URL=${MPT_UI_URL:-http://host.docker.internal:8501}
-      - MONEYPRINTERTURBO_COMPOSE=${MONEYPRINTERTURBO_COMPOSE:-/workspace-root/content-gen/MoneyPrinterTurbo/docker-compose.yml}
     volumes:
       - ../:/workspace-root:ro
-      # Mount Docker socket so the server can start/stop MoneyPrinterTurbo
-      # Only enabled when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
-      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

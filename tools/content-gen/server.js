@@ -21,17 +21,16 @@ import { dirname, join } from 'path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
+const execAsync = promisify(exec);
+
 dotenv.config();
 
-const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS_DIR = join(__dirname, 'scripts');
 
 const PORT    = parseInt(process.env.CONTENT_GEN_PORT || '3200', 10);
-const MPT_API = process.env.MPT_API_URL   || 'http://localhost:8080';
-const MPT_UI  = process.env.MPT_UI_URL    || 'http://localhost:8501';
-const MPT_COMPOSE = process.env.MONEYPRINTERTURBO_COMPOSE
-  || join(__dirname, 'modules', 'MoneyPrinterTurbo', 'docker-compose.yml');
+const MPT_API = process.env.MPT_API_URL || 'http://localhost:8080';
+const MPT_UI  = process.env.MPT_UI_URL  || 'http://localhost:8501';
 
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS  = 600_000;  // 10 min
@@ -47,26 +46,12 @@ async function isMptRunning() {
   }
 }
 
-async function ensureMptRunning() {
-  if (await isMptRunning()) return { started: false, message: 'already running' };
-
-  // Docker control requires the socket to be mounted
-  // (docker-compose.yml: uncomment /var/run/docker.sock when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true)
-  try {
-    await execAsync(`docker compose -f "${MPT_COMPOSE}" up -d`, { timeout: 10_000 });
-  } catch (err) {
-    throw new Error(
-      'MoneyPrinterTurbo is not running and could not be started automatically.\n' +
-      `Start it manually on the host:\n  docker compose -f "${MPT_COMPOSE}" up -d`
-    );
-  }
-
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 2000));
-    if (await isMptRunning()) return { started: true, message: 'started' };
-  }
-  throw new Error('MoneyPrinterTurbo failed to start within 30s');
+function mptNotRunningError() {
+  return new Error(
+    'MoneyPrinterTurbo is not running.\n' +
+    `Start it on the host:\n  docker compose --profile mpt up -d\n` +
+    `Then retry — this server connects to it at ${MPT_API}`
+  );
 }
 
 async function pollTaskUntilDone(taskId) {
@@ -101,7 +86,7 @@ function buildServer() {
       subtitles: z.boolean().default(true).describe('Include burnt-in subtitles'),
     },
     async ({ topic, aspect, count, language, subtitles }) => {
-      await ensureMptRunning();
+      if (!await isMptRunning()) throw mptNotRunningError();
 
       const videoAspect = aspect === 'portrait' ? '9:16' : '16:9';
       const payload = {
@@ -153,7 +138,7 @@ function buildServer() {
   // ── Tool: container_status ──────────────────────────────────────────────────
   server.tool(
     'container_status',
-    'Check whether the MoneyPrinterTurbo Docker container is running.',
+    'Check whether the MoneyPrinterTurbo service is reachable.',
     {},
     async () => {
       const running = await isMptRunning();
@@ -162,31 +147,9 @@ function buildServer() {
           type: 'text',
           text: running
             ? `✓ MoneyPrinterTurbo is running at ${MPT_API}\n  UI: ${MPT_UI}`
-            : `✗ MoneyPrinterTurbo is not running.\n  Start with: docker compose -f "${MPT_COMPOSE}" up -d`,
+            : `✗ MoneyPrinterTurbo is not reachable at ${MPT_API}\n  Start it on the host: docker compose --profile mpt up -d`,
         }],
       };
-    }
-  );
-
-  // ── Tool: start_container ───────────────────────────────────────────────────
-  server.tool(
-    'start_container',
-    'Start the MoneyPrinterTurbo Docker container.',
-    {},
-    async () => {
-      const result = await ensureMptRunning();
-      return { content: [{ type: 'text', text: `✓ MoneyPrinterTurbo: ${result.message}` }] };
-    }
-  );
-
-  // ── Tool: stop_container ────────────────────────────────────────────────────
-  server.tool(
-    'stop_container',
-    'Stop the MoneyPrinterTurbo Docker container.',
-    {},
-    async () => {
-      await execAsync(`docker compose -f "${MPT_COMPOSE}" stop`);
-      return { content: [{ type: 'text', text: '✓ MoneyPrinterTurbo stopped.' }] };
     }
   );
 
