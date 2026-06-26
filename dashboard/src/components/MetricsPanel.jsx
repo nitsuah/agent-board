@@ -17,7 +17,7 @@ function renderBar(value, max, color = 'var(--green)') {
   );
 }
 
-function MetricsPanel({ metricsSummary, metricsSafety, metricsFeedback, metricsErrors, liveEvents, onRefresh, onClose }) {
+function MetricsPanel({ metricsSummary, metricsSafety, metricsFeedback, metricsErrors, liveEvents, taskSummary, onRefresh, onClose }) {
   return (
     <aside className="drawer drawer-right drawer-metrics">
       <div className="drawer-header">
@@ -34,6 +34,8 @@ function MetricsPanel({ metricsSummary, metricsSafety, metricsFeedback, metricsE
           { label: 'Blocked', value: metricsSafety?.totalBlocked ?? '…' },
           { label: '👍', value: metricsFeedback?.totalPositive ?? '…' },
           { label: '👎', value: metricsFeedback?.totalNegative ?? '…' },
+          { label: 'Tasks', value: taskSummary?.total ?? 0 },
+          { label: 'Pending', value: taskSummary?.byStatus?.pending ?? 0 },
         ].map(({ label, value }) => (
           <div key={label} className="metrics-sidebar-card">
             <div className="metric-value">{value}</div>

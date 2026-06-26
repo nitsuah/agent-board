@@ -838,6 +838,7 @@ function App() {
             metricsFeedback={metricsFeedback}
             metricsErrors={metricsErrors}
             liveEvents={liveEvents}
+            taskSummary={taskSummary}
             onRefresh={fetchMetrics}
             onClose={() => setShowMetricsPanel(false)}
           />
