@@ -694,6 +694,27 @@ function App() {
         createSession={createSession}
       />
 
+      {/* ── Session tab strip ─────────────────────────────────────── */}
+      {sessions.length > 0 && (
+        <div className="session-tabs">
+          {sessions.map(s => (
+            <div
+              key={s.id}
+              className={`session-tab ${activeSession === s.id ? 'active' : ''}`}
+              onClick={() => { setActiveSession(s.id); fetchSessionDetails(s.id); }}
+            >
+              <span className="session-tab-icon">{EXPERIENCE_META[s.experience]?.icon || '💬'}</span>
+              <span className="session-tab-name">{s.name}</span>
+              <button
+                className="session-tab-close"
+                onClick={e => { e.stopPropagation(); if (activeSession === s.id) setActiveSession(null); }}
+                title="Close tab"
+              >×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showOnboarding && (
         <div className="onboarding-strip">
           <div className="onboarding-copy">

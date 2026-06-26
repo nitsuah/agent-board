@@ -16,6 +16,13 @@ export default function TopBar({
   runningServices, totalServices,
   createSession,
 }) {
+  // Only show tool-backed experiences when their Docker service is up
+  const isServiceUp = (key) => {
+    if (key === 'content_gen') return dockerStatus?.services?.tool_content_gen?.status === 'up';
+    if (key === 'website') return dockerStatus?.services?.tool_website?.status === 'up';
+    return true; // developer, research, safechat always show
+  };
+
   return (
     <div className="topbar">
       <div className="topbar-left">
@@ -35,12 +42,22 @@ export default function TopBar({
             className={`icon-btn ${wsLayout === 'split-h' ? 'active' : ''}`}
             onClick={() => { setWsLayout('split-h'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
             title="Split view — side by side"
-          >⊟</button>
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="1" y="2" width="6" height="12" rx="1"/>
+              <rect x="9" y="2" width="6" height="12" rx="1"/>
+            </svg>
+          </button>
           <button
             className={`icon-btn ${wsLayout === 'split-v' ? 'active' : ''}`}
             onClick={() => { setWsLayout('split-v'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
             title="Split view — stacked"
-          >⊠</button>
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="1" y="1" width="14" height="6" rx="1"/>
+              <rect x="1" y="9" width="14" height="6" rx="1"/>
+            </svg>
+          </button>
         </div>
         <div className="topbar-divider" />
       </div>
@@ -55,63 +72,46 @@ export default function TopBar({
           >+ New ▾</button>
           {showNewSessionMenu && (
             <div className="topbar-new-panel">
-              <div className="topbar-new-summary">
-                {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-                <span className="topbar-new-dot">·</span>
-                {allEndpointMeta[selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || currentEndpoint)]?.label || currentEndpoint}
-              </div>
+              <div className="topbar-new-section-label">Experience</div>
+              {Object.entries(EXPERIENCE_META)
+                .filter(([key]) => isServiceUp(key))
+                .filter(([key]) => !demoMode.enabled || key === 'safechat')
+                .map(([key, exp]) => (
+                  <div
+                    key={key}
+                    className={`topbar-new-option ${selectedExperience === key ? 'selected' : ''}`}
+                    onClick={() => setSelectedExperience(key)}
+                  >
+                    {exp.icon} {exp.name}
+                    {selectedExperience === key && <span className="topbar-check">✓</span>}
+                  </div>
+                ))
+              }
+              {selectableEndpointKeys.length > 1 && (
+                <>
+                  <div className="topbar-new-section-label">Model</div>
+                  {selectableEndpointKeys.map(key => (
+                    <div
+                      key={key}
+                      className={`topbar-new-option ${currentEndpoint === key ? 'selected' : ''}`}
+                      onClick={() => handleEndpointSelection(key)}
+                    >
+                      {allEndpointMeta[key]?.label || key}
+                      {currentEndpoint === key && <span className="topbar-check">✓</span>}
+                    </div>
+                  ))}
+                </>
+              )}
               <button
                 className="btn-primary"
-                style={{ width: '100%', fontSize: '0.8rem', marginTop: '0.2rem' }}
+                style={{ width: '100%', marginTop: '0.5rem' }}
                 onClick={() => { createSession(); setShowNewSessionMenu(false); }}
               >
-                Create Session
+                + Create Session
               </button>
             </div>
           )}
         </div>
-
-        <select
-          className="topbar-select"
-          value={selectedExperience}
-          onChange={e => setSelectedExperience(e.target.value)}
-          disabled={demoMode.enabled}
-          title="Switch experience"
-        >
-          {Object.entries(EXPERIENCE_META)
-            .filter(([key]) => !demoMode.enabled || key === 'safechat')
-            .map(([key, exp]) => (
-              <option key={key} value={key}>{exp.icon} {exp.name}</option>
-            ))}
-        </select>
-
-        <select
-          className="topbar-select topbar-select-model"
-          value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
-          onChange={e => handleEndpointSelection(e.target.value)}
-          disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
-          title="Switch model"
-        >
-          {selectableEndpointKeys.length === 0 ? (
-            <option value="">No models online</option>
-          ) : selectableEndpointKeys.map(key => (
-            <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
-          ))}
-        </select>
-
-        {sessions.length > 0 && (
-          <select
-            className="topbar-select topbar-select-session"
-            value={activeSession || ''}
-            onChange={e => { if (e.target.value) { setActiveSession(e.target.value); fetchSessionDetails(e.target.value); } }}
-            title="Switch session"
-          >
-            {!activeSession && <option value="">Select session…</option>}
-            {sessions.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        )}
       </div>
 
       <div className="topbar-right">
