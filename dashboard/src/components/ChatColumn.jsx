@@ -92,10 +92,12 @@ export default function ChatColumn({
               value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
               onKeyDown={handleMessageInputKeyDown}
-              placeholder={loading ? 'Type to queue next message…' : 'Type your message…'}
+              placeholder={loading ? 'Type to queue next message…' : 'Type your message… (Enter or Ctrl+Enter to send)'}
               maxLength={4000}
             />
-            <span className="input-counter">{messageInput.length}/4000</span>
+            <span className="input-counter" style={messageInput.length > 3200 ? { color: messageInput.length > 3800 ? 'var(--red)' : 'var(--yellow, orange)' } : undefined}>
+              {messageInput.length}/4000
+            </span>
             <select
               className="select-inline"
               value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}

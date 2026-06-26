@@ -66,6 +66,7 @@ const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..', 'config');
 const DOCKER_ENV_FILE = process.env.DOCKER_ENV_FILE || join(__dirname, '..', 'config', '.env');
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || null;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
 const WEBSITE_OUTPUT_DIR = process.env.WEBSITE_OUTPUT_DIR || join(__dirname, '..', 'tools', 'website', 'output');
 
 function parseUrlListEnv(rawValue, fallback = []) {
@@ -470,6 +471,7 @@ app.use('/api', tasksRouter);
 
 app.use('/api', createWebhooksRouter({
   tasks, getNextTaskId, eventBus, logStructured,
+  webhookSecret: WEBHOOK_SECRET,
   normalizeTaskPriority, resolveTaskAssignment, buildTaskSummary,
 }));
 
