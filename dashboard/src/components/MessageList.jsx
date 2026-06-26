@@ -1,6 +1,26 @@
 import React, { useState } from 'react';
 import Markdown from './Markdown.jsx';
 
+function ToolCallBadge({ tool, args, result }) {
+  const [open, setOpen] = useState(false);
+  const hasError = result?.error;
+  return (
+    <div className={`tool-call-badge ${hasError ? 'tool-call-error' : ''}`}>
+      <button className="tool-call-toggle" onClick={() => setOpen(o => !o)}>
+        <span className="tool-call-icon">{hasError ? '✗' : '⚙'}</span>
+        <span className="tool-call-name">{tool}</span>
+        <span className="tool-call-chevron">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="tool-call-detail">
+          <div className="tool-call-section"><span className="tool-call-label">Args</span><pre>{JSON.stringify(args, null, 2)}</pre></div>
+          <div className="tool-call-section"><span className="tool-call-label">Result</span><pre>{JSON.stringify(result, null, 2)}</pre></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -39,6 +59,11 @@ export default function MessageList({ messages, loading, streamingContent, onFee
       )}
       {visible.length > 0 ? (
         visible.map(({ msg, idx: index }) => (
+          msg.role === 'tool_call' ? (
+            <div key={index} className="message-tool-call-row">
+              <ToolCallBadge tool={msg.tool} args={msg.args} result={msg.result} />
+            </div>
+          ) : (
           <div key={index} className={`message ${msg.role}`}>
             <div className="message-content">
               <span className="message-role">{msg.role === 'user' ? 'You' : 'AI'}</span>
@@ -52,6 +77,13 @@ export default function MessageList({ messages, loading, streamingContent, onFee
                 </span>
               )}
             </div>
+            {msg.role === 'assistant' && msg.toolLog?.length > 0 && (
+              <div className="message-tool-log">
+                {msg.toolLog.map((tc, ti) => (
+                  <ToolCallBadge key={ti} tool={tc.name} args={tc.args} result={tc.result} />
+                ))}
+              </div>
+            )}
             {msg.role === 'assistant' && (
               <div className="message-feedback">
                 <CopyButton text={msg.content} />
@@ -76,6 +108,7 @@ export default function MessageList({ messages, loading, streamingContent, onFee
               </div>
             )}
           </div>
+          )
         ))
       ) : (
         <div className="messages-placeholder">

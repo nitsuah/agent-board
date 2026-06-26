@@ -514,6 +514,10 @@ function App() {
             if (event.type === 'token') {
               accumulated += event.content;
               setStreamingBySession(prev => ({ ...prev, [sessionId]: accumulated }));
+            } else if (event.type === 'tool_call') {
+              // show tool calls inline as they arrive during agentic streaming
+              const toolMsg = { role: 'tool_call', tool: event.tool, args: event.args, result: event.result, timestamp: new Date() };
+              if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, toolMsg]);
             } else if (event.type === 'done' || event.type === 'error') {
               if (event.type === 'error') console.error('LLM stream error:', event.message);
               setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });

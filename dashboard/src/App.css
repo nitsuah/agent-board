@@ -1027,6 +1027,77 @@ body {
   white-space: nowrap;
 }
 
+.message-tool-call-row {
+  padding: 0.1rem 0.75rem;
+}
+
+.message-tool-log {
+  padding: 0.2rem 0 0.1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tool-call-badge {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 0.72rem;
+  overflow: hidden;
+}
+
+.tool-call-badge.tool-call-error {
+  border-color: color-mix(in srgb, var(--red) 40%, var(--border));
+  background: color-mix(in srgb, var(--red) 8%, var(--surface-2));
+}
+
+.tool-call-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.tool-call-toggle:hover { background: var(--surface); }
+.tool-call-icon { font-size: 0.65rem; }
+.tool-call-name { font-family: var(--font-mono); font-weight: 600; color: var(--accent); }
+.tool-call-chevron { margin-left: auto; font-size: 0.6rem; }
+
+.tool-call-detail {
+  border-top: 1px solid var(--border);
+  padding: 0.3rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tool-call-section pre {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.tool-call-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 0.15rem;
+}
+
 .chat-name-edit {
   font-size: 1.1rem;
   font-weight: 600;
