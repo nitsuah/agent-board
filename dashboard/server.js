@@ -32,6 +32,7 @@ import { createModelsRouter } from './routes/models.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createToolsRouter } from './routes/tools.js';
 import { createConnectorsRouter } from './routes/connectors.js';
+import { createEndpointsRouter } from './routes/endpoints.js';
 import { startTaskRunner } from './task-runner.js';
 import outputsRouter from './routes/outputs.js';
 import {
@@ -501,6 +502,8 @@ app.get('/api/experiences', (req, res) => {
 app.use('/api', createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }));
 
 app.use('/api', createConnectorsRouter({ BB_MCP_ENABLED, BB_MCP_URL, logStructured }));
+
+app.use('/api', createEndpointsRouter({ LLM_CONFIG, logStructured }));
 
 app.get('/api/health', async (req, res) => {
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();

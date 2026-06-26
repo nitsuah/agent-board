@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from './Toast.jsx';
 
 const BACKEND_TYPE_LABEL = {
@@ -18,6 +18,20 @@ function SystemPanel({
   const [expandedSvcs, setExpandedSvcs] = useState({});
   const [diagResults, setDiagResults] = useState(null);
   const [diagBusy, setDiagBusy] = useState(false);
+  const [byokEndpoints, setByokEndpoints] = useState([]);
+  const [byokForm, setByokForm] = useState({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
+  const [byokOpen, setByokOpen] = useState(false);
+  const [byokBusy, setByokBusy] = useState(false);
+
+  const fetchByokEndpoints = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config/endpoints');
+      const data = await res.json();
+      if (data.success) setByokEndpoints(data.endpoints.filter(e => !e.builtin));
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchByokEndpoints(); }, [fetchByokEndpoints]);
 
   const renderServiceRow = (serviceKey, info, endpointData = null) => {
     const canControl = !!(systemServices?.dockerControlEnabled && info.controllable);
@@ -344,6 +358,98 @@ function SystemPanel({
           >Pull All</button>
         </div>
         {allSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
+      </div>
+
+      <div className="docker-status">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3>External Endpoints (BYOK)</h3>
+          <button className="btn-docker-action" style={{ fontSize: '0.72rem' }} onClick={() => setByokOpen(p => !p)}>
+            {byokOpen ? 'Cancel' : '+ Add'}
+          </button>
+        </div>
+        {byokOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
+            {[
+              ['key', 'Endpoint key (e.g. claude)', byokForm.key],
+              ['name', 'Display name', byokForm.name],
+              ['url', 'API base URL', byokForm.url],
+              ['defaultModel', 'Default model (optional)', byokForm.defaultModel],
+              ['apiKey', 'API key (optional)', byokForm.apiKey],
+            ].map(([field, placeholder, value]) => (
+              <input
+                key={field}
+                type={field === 'apiKey' ? 'password' : 'text'}
+                placeholder={placeholder}
+                value={value}
+                className="select"
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
+                onChange={e => setByokForm(p => ({ ...p, [field]: e.target.value }))}
+              />
+            ))}
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Style:</label>
+              <select
+                value={byokForm.apiStyle}
+                className="select"
+                style={{ fontSize: '0.72rem', padding: '0.25rem 0.4rem' }}
+                onChange={e => setByokForm(p => ({ ...p, apiStyle: e.target.value }))}
+              >
+                <option value="openai">OpenAI-compatible</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            <button
+              className="btn-primary"
+              style={{ fontSize: '0.75rem' }}
+              disabled={byokBusy || !byokForm.key || !byokForm.url}
+              onClick={async () => {
+                setByokBusy(true);
+                try {
+                  const res = await fetch('/api/config/endpoints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(byokForm),
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast.success?.(`Added endpoint: ${byokForm.key}`);
+                    setByokForm({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
+                    setByokOpen(false);
+                    fetchByokEndpoints();
+                  } else {
+                    toast.error(data.error || 'Failed to add endpoint');
+                  }
+                } catch (err) { toast.error(err.message); }
+                finally { setByokBusy(false); }
+              }}
+            >{byokBusy ? 'Adding…' : 'Add Endpoint'}</button>
+          </div>
+        )}
+        {byokEndpoints.length === 0 && !byokOpen && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-faint)', marginTop: '0.4rem' }}>
+            No external endpoints added. Click + Add to register a Claude, OpenAI, or custom API key.
+          </div>
+        )}
+        {byokEndpoints.map(ep => (
+          <div key={ep.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.72rem' }}>
+            <div>
+              <span style={{ color: 'var(--text)' }}>{ep.name}</span>
+              <span style={{ color: 'var(--text-faint)', marginLeft: '0.4rem' }}>{ep.apiStyle}</span>
+              {ep.hasApiKey && <span style={{ color: 'var(--green)', marginLeft: '0.4rem' }}>● key set</span>}
+            </div>
+            <button
+              className="btn-docker-action"
+              style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
+              onClick={async () => {
+                try {
+                  await fetch(`/api/config/endpoints/${ep.key}`, { method: 'DELETE' });
+                  fetchByokEndpoints();
+                } catch (err) { toast.error(err.message); }
+              }}
+            >✕</button>
+          </div>
+        ))}
       </div>
     </aside>
   );
