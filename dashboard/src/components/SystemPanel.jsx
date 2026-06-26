@@ -87,6 +87,13 @@ function SystemPanel({
                 </span>
               </div>
             )}
+            {info.running && info.stats && (
+              <div style={{ fontSize: '0.63rem', color: 'var(--text-faint)', marginTop: '0.15rem', fontFamily: 'var(--font-mono)', display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <span title="CPU usage">CPU {info.stats.cpu}</span>
+                <span title="Memory usage">{info.stats.mem}</span>
+                <span title="Memory %">({info.stats.memPerc})</span>
+              </div>
+            )}
             {eps.map(({ epKey, ep }) => {
               const pullKey = `${epKey}:${ep.model}`;
               const pull = modelPulls[pullKey];

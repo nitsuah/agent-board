@@ -36,7 +36,7 @@ Last Updated: 2026-06-25
 - [ ] **Windows host mitigation (Phase 2)**: Establish a lean baseline profile for Windows nodes to account for WSL2/Docker Desktop resource taxes.
 - [x] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
 - [x] **Just-In-Time (JIT) model lifecycle (Phase 1)**: Implement a `/tools` orchestration wrapper to dynamically spin up/down containerized model sizes on task queue demand.
-- [ ] **Service lifecycle dashboard**: Control on-demand model/service execution via UI and surface real-time per-service resource tracking.
+- [ ] **Service lifecycle dashboard**: Control on-demand model/service execution via UI and surface real-time per-service resource tracking. API-side `docker stats` parsing is implemented (graceful no-op when socket absent); UI renders stats inline when present. Remaining: mount `/var/run/docker.sock` for in-container stats or add a host-side stats sidecar.
 - [ ] **Decoupled runtimes & routing (Phase 3)**: Decouple local runner images into headless worker nodes with cross-node routing for pooled resource scheduling.
 - [ ] **Model configuration matrix (Phase 3)**: Pair custom "homebrew" open-source model configs with out-of-the-box vendor images.
 
