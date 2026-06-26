@@ -5,10 +5,11 @@ export function createTasksRouter({ tasks, sessions, eventBus, logStructured, no
   let taskCounter = 0;
 
   router.get('/tasks', (req, res) => {
-    const { status, sessionId, priority, q } = req.query;
+    const { status, sessionId, priority, q, limit: limitParam } = req.query;
     const normalizedStatus = status ? normalizeTaskStatus(status) : null;
     const normalizedPriorityFilter = priority ? normalizeTaskPriority(priority) : null;
     const searchTerm = q && typeof q === 'string' ? q.trim().toLowerCase() : null;
+    const limit = limitParam ? Math.max(1, Math.min(500, parseInt(limitParam, 10) || 100)) : null;
 
     if (status && !normalizedStatus) {
       return res.status(400).json({ success: false, error: 'Invalid status filter' });
@@ -17,23 +18,25 @@ export function createTasksRouter({ tasks, sessions, eventBus, logStructured, no
       return res.status(400).json({ success: false, error: 'Invalid priority filter' });
     }
 
-    const items = Array.from(tasks.values())
+    const allItems = Array.from(tasks.values())
       .filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
       .filter((task) => (normalizedPriorityFilter ? task.priority === normalizedPriorityFilter : true))
       .filter((task) => (sessionId ? task.sessionId === sessionId : true))
       .filter((task) => (searchTerm ? task.title.toLowerCase().includes(searchTerm) || task.description.toLowerCase().includes(searchTerm) : true))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map(buildTaskSummary);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const byStatus = { pending: 0, in_progress: 0, blocked: 0, completed: 0 };
-    items.forEach((task) => {
+    allItems.forEach((task) => {
       byStatus[task.status] = (byStatus[task.status] || 0) + 1;
     });
+
+    const items = (limit ? allItems.slice(0, limit) : allItems).map(buildTaskSummary);
 
     res.json({
       success: true,
       tasks: items,
-      summary: { total: items.length, byStatus }
+      total: allItems.length,
+      summary: { total: allItems.length, byStatus }
     });
   });
 
