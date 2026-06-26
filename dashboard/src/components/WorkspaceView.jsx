@@ -50,12 +50,13 @@ const TASK_FILTERS = [
 ];
 
 function TasksPanel({
-  tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
+  tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience, createTask, updateTaskStatus,
   deleteTask, dispatchTask, clearCompletedTasks,
   setActiveSession, fetchSessionDetails, setActiveTab,
 }) {
   const [filter, setFilter] = useState('active');
+  const [showDesc, setShowDesc] = useState(false);
 
   const filtered = tasks.filter(t => {
     if (filter === 'active') return t.status !== 'completed';
@@ -82,8 +83,19 @@ function TasksPanel({
             <option key={key} value={key}>{exp.icon} {exp.name}</option>
           ))}
         </select>
+        <button className="task-desc-toggle" onClick={() => setShowDesc(p => !p)} title="Add description">+</button>
         <button className="btn-primary" onClick={() => createTask(taskExperience)} disabled={!taskTitle.trim()}>Add</button>
       </div>
+      {showDesc && (
+        <textarea
+          className="task-desc-input"
+          value={taskDescription}
+          onChange={e => setTaskDescription(e.target.value)}
+          placeholder="Optional description…"
+          maxLength={2000}
+          rows={2}
+        />
+      )}
       <div className="task-filter-tabs">
         {TASK_FILTERS.map(f => (
           <button
@@ -121,6 +133,9 @@ function TasksPanel({
                 <span style={{ opacity: 0.4 }}>unassigned</span>
               )}
             </div>
+            {task.description && (
+              <div className="task-item-desc" title={task.description}>{task.description.slice(0, 100)}{task.description.length > 100 ? '…' : ''}</div>
+            )}
             {task.result && (
               <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
             )}
@@ -153,7 +168,7 @@ export default function WorkspaceView({
   startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
   moveWorkspaceEntry, renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
   artifactFiles,
-  tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
+  tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience,
   createTask, updateTaskStatus, dispatchTask, deleteTask, clearCompletedTasks,
   activeSession, setActiveSession, fetchSessionDetails, setActiveTab,
@@ -666,6 +681,7 @@ export default function WorkspaceView({
           {wsBottomTab === 'tasks' && (
             <TasksPanel
               tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle}
+              taskDescription={taskDescription} setTaskDescription={setTaskDescription}
               taskPriority={taskPriority} setTaskPriority={setTaskPriority}
               taskExperience={taskExperience} setTaskExperience={setTaskExperience}
               createTask={createTask} updateTaskStatus={updateTaskStatus}

@@ -5,6 +5,7 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
   const [tasks, setTasks] = useState([]);
   const [taskSummary, setTaskSummary] = useState({ total: 0, byStatus: {} });
   const [taskTitle, setTaskTitle] = useState('');
+  const [taskDescription, setTaskDescription] = useState('');
   const [taskPriority, setTaskPriority] = useState('medium');
 
   const fetchTasks = async () => {
@@ -24,11 +25,12 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: taskTitle.trim(), priority: taskPriority, sessionId: activeSession || null, experience: experience || selectedExperience }),
+        body: JSON.stringify({ title: taskTitle.trim(), description: taskDescription.trim() || undefined, priority: taskPriority, sessionId: activeSession || null, experience: experience || selectedExperience }),
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.error || 'Failed to create task'); return; }
       setTaskTitle('');
+      setTaskDescription('');
       setTaskPriority('medium');
       fetchTasks();
     } catch (error) { toast.error(`Failed to create task: ${error.message}`); }
@@ -104,7 +106,7 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
   };
 
   return {
-    tasks, taskSummary, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
+    tasks, taskSummary, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
     fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
   };
 }

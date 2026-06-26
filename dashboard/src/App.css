@@ -856,6 +856,37 @@ body {
   cursor: not-allowed;
 }
 
+.task-desc-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.task-desc-toggle:hover { color: var(--text); border-color: var(--accent); }
+.task-desc-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text);
+  resize: none;
+  margin-top: 0.25rem;
+  box-sizing: border-box;
+}
+.task-item-desc {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  margin: 0.15rem 0;
+  line-height: 1.4;
+}
+
 .task-filter-tabs {
   display: flex;
   gap: 0.25rem;
