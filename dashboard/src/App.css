@@ -2254,6 +2254,10 @@ code {
 /* Explorer panel */
 .ws-explorer-panel {
   background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 .ws-explorer-panel .workspace-breadcrumb {
   padding: 0.3rem 0.5rem;

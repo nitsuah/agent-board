@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { EXPERIENCE_TOOLS } from '../constants/app-config.js';
 
 export default function WorkspaceView({
@@ -24,6 +24,15 @@ export default function WorkspaceView({
   contentClients, contentFiles, contentExpanded, setContentExpanded,
   fetchContentClients, fetchContentFiles, downloadContentFile,
 }) {
+  const termInputRef = useRef(null);
+
+  // Re-focus terminal input after command finishes or tab switches to terminal
+  useEffect(() => {
+    if (!termBusy && wsBottomTab === 'terminal') {
+      termInputRef.current?.focus();
+    }
+  }, [termBusy, wsBottomTab]);
+
   return (
     <div className="workspace-view">
 
@@ -375,11 +384,17 @@ export default function WorkspaceView({
               <div className="ws-term-input-row">
                 <span className="ws-term-prompt">$</span>
                 <input
+                  ref={termInputRef}
                   className="ws-term-input"
                   type="text"
                   value={termInput}
                   onChange={e => setTermInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && runTermCommand(termInput)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      runTermCommand(termInput);
+                      setTimeout(() => termInputRef.current?.focus(), 100);
+                    }
+                  }}
                   placeholder={termBusy ? 'Running…' : 'Enter command…'}
                   disabled={termBusy}
                   spellCheck={false}
