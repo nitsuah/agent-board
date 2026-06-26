@@ -51,12 +51,15 @@ const TASK_FILTERS = [
 
 function TasksPanel({
   tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
-  taskExperience, setTaskExperience, createTask, updateTaskStatus,
+  taskExperience, setTaskExperience, createTask, updateTask, updateTaskStatus,
   deleteTask, dispatchTask, clearCompletedTasks,
   setActiveSession, fetchSessionDetails, setActiveTab,
 }) {
   const [filter, setFilter] = useState('active');
   const [showDesc, setShowDesc] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPriority, setEditPriority] = useState('medium');
 
   const filtered = tasks.filter(t => {
     if (filter === 'active') return t.status !== 'completed';
@@ -121,29 +124,55 @@ function TasksPanel({
       <div className="task-list">
         {filtered.map(task => (
           <div key={task.id} className={`task-item status-${task.status}`}>
-            <div className="task-item-head">
-              <strong>{task.title}</strong>
-              <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-            </div>
-            <div className="task-item-meta">
-              <span>{task.status.replace('_', ' ')}</span>
-              {task.sessionId ? (
-                <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
-              ) : (
-                <span style={{ opacity: 0.4 }}>unassigned</span>
-              )}
-            </div>
-            {task.description && (
-              <div className="task-item-desc" title={task.description}>{task.description.slice(0, 100)}{task.description.length > 100 ? '…' : ''}</div>
+            {editingId === task.id ? (
+              <div className="task-edit-form">
+                <input
+                  className="task-edit-title"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  maxLength={140}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { updateTask(task.id, { title: editTitle, priority: editPriority }); setEditingId(null); }
+                    if (e.key === 'Escape') setEditingId(null);
+                  }}
+                />
+                <select value={editPriority} onChange={e => setEditPriority(e.target.value)}>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="urgent">urgent</option>
+                </select>
+                <button onClick={() => { updateTask(task.id, { title: editTitle, priority: editPriority }); setEditingId(null); }}>Save</button>
+                <button onClick={() => setEditingId(null)}>Cancel</button>
+              </div>
+            ) : (
+              <>
+                <div className="task-item-head">
+                  <strong className="task-title-editable" onClick={() => { setEditingId(task.id); setEditTitle(task.title); setEditPriority(task.priority); }} title="Click to edit">{task.title}</strong>
+                  <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                </div>
+                <div className="task-item-meta">
+                  <span>{task.status.replace('_', ' ')}</span>
+                  {task.sessionId ? (
+                    <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
+                  ) : (
+                    <span style={{ opacity: 0.4 }}>unassigned</span>
+                  )}
+                </div>
+                {task.description && (
+                  <div className="task-item-desc" title={task.description}>{task.description.slice(0, 100)}{task.description.length > 100 ? '…' : ''}</div>
+                )}
+                {task.result && (
+                  <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
+                )}
+                <div className="task-item-actions">
+                  {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
+                  {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>}
+                  <button onClick={() => deleteTask(task.id)}>Delete</button>
+                </div>
+              </>
             )}
-            {task.result && (
-              <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
-            )}
-            <div className="task-item-actions">
-              {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
-              {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>}
-              <button onClick={() => deleteTask(task.id)}>Delete</button>
-            </div>
           </div>
         ))}
         {filtered.length === 0 && <div className="task-empty">{filter === 'completed' ? 'No completed tasks.' : 'No active tasks.'}</div>}
@@ -170,7 +199,7 @@ export default function WorkspaceView({
   artifactFiles,
   tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience,
-  createTask, updateTaskStatus, dispatchTask, deleteTask, clearCompletedTasks,
+  createTask, updateTask, updateTaskStatus, dispatchTask, deleteTask, clearCompletedTasks,
   activeSession, setActiveSession, fetchSessionDetails, setActiveTab,
   selectedExperience,
   contentClients, contentFiles, contentExpanded, setContentExpanded,
@@ -684,7 +713,7 @@ export default function WorkspaceView({
               taskDescription={taskDescription} setTaskDescription={setTaskDescription}
               taskPriority={taskPriority} setTaskPriority={setTaskPriority}
               taskExperience={taskExperience} setTaskExperience={setTaskExperience}
-              createTask={createTask} updateTaskStatus={updateTaskStatus}
+              createTask={createTask} updateTask={updateTask} updateTaskStatus={updateTaskStatus}
               deleteTask={deleteTask} dispatchTask={dispatchTask}
               clearCompletedTasks={clearCompletedTasks}
               setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}

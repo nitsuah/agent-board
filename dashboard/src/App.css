@@ -886,6 +886,46 @@ body {
   margin: 0.15rem 0;
   line-height: 1.4;
 }
+.task-title-editable {
+  cursor: pointer;
+}
+.task-title-editable:hover {
+  text-decoration: underline dotted;
+}
+.task-edit-form {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.25rem 0;
+}
+.task-edit-title {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input, var(--bg2));
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+}
+.task-edit-form select {
+  background: var(--bg-input, var(--bg2));
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+}
+.task-edit-form button {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+}
 
 .task-filter-tabs {
   display: flex;

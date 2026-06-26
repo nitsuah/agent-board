@@ -90,6 +90,19 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
     } catch (err) { toast.error(`Dispatch failed: ${err.message}`); }
   };
 
+  const updateTask = async (taskId, fields) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      const data = await res.json();
+      if (!data.success) { toast.error(data.error || 'Failed to update task'); return; }
+      fetchTasks();
+    } catch (error) { toast.error(`Failed to update task: ${error.message}`); }
+  };
+
   const deleteTask = async (taskId) => {
     try {
       const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
@@ -107,6 +120,6 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
 
   return {
     tasks, taskSummary, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
-    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
+    fetchTasks, createTask, updateTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
   };
 }
