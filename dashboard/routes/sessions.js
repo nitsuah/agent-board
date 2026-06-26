@@ -104,12 +104,18 @@ export function createSessionsRouter({
   });
 
   router.get('/', (req, res) => {
-    const sessionList = Array.from(sessions.values()).map(s => ({
-      id: s.id, name: s.name, model: s.model, endpoint: s.endpoint,
-      messageCount: s.messages.length, createdAt: s.createdAt, updatedAt: s.updatedAt,
-      userId: s.userId, experience: s.experience, safetyMode: s.safetyMode,
-    }));
-    res.json({ success: true, sessions: sessionList });
+    const { experience, userId: filterUserId } = req.query;
+    let sessionList = Array.from(sessions.values());
+    if (experience) sessionList = sessionList.filter(s => s.experience === experience);
+    if (filterUserId) sessionList = sessionList.filter(s => s.userId === filterUserId);
+    res.json({
+      success: true,
+      sessions: sessionList.map(s => ({
+        id: s.id, name: s.name, model: s.model, endpoint: s.endpoint,
+        messageCount: s.messages.length, createdAt: s.createdAt, updatedAt: s.updatedAt,
+        userId: s.userId, experience: s.experience, safetyMode: s.safetyMode,
+      })),
+    });
   });
 
   router.get('/:id', (req, res) => {
