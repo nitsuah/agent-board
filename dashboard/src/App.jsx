@@ -592,6 +592,19 @@ function App() {
     switchEndpoint(endpoint, model);
   };
 
+  const renameSession = async (id, name) => {
+    if (!name?.trim()) return;
+    try {
+      const res = await fetch(`/api/sessions/${id}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) fetchSessions();
+    } catch (err) { console.error('Rename failed:', err); }
+  };
+
   const deleteSession = async (id) => {
     try {
       await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
@@ -765,6 +778,7 @@ function App() {
               sendFeedback={sendFeedback}
               togglePause={togglePause}
               deleteSession={deleteSession}
+              renameSession={renameSession}
               forceSend={forceSend}
               stopSession={stopSession}
               handleEndpointSelection={handleEndpointSelection}

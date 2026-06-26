@@ -131,6 +131,19 @@ export function createSessionsRouter({
 
   router.post('/:id/stream', (req, res) => handleSessionStream(req, res, handlerDeps));
 
+  router.patch('/:id/name', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    const { name } = req.body || {};
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'name must be a non-empty string' });
+    }
+    session.name = name.trim().slice(0, 80);
+    session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
+    res.json({ success: true, name: session.name });
+  });
+
   router.put('/:id/model', async (req, res) => {
     const session = sessions.get(req.params.id);
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });

@@ -1027,6 +1027,19 @@ body {
   white-space: nowrap;
 }
 
+.chat-name-edit {
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--accent);
+  color: var(--text);
+  padding: 0 0.1rem;
+  outline: none;
+  width: 100%;
+  max-width: 320px;
+}
+
 .input-counter {
   font-size: 0.7rem;
   color: var(--text-faint);

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import MessageList from './MessageList.jsx';
 import ToolWorkbench from './ToolWorkbench.jsx';
 
@@ -14,6 +14,7 @@ function useAutoResize(value) {
 }
 
 export default function ChatColumn({
+  renameSession,
   activeSessionData,
   activeSessionMessages,
   activeSession,
@@ -49,13 +50,39 @@ export default function ChatColumn({
   dockerStatus,
 }) {
   const textareaRef = useAutoResize(messageInput);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const nameInputRef = useRef(null);
+
+  useEffect(() => {
+    if (editingName && nameInputRef.current) nameInputRef.current.select();
+  }, [editingName]);
 
   return (
     <div className="chat-column">
       {activeSessionData ? (
         <>
           <div className="chat-header">
-            <h2>{activeSessionData.name}</h2>
+            {editingName ? (
+              <input
+                ref={nameInputRef}
+                className="chat-name-edit"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                onBlur={() => { renameSession(activeSession, nameInput); setEditingName(false); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { renameSession(activeSession, nameInput); setEditingName(false); }
+                  if (e.key === 'Escape') setEditingName(false);
+                }}
+                maxLength={80}
+              />
+            ) : (
+              <h2
+                title="Click to rename"
+                style={{ cursor: 'pointer' }}
+                onClick={() => { setNameInput(activeSessionData.name); setEditingName(true); }}
+              >{activeSessionData.name}</h2>
+            )}
             <div className="chat-meta">
               {activeSessionData.endpoint} • {activeSessionData.messageCount} messages
               {loading && <span className="streaming-badge"> ⟳ streaming</span>}
