@@ -168,7 +168,10 @@ function TasksPanel({
                 )}
                 <div className="task-item-actions">
                   {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
-                  {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>}
+                  {task.status === 'pending' && <button onClick={() => updateTaskStatus(task.id, 'in_progress')} title="Mark as in progress">▷ Start</button>}
+                  {task.status === 'in_progress' && <button onClick={() => updateTaskStatus(task.id, 'blocked')} title="Mark as blocked">⚠ Block</button>}
+                  {task.status === 'blocked' && <button onClick={() => updateTaskStatus(task.id, 'pending')} title="Unblock — back to pending">↩ Unblock</button>}
+                  {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>✓ Done</button>}
                   <button onClick={() => deleteTask(task.id)}>Delete</button>
                 </div>
               </>
