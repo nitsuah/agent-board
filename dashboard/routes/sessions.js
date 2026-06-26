@@ -185,6 +185,28 @@ export function createSessionsRouter({
     });
   });
 
+  router.delete('/', express.json(), (req, res) => {
+    const { ids } = req.body || {};
+    const toDelete = Array.isArray(ids) ? ids : Array.from(sessions.keys());
+    let deleted = 0;
+    for (const id of toDelete) {
+      if (!sessions.has(id)) continue;
+      const session = sessions.get(id);
+      session.endedAt = new Date();
+      eventBus.emit('session_end', {
+        session_id: id, user_id: session?.userId,
+        model: session?.model, endpoint: session?.endpoint, experience: session?.experience,
+        metadata: { messageCount: session?.messages.length },
+      });
+      upsertSessionContext(session, logStructured);
+      markSessionEnded(id, session.endedAt, logStructured);
+      sessions.delete(id);
+      try { rmSync(path.join(process.cwd(), 'tmp', id), { recursive: true, force: true }); } catch { /* non-fatal */ }
+      deleted++;
+    }
+    res.json({ success: true, deleted });
+  });
+
   router.delete('/:id', (req, res) => {
     const exists = sessions.has(req.params.id);
     if (exists) {

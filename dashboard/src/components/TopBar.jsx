@@ -107,6 +107,7 @@ export default function TopBar({
           <div
             key={s.id}
             className={`session-tab ${activeSession === s.id ? 'active' : ''}`}
+            title={`${s.experience || 'session'} · ${s.messageCount} msg${s.messageCount !== 1 ? 's' : ''} · ${s.createdAt ? new Date(s.createdAt).toLocaleString() : ''}`}
             onClick={() => {
               setActiveSession(s.id);
               fetchSessionDetails(s.id);
