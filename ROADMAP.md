@@ -25,7 +25,7 @@ Last Updated: 2026-06-25
 - [ ] Define custom agent plugin boundaries.
 - [ ] Expand audit logging and compliance support.
 - [ ] Improve analytics and operational observability.
-- [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
+- [x] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
 
 ### Custom Agent System & Safety Guardrails
 

@@ -7,6 +7,11 @@ const _eventStore = [];
 const MAX_EVENTS = 10000;
 const _eventSubscribers = new Set();
 
+// Named pub/sub channels: Map<channelName, Set<listener>>
+const _channelSubscribers = new Map();
+const _channelHistory = new Map(); // Map<channelName, event[]>
+const MAX_CHANNEL_HISTORY = 200;
+
 export const eventBus = {
   emit(type, data = {}) {
     const event = {
@@ -18,22 +23,45 @@ export const eventBus = {
       model: data.model || null,
       endpoint: data.endpoint || null,
       experience: data.experience || null,
+      channel: data.channel || null,
       metadata: data.metadata || {},
     };
     _eventStore.push(event);
     if (_eventStore.length > MAX_EVENTS) _eventStore.shift();
 
+    // Broadcast to all-event subscribers
     for (const listener of _eventSubscribers) {
-      try {
-        listener(event);
-      } catch (error) {
-        logStructured('warn', 'event_subscriber_failed', { error: error.message });
+      try { listener(event); } catch (err) {
+        logStructured('warn', 'event_subscriber_failed', { error: err.message });
       }
+    }
+
+    // Route to named channel subscribers
+    if (event.channel) {
+      const subs = _channelSubscribers.get(event.channel);
+      if (subs) {
+        for (const listener of subs) {
+          try { listener(event); } catch (err) {
+            logStructured('warn', 'channel_subscriber_failed', { channel: event.channel, error: err.message });
+          }
+        }
+      }
+      // Persist channel history
+      if (!_channelHistory.has(event.channel)) _channelHistory.set(event.channel, []);
+      const hist = _channelHistory.get(event.channel);
+      hist.push(event);
+      if (hist.length > MAX_CHANNEL_HISTORY) hist.shift();
     }
 
     persistEvent(event, logStructured);
     return event;
   },
+
+  /** Publish directly to a named channel (shorthand for emit with channel set) */
+  publish(channel, type, data = {}) {
+    return this.emit(type, { ...data, channel });
+  },
+
   getAll() { return _eventStore; },
   getByType(type) { return _eventStore.filter(e => e.event_type === type); },
   getSince(iso) {
@@ -43,6 +71,31 @@ export const eventBus = {
   subscribe(listener) {
     _eventSubscribers.add(listener);
     return () => _eventSubscribers.delete(listener);
+  },
+
+  /** Subscribe to a named channel. Returns unsubscribe function. */
+  subscribeChannel(channel, listener) {
+    if (!_channelSubscribers.has(channel)) _channelSubscribers.set(channel, new Set());
+    _channelSubscribers.get(channel).add(listener);
+    return () => {
+      const subs = _channelSubscribers.get(channel);
+      if (subs) { subs.delete(listener); if (subs.size === 0) _channelSubscribers.delete(channel); }
+    };
+  },
+
+  /** List all known channels with subscriber count and recent event count */
+  listChannels() {
+    const channels = new Set([..._channelSubscribers.keys(), ..._channelHistory.keys()]);
+    return [...channels].map(name => ({
+      name,
+      subscribers: _channelSubscribers.get(name)?.size || 0,
+      recentEvents: _channelHistory.get(name)?.length || 0,
+    }));
+  },
+
+  /** Get recent events for a channel */
+  getChannelHistory(channel, limit = 50) {
+    return (_channelHistory.get(channel) || []).slice(-limit);
   },
 };
 
@@ -65,6 +118,43 @@ export function attachEventWebSocketServer(server) {
 
   wss.on('connection', (client) => {
     client.send(JSON.stringify({ type: 'hello', timestamp: new Date().toISOString() }));
+
+    // Per-client channel subscriptions
+    const clientChannelUnsubs = new Map();
+
+    client.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(String(raw));
+        if (msg.type === 'subscribe_channel' && msg.channel) {
+          const ch = String(msg.channel).slice(0, 128);
+          if (!clientChannelUnsubs.has(ch)) {
+            const unsub = eventBus.subscribeChannel(ch, (event) => {
+              if (client.readyState === client.OPEN) {
+                client.send(JSON.stringify({ type: 'channel_event', channel: ch, event }));
+              }
+            });
+            clientChannelUnsubs.set(ch, unsub);
+            client.send(JSON.stringify({ type: 'subscribed', channel: ch }));
+          }
+        } else if (msg.type === 'unsubscribe_channel' && msg.channel) {
+          const ch = String(msg.channel);
+          const unsub = clientChannelUnsubs.get(ch);
+          if (unsub) { unsub(); clientChannelUnsubs.delete(ch); }
+          client.send(JSON.stringify({ type: 'unsubscribed', channel: ch }));
+        } else if (msg.type === 'publish' && msg.channel && msg.event_type) {
+          // Agents can publish to channels via WebSocket
+          eventBus.publish(String(msg.channel).slice(0, 128), String(msg.event_type), {
+            metadata: msg.metadata || {},
+            session_id: msg.session_id || null,
+          });
+        }
+      } catch { /* ignore malformed messages */ }
+    });
+
+    client.on('close', () => {
+      for (const unsub of clientChannelUnsubs.values()) unsub();
+      clientChannelUnsubs.clear();
+    });
   });
 
   const unsubscribe = eventBus.subscribe((event) => {
