@@ -64,6 +64,7 @@ function App() {
     });
   };
   const [selectedExperience, setSelectedExperience] = useState('developer');
+  const [taskExperience, setTaskExperience] = useState('research');
   const [activeTab, setActiveTab] = useState('chat');
   const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding);
   const [metricsSummary, setMetricsSummary] = useState(null);
@@ -741,6 +742,7 @@ function App() {
               tasks={tasks}
               taskTitle={taskTitle} setTaskTitle={setTaskTitle}
               taskPriority={taskPriority} setTaskPriority={setTaskPriority}
+              taskExperience={taskExperience} setTaskExperience={setTaskExperience}
               createTask={createTask} updateTaskStatus={updateTaskStatus}
               dispatchTask={dispatchTask} deleteTask={deleteTask}
               activeSession={activeSession} setActiveSession={setActiveSession}

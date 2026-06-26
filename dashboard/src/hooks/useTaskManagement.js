@@ -17,13 +17,13 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
     } catch (error) { console.error('Error fetching tasks:', error); }
   };
 
-  const createTask = async () => {
+  const createTask = async (experience) => {
     if (!taskTitle.trim()) return;
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: taskTitle.trim(), priority: taskPriority, sessionId: activeSession || null }),
+        body: JSON.stringify({ title: taskTitle.trim(), priority: taskPriority, sessionId: activeSession || null, experience: experience || selectedExperience }),
       });
       const data = await res.json();
       if (!data.success) { console.error('Error creating task:', data.error || 'Unknown error'); return; }

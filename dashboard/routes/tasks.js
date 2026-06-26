@@ -84,6 +84,12 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
     res.json({ success: true, task: buildTaskSummary(task) });
   });
 
+  router.get('/tasks/:id', (req, res) => {
+    const task = tasks.get(req.params.id);
+    if (!task) return res.status(404).json({ success: false, error: 'Not found' });
+    res.json({ success: true, task: buildTaskSummary(task) });
+  });
+
   router.put('/tasks/:id', express.json(), (req, res) => {
     const task = tasks.get(req.params.id);
     if (!task) {

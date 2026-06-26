@@ -32,6 +32,7 @@ import { createModelsRouter } from './routes/models.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createToolsRouter } from './routes/tools.js';
 import { createConnectorsRouter } from './routes/connectors.js';
+import { startTaskRunner } from './task-runner.js';
 import {
   isKnownExperience, isKnownSafetyMode, getExperienceConfig, getAllowedEndpoints,
   getPublicExperienceConfigs, isEndpointAllowed, resolveSessionEndpoint,
@@ -581,6 +582,9 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
   });
 
   attachEventWebSocketServer(server);
+
+  // Start the background task auto-runner (picks up pending tasks by priority)
+  startTaskRunner(tasks, eventBus);
 
   process.on('SIGTERM', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });
   process.on('SIGINT', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });

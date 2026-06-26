@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { EXPERIENCE_TOOLS } from '../constants/app-config.js';
+import { EXPERIENCE_TOOLS, EXPERIENCE_META } from '../constants/app-config.js';
 
 export default function WorkspaceView({
   dockerStatus,
@@ -18,6 +18,7 @@ export default function WorkspaceView({
   renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
   artifactFiles,
   tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
+  taskExperience, setTaskExperience,
   createTask, updateTaskStatus, dispatchTask, deleteTask,
   activeSession, setActiveSession, fetchSessionDetails, setActiveTab,
   selectedExperience,
@@ -408,14 +409,19 @@ export default function WorkspaceView({
           {wsBottomTab === 'tasks' && (
             <div className="ws-tasks-tab">
               <div className="task-create-row">
-                <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Add a task…" maxLength={140} onKeyDown={e => e.key === 'Enter' && createTask()} />
+                <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Add a task…" maxLength={140} onKeyDown={e => e.key === 'Enter' && createTask(taskExperience)} />
                 <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
                   <option value="low">low</option>
                   <option value="medium">medium</option>
                   <option value="high">high</option>
                   <option value="urgent">urgent</option>
                 </select>
-                <button className="btn-primary" onClick={createTask}>Add</button>
+                <select value={taskExperience} onChange={e => setTaskExperience(e.target.value)} title="Experience for this task">
+                  {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+                    <option key={key} value={key}>{exp.icon} {exp.name}</option>
+                  ))}
+                </select>
+                <button className="btn-primary" onClick={() => createTask(taskExperience)}>Add</button>
               </div>
               <div className="task-list">
                 {tasks.slice(0, 20).map(task => (
