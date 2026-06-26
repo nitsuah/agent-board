@@ -541,5 +541,63 @@ export function createDockerRouter({
     }
   });
 
+  /**
+   * GET /api/system/config-check
+   * Validates that each registered service has a reachable candidate URL
+   * and that Docker control is enabled (if any service is controllable).
+   * Returns a list of passing/failing checks with diagnostic hints.
+   */
+  router.get('/system/config-check', async (req, res) => {
+    const registry = getServiceRegistry();
+    const checks = await Promise.all(
+      Object.values(registry).map(async (svc) => {
+        const base = {
+          key: svc.key,
+          label: svc.label,
+          backendType: svc.backendType,
+          controllable: svc.controllable,
+          disabled: !!svc.disabledReason,
+          disabledReason: svc.disabledReason || null,
+        };
+
+        if (svc.disabledReason) {
+          return { ...base, reachable: null, hint: `Disabled: ${svc.disabledReason}` };
+        }
+
+        const candidate = svc.candidates?.[0];
+        if (!candidate) return { ...base, reachable: false, hint: 'No candidate URL configured' };
+
+        try {
+          if (svc.checkType === 'tcp') {
+            await checkTcpService(candidate, 2000);
+          } else {
+            const probe = svc.probePath ? `${candidate}${svc.probePath}` : candidate;
+            await checkHttpService(probe, 2000);
+          }
+          return { ...base, reachable: true, hint: null };
+        } catch {
+          const hints = [];
+          if (svc.controllable && !DOCKER_CONTROL_ENABLED) {
+            hints.push('Docker control disabled — rebuild with docker-compose.docker-control.yml overlay to enable start/stop');
+          }
+          if (svc.composeProfile) hints.push(`Requires compose profile: ${svc.composeProfile}`);
+          hints.push(`Expected at: ${candidate}`);
+          return { ...base, reachable: false, hint: hints.join('; ') };
+        }
+      })
+    );
+
+    const passing = checks.filter(c => c.reachable === true).length;
+    const failing = checks.filter(c => c.reachable === false).length;
+    const disabled = checks.filter(c => c.reachable === null).length;
+
+    res.json({
+      success: true,
+      dockerControlEnabled: DOCKER_CONTROL_ENABLED,
+      summary: { total: checks.length, passing, failing, disabled },
+      checks,
+    });
+  });
+
   return router;
 }
