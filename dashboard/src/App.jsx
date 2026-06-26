@@ -362,33 +362,48 @@ function App() {
     }
   }, [demoMode.enabled]);
 
+  const wsRef = useRef(null);
+  const wsReconnectTimerRef = useRef(null);
   useEffect(() => {
-    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
-    socket.onopen = () => setWsConnected(true);
-    socket.onclose = () => setWsConnected(false);
-    socket.onerror = () => setWsConnected(false);
-    socket.onmessage = (msg) => {
-      try {
-        const payload = JSON.parse(msg.data);
-        if (payload.type !== 'event' || !payload.event) return;
-        setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
-        const { event_type: eventType, endpoint, model, metadata } = payload.event;
-        if (eventType?.startsWith('model_pull_') && endpoint && model) {
-          setModelPulls((prev) => ({ ...prev, [`${endpoint}:${model}`]: { endpoint, model, ...metadata } }));
-        }
-        if (eventType === 'artifact_created') {
-          wsOps.fetchArtifacts?.();
-        }
-        if (eventType === 'task_status_changed') {
-          const { status } = metadata || {};
-          if (status === 'completed') toast.success('Task completed');
-          else if (status === 'failed') toast.error(`Task failed${metadata?.error ? `: ${metadata.error}` : ''}`);
-          fetchTasksRef.current?.();
-        }
-      } catch { /* ignore malformed payloads */ }
+    let destroyed = false;
+    const connect = () => {
+      if (destroyed) return;
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
+      wsRef.current = socket;
+      socket.onopen = () => setWsConnected(true);
+      socket.onclose = () => {
+        setWsConnected(false);
+        if (!destroyed) wsReconnectTimerRef.current = setTimeout(connect, 3000);
+      };
+      socket.onerror = () => setWsConnected(false);
+      socket.onmessage = (msg) => {
+        try {
+          const payload = JSON.parse(msg.data);
+          if (payload.type !== 'event' || !payload.event) return;
+          setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
+          const { event_type: eventType, endpoint, model, metadata } = payload.event;
+          if (eventType?.startsWith('model_pull_') && endpoint && model) {
+            setModelPulls((prev) => ({ ...prev, [`${endpoint}:${model}`]: { endpoint, model, ...metadata } }));
+          }
+          if (eventType === 'artifact_created') {
+            wsOps.fetchArtifacts?.();
+          }
+          if (eventType === 'task_status_changed') {
+            const { status } = metadata || {};
+            if (status === 'completed') toast.success('Task completed');
+            else if (status === 'failed') toast.error(`Task failed${metadata?.error ? `: ${metadata.error}` : ''}`);
+            fetchTasksRef.current?.();
+          }
+        } catch { /* ignore malformed payloads */ }
+      };
     };
-    return () => socket.close();
+    connect();
+    return () => {
+      destroyed = true;
+      clearTimeout(wsReconnectTimerRef.current);
+      wsRef.current?.close();
+    };
   }, []);
 
   useEffect(() => {
