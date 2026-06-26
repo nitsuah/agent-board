@@ -171,6 +171,42 @@ export function createSessionsRouter({
     });
   });
 
+  router.post('/:id/restart', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    const cleared = session.messages.length;
+    session.messages = [];
+    session.status = 'idle';
+    session.errorCount = 0;
+    session.lastActivity = new Date();
+    session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
+    eventBus.emit('session_restart', {
+      session_id: session.id, user_id: session.userId,
+      model: session.model, endpoint: session.endpoint, experience: session.experience,
+      metadata: { cleared },
+    });
+    logStructured('info', 'session_restarted', { sessionId: session.id, cleared });
+    res.json({ success: true, cleared, status: 'idle' });
+  });
+
+  router.post('/:id/stop', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    if (session.status === 'stopped') return res.json({ success: true, already: true });
+    session.status = 'stopped';
+    session.lastActivity = new Date();
+    session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
+    eventBus.emit('session_stopped', {
+      session_id: session.id, user_id: session.userId,
+      model: session.model, endpoint: session.endpoint, experience: session.experience,
+      metadata: { messageCount: session.messages.length },
+    });
+    logStructured('info', 'session_stopped', { sessionId: session.id });
+    res.json({ success: true, status: 'stopped' });
+  });
+
   router.post('/:id/message', (req, res) => handleSessionMessage(req, res, handlerDeps));
 
   router.post('/:id/stream', (req, res) => handleSessionStream(req, res, handlerDeps));

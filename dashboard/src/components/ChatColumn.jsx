@@ -121,12 +121,20 @@ export default function ChatColumn({
                     const res = await fetch(`/api/sessions/${activeSession}/messages`, { method: 'DELETE' });
                     const data = await res.json().catch(() => ({}));
                     if (data.success && typeof data.cleared === 'number') {
-                      // Reload session details to reflect empty messages
                       if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
                     }
                   }}
                 >⌫ Clear</button>
               )}
+              <button
+                className="btn-secondary btn-sm"
+                title="Restart session — clears messages and resets error state"
+                onClick={async () => {
+                  if (!confirm('Restart this session? All messages will be cleared.')) return;
+                  await fetch(`/api/sessions/${activeSession}/restart`, { method: 'POST' });
+                  if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+                }}
+              >↺ Restart</button>
               <button
                 className="btn-secondary btn-sm"
                 title="Delete session"
