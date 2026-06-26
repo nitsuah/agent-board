@@ -1,10 +1,11 @@
 import express from 'express';
 import { readdir, readFile, writeFile, mkdir, stat, unlink, rm } from 'fs/promises';
 import { resolve as resolvePath, relative as relativePath } from 'path';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
 
@@ -20,7 +21,7 @@ export function createWorkspaceRouter(WORKSPACE_ROOT) {
   }
 
   async function gitInWorkspace(...args) {
-    const { stdout } = await execAsync(['git', ...args].join(' '), { cwd: WORKSPACE_ROOT });
+    const { stdout } = await execFileAsync('git', args, { cwd: WORKSPACE_ROOT });
     return stdout.trim();
   }
 

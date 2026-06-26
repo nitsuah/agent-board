@@ -730,7 +730,7 @@ body {
 
 .task-create-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 4.2rem) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(5.5rem, auto) auto;
   gap: 0.4rem;
 }
 

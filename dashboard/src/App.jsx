@@ -80,6 +80,7 @@ function App() {
   const pausedSessionsRef = useRef(new Set());
   const [pausedSessions, setPausedSessions] = useState(new Set());
   const chatBottomRef = useRef(null);
+  const createSessionRef = useRef(null);
 
   // ── Derived endpoint helpers (needed by hooks below) ─────────────────────
   const allEndpointMeta = useMemo(() => {
@@ -415,7 +416,7 @@ function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) {
         if (inInput) return;
         e.preventDefault();
-        createSession();
+        createSessionRef.current?.();
       }
       if (e.key === '?' && !e.ctrlKey && !e.metaKey && !inInput) {
         setShowShortcuts(p => !p);
@@ -428,7 +429,7 @@ function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [createSession, setShowMetricsPanel, setShowSystemPanel]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'metrics') {
@@ -464,6 +465,7 @@ function App() {
       }
     } catch (error) { toast.error(`Failed to create session: ${error.message}`); }
   };
+  createSessionRef.current = createSession;
 
   const fetchSessionDetails = async (id) => {
     try {
