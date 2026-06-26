@@ -34,3 +34,8 @@ services:
     volumes:
       # Linux/Mac: Unix socket
       - /var/run/docker.sock:/var/run/docker.sock
+      # Windows (Docker Desktop): named pipe
+      # Uncomment if /var/run/docker.sock is not bridged by Docker Desktop:
+      # - type: npipe
+      #   source: \\.\pipe\docker_engine
+      #   target: \\.\pipe\docker_engine
