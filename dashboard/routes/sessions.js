@@ -382,5 +382,37 @@ export function createSessionsRouter({
     res.send(lines.join('\n'));
   });
 
+  // Replay endpoint — returns messages as ordered steps for step-through UI
+  router.get('/:id/replay', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+
+    const steps = session.messages.map((m, i) => ({
+      step: i,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp,
+      blocked: m.blocked || false,
+      redacted: m.redacted || false,
+      toolLog: m.toolLog || null,
+      feedback: m.feedback || null,
+      filterFlags: m.filterFlags || [],
+    }));
+
+    res.json({
+      success: true,
+      replay: {
+        sessionId: session.id,
+        name: session.name,
+        experience: session.experience,
+        endpoint: session.endpoint,
+        model: session.model,
+        createdAt: session.createdAt,
+        totalSteps: steps.length,
+        steps,
+      },
+    });
+  });
+
   return router;
 }
