@@ -9,7 +9,7 @@
 
 const PRIORITY_ORDER = { critical: 4, high: 3, normal: 2, medium: 2, low: 1 };
 
-export function startTaskRunner(tasks, eventBus, dispatchMessage) {
+export function startTaskRunner(tasks, eventBus, dispatchMessage, { intervalMs = 5000 } = {}) {
   let runnerInterval = null;
 
   const emitStatus = (task, status, extra = {}) => {
@@ -55,7 +55,7 @@ export function startTaskRunner(tasks, eventBus, dispatchMessage) {
     }
   };
 
-  runnerInterval = setInterval(tick, 5000);
+  runnerInterval = setInterval(tick, intervalMs);
 
   return () => {
     if (runnerInterval) clearInterval(runnerInterval);
