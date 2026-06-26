@@ -92,7 +92,18 @@ export default function TopBar({
           <div
             key={s.id}
             className={`session-tab ${activeSession === s.id ? 'active' : ''}`}
-            onClick={() => { setActiveSession(s.id); fetchSessionDetails(s.id); }}
+            onClick={() => {
+              setActiveSession(s.id);
+              fetchSessionDetails(s.id);
+              // If already in workspace view, switch to split so chat is visible
+              if (activeTab === 'workspace') {
+                setWsLayout('split-h');
+                setActiveTab('chat');
+              } else {
+                setActiveTab('chat');
+                setWsLayout('single');
+              }
+            }}
           >
             <span className="session-tab-icon">{EXPERIENCE_META[s.experience]?.icon || '💬'}</span>
             <span className="session-tab-name">{s.name}</span>

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { EXPERIENCE_TOOLS, EXPERIENCE_META } from '../constants/app-config.js';
 
 export default function WorkspaceView({
@@ -26,7 +26,23 @@ export default function WorkspaceView({
   fetchContentClients, fetchContentFiles, downloadContentFile,
 }) {
   const termInputRef = useRef(null);
-  const [sessionOutputs, setSessionOutputs] = React.useState([]);
+  const [sessionOutputs, setSessionOutputs] = useState([]);
+  const [ctxMenu, setCtxMenu] = useState(null); // { x, y, entry, fullPath }
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('contextmenu', close);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); };
+  }, [ctxMenu]);
+
+  const openCtxMenu = useCallback((e, entry, fullPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, entry, fullPath });
+  }, []);
 
   // Re-focus terminal input after command finishes or tab switches to terminal
   useEffect(() => {
@@ -176,13 +192,7 @@ export default function WorkspaceView({
           {/* ── Explorer panel ─────────────────────────────────── */}
           {wsShowExplorer && (
             <div className="ws-panel ws-explorer-panel" style={{ width: wsExplorerWidth, minWidth: wsExplorerWidth, maxWidth: wsExplorerWidth }}>
-              <div className="ws-panel-title">
-                EXPLORER
-                <div className="ws-explorer-actions">
-                  <button className="icon-btn" title="New file" onClick={() => { setWsCreateMode('file'); setWsNewName(''); }}>+F</button>
-                  <button className="icon-btn" title="New folder" onClick={() => { setWsCreateMode('dir'); setWsNewName(''); }}>+D</button>
-                </div>
-              </div>
+              {/* EXPLORER title removed — use right-click context menu instead */}
 
               <div className="ws-search-row">
                 <input
@@ -234,7 +244,7 @@ export default function WorkspaceView({
                 ))}
               </div>
 
-              <div className="workspace-entries">
+              <div className="workspace-entries" onContextMenu={e => openCtxMenu(e, null, null)}>
                 {wsSearchResults !== null ? (
                   wsSearchResults.length === 0
                     ? <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>No matches</div>
@@ -255,6 +265,7 @@ export default function WorkspaceView({
                       <div
                         key={e.name}
                         className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''}`}
+                        onContextMenu={ev => openCtxMenu(ev, e, fullPath)}
                       >
                         {isRenaming ? (
                           <input
@@ -277,20 +288,6 @@ export default function WorkspaceView({
                             {e.size != null && <span className="ws-file-size"> {(e.size / 1024).toFixed(1)}k</span>}
                           </span>
                         )}
-                        {!isRenaming && (
-                          <span className="ws-entry-actions">
-                            <button
-                              className="ws-entry-btn"
-                              title="Rename"
-                              onClick={ev => { ev.stopPropagation(); setWsRenaming({ name: e.name, newName: e.name }); }}
-                            >✎</button>
-                            <button
-                              className="ws-entry-btn ws-entry-btn-del"
-                              title="Delete"
-                              onClick={ev => { ev.stopPropagation(); deleteWorkspaceEntry(fullPath); }}
-                            >✕</button>
-                          </span>
-                        )}
                       </div>
                     );
                   })
@@ -299,6 +296,44 @@ export default function WorkspaceView({
                   <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>(empty)</div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ── Right-click context menu ────────────────────────── */}
+          {ctxMenu && (
+            <div
+              className="ws-ctx-menu"
+              style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 1000 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="ws-ctx-item" onClick={() => { setWsCreateMode('file'); setWsNewName(''); setCtxMenu(null); }}>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="1" width="10" height="14" rx="1"/><line x1="6" y1="5" x2="10" y2="5"/><line x1="6" y1="8" x2="10" y2="8"/></svg>
+                New File
+              </div>
+              <div className="ws-ctx-item" onClick={() => { setWsCreateMode('dir'); setWsNewName(''); setCtxMenu(null); }}>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4h5l2 2h7v8H1z"/></svg>
+                New Folder
+              </div>
+              {ctxMenu.entry && (
+                <>
+                  <div className="ws-ctx-divider" />
+                  <div className="ws-ctx-item" onClick={() => { setWsRenaming({ name: ctxMenu.entry.name, newName: ctxMenu.entry.name }); setCtxMenu(null); }}>
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 2l3 3-9 9H2v-3z"/></svg>
+                    Rename
+                  </div>
+                  {ctxMenu.entry.type === 'file' && (
+                    <div className="ws-ctx-item" onClick={() => { openWorkspaceFile(ctxMenu.fullPath); setCtxMenu(null); }}>
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="1" width="10" height="14" rx="1"/><line x1="6" y1="5" x2="10" y2="5"/></svg>
+                      Open
+                    </div>
+                  )}
+                  <div className="ws-ctx-divider" />
+                  <div className="ws-ctx-item ws-ctx-item-danger" onClick={() => { deleteWorkspaceEntry(ctxMenu.fullPath); setCtxMenu(null); }}>
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="3,4 13,4"/><path d="M5 4V2h6v2"/><path d="M6 7v5M10 7v5"/><path d="M4 4l1 10h6l1-10"/></svg>
+                    Delete
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -1836,7 +1836,6 @@ code {
 }
 
 .workspace-entries {
-  max-height: 180px;
   overflow-y: auto;
 }
 
@@ -3169,3 +3168,28 @@ code {
   flex-shrink: 0;
 }
 
+/* ===== Explorer right-click context menu ===== */
+.ws-ctx-menu {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  min-width: 160px;
+  padding: 0.2rem 0;
+  user-select: none;
+}
+.ws-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.1s;
+}
+.ws-ctx-item:hover { background: var(--accent-soft); color: var(--accent-strong); }
+.ws-ctx-item-danger { color: var(--red, #f47171); }
+.ws-ctx-item-danger:hover { background: rgba(244,113,113,0.12); color: var(--red, #f47171); }
+.ws-ctx-divider { height: 1px; background: var(--border); margin: 0.15rem 0; }

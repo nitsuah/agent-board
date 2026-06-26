@@ -50,7 +50,7 @@ export function useWorkspaceOps() {
       const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       if (!data.error) {
-        setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: null, editing: false }]);
+        setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: data.content, editing: true }]);
         setActiveFilePath(data.path);
       }
     } catch (err) { console.error('Workspace read failed:', err); }
