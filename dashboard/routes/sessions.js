@@ -213,5 +213,44 @@ export function createSessionsRouter({
     res.json({ success: true, recorded: eventType });
   });
 
+  router.get('/:id/export', (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+
+    const fmt = (req.query.format || 'markdown').toLowerCase();
+    if (fmt === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${session.id}.json"`);
+      return res.json({
+        id: session.id, name: session.name, experience: session.experience,
+        endpoint: session.endpoint, model: session.model,
+        createdAt: session.createdAt, updatedAt: session.updatedAt,
+        messages: session.messages.map(m => ({
+          role: m.role, content: m.content,
+          timestamp: m.timestamp, feedback: m.feedback || undefined,
+        })),
+      });
+    }
+
+    // Default: Markdown
+    const lines = [
+      `# ${session.name}`,
+      ``,
+      `*Experience: ${session.experience} · Endpoint: ${session.endpoint} · Model: ${session.model}*`,
+      `*Exported: ${new Date().toISOString()}*`,
+      ``,
+    ];
+    for (const m of session.messages) {
+      const role = m.role === 'user' ? '**You**' : '**AI**';
+      const ts = m.timestamp ? ` *(${new Date(m.timestamp).toISOString()})*` : '';
+      lines.push(`${role}${ts}`, ``, m.content, ``);
+    }
+
+    const filename = session.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.md"`);
+    res.send(lines.join('\n'));
+  });
+
   return router;
 }

@@ -994,6 +994,39 @@ body {
   cursor: not-allowed;
 }
 
+.msg-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.msg-search-input {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.msg-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.msg-search-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .input-counter {
   font-size: 0.7rem;
   color: var(--text-faint);

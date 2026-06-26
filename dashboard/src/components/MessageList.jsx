@@ -17,10 +17,28 @@ function CopyButton({ text }) {
 }
 
 export default function MessageList({ messages, loading, streamingContent, onFeedback, chatBottomRef }) {
+  const [search, setSearch] = useState('');
+  const query = search.trim().toLowerCase();
+  const visible = query
+    ? messages.map((msg, idx) => ({ msg, idx })).filter(({ msg }) => msg.content?.toLowerCase().includes(query))
+    : messages.map((msg, idx) => ({ msg, idx }));
+
   return (
     <div className="chat-container">
-      {messages.length > 0 ? (
-        messages.map((msg, index) => (
+      {messages.length > 2 && (
+        <div className="msg-search-bar">
+          <input
+            className="msg-search-input"
+            type="search"
+            placeholder="Search messages…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {query && <span className="msg-search-count">{visible.length}/{messages.length}</span>}
+        </div>
+      )}
+      {visible.length > 0 ? (
+        visible.map(({ msg, idx: index }) => (
           <div key={index} className={`message ${msg.role}`}>
             <div className="message-content">
               <span className="message-role">{msg.role === 'user' ? 'You' : 'AI'}</span>
@@ -61,7 +79,7 @@ export default function MessageList({ messages, loading, streamingContent, onFee
         ))
       ) : (
         <div className="messages-placeholder">
-          <p>No messages yet. Start a conversation!</p>
+          <p>{query ? `No messages matching "${search}"` : 'No messages yet. Start a conversation!'}</p>
         </div>
       )}
       {loading && streamingContent && (
