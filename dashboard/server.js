@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import { initSessionSnapshot, scheduleSnapshotWrite } from './modules/session-snapshot.js';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
@@ -359,6 +360,18 @@ async function fetchOllamaModels(baseUrl, timeoutMs = 4000) {
 
 await initTracing(logStructured);
 await initPersistence(logStructured);
+initSessionSnapshot(sessions, logStructured);
+
+const _baseUpsertSessionContext = upsertSessionContext;
+function upsertSessionContextWithSnapshot(session, log) {
+  _baseUpsertSessionContext(session, log);
+  scheduleSnapshotWrite(log);
+}
+const _baseMarkSessionEnded = markSessionEnded;
+function markSessionEndedWithSnapshot(sessionId, endedAt, log) {
+  _baseMarkSessionEnded(sessionId, endedAt, log);
+  scheduleSnapshotWrite(log);
+}
 
 const { getExperienceTools, runAgentLoop } = createAgentHelpers({
   WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS,
@@ -479,7 +492,7 @@ app.use('/api/sessions', createSessionsRouter({
   getExperienceConfig, getAllowedEndpoints, coerceModelForEndpoint,
   resolveEndpointUrl, prepareSessionForLlmCall, ensureRunnableModelForSession,
   getExperienceTools, runPromptHandlers, runAgentLoop,
-  upsertSessionContext, markSessionEnded, persistEvent, activeDockerRunnerModelRef,
+  upsertSessionContext: upsertSessionContextWithSnapshot, markSessionEnded: markSessionEndedWithSnapshot, persistEvent, activeDockerRunnerModelRef,
 }));
 
 app.use('/api', tasksRouter);
@@ -625,7 +638,7 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
       userRole: null, experience, safetyMode: null, useSafeModeEnabled: false,
     };
     sessions.set(sessionId, session);
-    upsertSessionContext(session, logStructured);
+    upsertSessionContextWithSnapshot(session, logStructured);
 
     session.messages.push({ role: 'user', content: task.title, timestamp: new Date() });
     const prepared = await prepareSessionForLlmCall(session);
@@ -639,7 +652,7 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
     const result = await runAgentLoop(msgs, apiStyle, llmUrl, streamHeaders, tools, session);
     session.messages.push({ role: 'assistant', content: result.content, timestamp: new Date(), toolLog: result.toolLog?.length ? result.toolLog : undefined });
     session.updatedAt = new Date();
-    upsertSessionContext(session, logStructured);
+    upsertSessionContextWithSnapshot(session, logStructured);
     task.sessionId = sessionId;
     return result;
   };

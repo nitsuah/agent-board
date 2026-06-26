@@ -4,7 +4,7 @@ Last Updated: 2026-06-25
 
 ## 2026 Q2 - Persistence and Agent Control
 
-- [ ] Implement persistence for agent history, logs, and state snapshots. Verify they work with tests and examples.
+- [x] Implement persistence for agent history, logs, and state snapshots. Verify they work with tests and examples.
 - [x] Ship the agent command interface for start, stop, and restart actions. Verify they work with tests and examples (1 is fine can do before chat tests).
 - [x] Add heartbeat and resource monitoring so agents can report health and resource usage back to the dashboard or if models fail the system can offer the "restart" option.
 - [x] Finish or investigate for further review the real-time communication bridge that early docs implied.
