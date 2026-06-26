@@ -25,6 +25,8 @@ export function useWorkspaceOps() {
   const [termHistory, setTermHistory] = useState([]);
   const [termInput, setTermInput] = useState('');
   const [termBusy, setTermBusy] = useState(false);
+  const termCmdHistoryRef = useRef([]); // past commands (oldest first)
+  const termCmdIndexRef = useRef(-1);   // -1 = not browsing history
   const termEndRef = useRef(null);
   const [wsLayout, setWsLayout] = useState('single');
   const [wsExplorerWidth, setWsExplorerWidth] = useState(220);
@@ -146,8 +148,36 @@ export function useWorkspaceOps() {
     }
   };
 
+  const handleTermKeyDown = (e, cmd) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const hist = termCmdHistoryRef.current;
+      if (!hist.length) return;
+      const newIdx = termCmdIndexRef.current === -1
+        ? hist.length - 1
+        : Math.max(0, termCmdIndexRef.current - 1);
+      termCmdIndexRef.current = newIdx;
+      setTermInput(hist[newIdx]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const hist = termCmdHistoryRef.current;
+      const newIdx = termCmdIndexRef.current + 1;
+      if (newIdx >= hist.length) {
+        termCmdIndexRef.current = -1;
+        setTermInput('');
+      } else {
+        termCmdIndexRef.current = newIdx;
+        setTermInput(hist[newIdx]);
+      }
+    } else if (e.key === 'Enter') {
+      runTermCommand(cmd);
+    }
+  };
+
   const runTermCommand = async (cmd) => {
     if (!cmd.trim() || termBusy) return;
+    termCmdHistoryRef.current = [...termCmdHistoryRef.current.filter(c => c !== cmd), cmd].slice(-100);
+    termCmdIndexRef.current = -1;
     const entry = { cmd, stdout: '', stderr: '', exitCode: null, ts: Date.now() };
     setTermHistory(h => [...h, entry]);
     setTermInput('');
@@ -354,7 +384,7 @@ export function useWorkspaceOps() {
     wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
     wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsSplitPos, wsGitPopoverRef,
     browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts,
-    commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
+    commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
     startExplorerResize, startBottomResize, startSplitResize, startSplitResizeV,
     deleteWorkspaceEntry, createWorkspaceEntry, moveWorkspaceEntry,
     renameWorkspaceEntry, searchWorkspace, fetchBranches, checkoutBranch, pullBranch, discardFile,

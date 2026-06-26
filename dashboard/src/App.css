@@ -805,6 +805,17 @@ body {
   color: var(--text-faint);
 }
 
+.task-item-result {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  margin-top: 0.2rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .task-item-actions {
   display: flex;
   gap: 0.3rem;

@@ -13,7 +13,7 @@ export default function WorkspaceView({
   wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
   wsExplorerWidth, wsBottomHeight,
   browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts, fetchBranches,
-  commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
+  commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
   startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
   moveWorkspaceEntry, renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
   artifactFiles,
@@ -509,10 +509,8 @@ export default function WorkspaceView({
                   value={termInput}
                   onChange={e => setTermInput(e.target.value)}
                   onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      runTermCommand(termInput);
-                      setTimeout(() => termInputRef.current?.focus(), 100);
-                    }
+                    handleTermKeyDown(e, termInput);
+                    if (e.key === 'Enter') setTimeout(() => termInputRef.current?.focus(), 100);
                   }}
                   placeholder={termBusy ? 'Running…' : 'Enter command…'}
                   disabled={termBusy}
@@ -556,6 +554,9 @@ export default function WorkspaceView({
                         <span style={{ opacity: 0.4 }}>unassigned</span>
                       )}
                     </div>
+                    {task.result && (
+                      <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
+                    )}
                     <div className="task-item-actions">
                       {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
                       <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
