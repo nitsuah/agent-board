@@ -29,6 +29,7 @@ function App() {
   const [loadingSessions, setLoadingSessions] = useState(new Set());
   const [streamingBySession, setStreamingBySession] = useState({});
   const streamAbortControllersRef = useRef(new Map());
+  const fetchTasksRef = useRef(null);
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
@@ -147,6 +148,9 @@ function App() {
     fetchSessionDetails: fetchSessionDetailsStable,
     setActiveSession,
   });
+
+  // keep ref current so the WS handler (which has [] deps) always calls the latest fetchTasks
+  fetchTasksRef.current = fetchTasks;
 
   // ── Data fetch functions ──────────────────────────────────────────────────
   const fetchModels = async () => {
@@ -375,6 +379,12 @@ function App() {
         }
         if (eventType === 'artifact_created') {
           wsOps.fetchArtifacts?.();
+        }
+        if (eventType === 'task_status_changed') {
+          const { status } = metadata || {};
+          if (status === 'completed') toast.success('Task completed');
+          else if (status === 'failed') toast.error(`Task failed${metadata?.error ? `: ${metadata.error}` : ''}`);
+          fetchTasksRef.current?.();
         }
       } catch { /* ignore malformed payloads */ }
     };
