@@ -3477,6 +3477,48 @@ code {
 .ws-git-log-subject { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-git-log-meta { color: var(--text-faint); white-space: nowrap; font-size: 0.65rem; }
 
+/* ── Keyboard shortcuts overlay ────────────────────────────── */
+.ks-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.ks-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.ks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.ks-header h3 { margin: 0; font-size: 0.95rem; }
+.ks-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.ks-row { display: flex; align-items: center; gap: 0.75rem; }
+.ks-key {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-family: monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  min-width: 90px;
+  text-align: center;
+  color: var(--text);
+}
+.ks-desc { font-size: 0.8rem; color: var(--text-faint); }
+
 /* ── Toast notifications ─────────────────────────────────────── */
 .toast-container {
   position: fixed;

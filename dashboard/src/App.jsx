@@ -11,6 +11,7 @@ import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import { useWorkspaceOps } from './hooks/useWorkspaceOps.js';
 import { useTaskManagement } from './hooks/useTaskManagement.js';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.jsx';
 import {
   getOrCreateUserId, getUserRole, shouldShowOnboarding,
   ENDPOINT_META, EXPERIENCE_ENDPOINTS, EXPERIENCE_TOOLS, EXPERIENCE_META, SAFETY_COLORS,
@@ -46,6 +47,7 @@ function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const [showNewSessionMenu, setShowNewSessionMenu] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const newSessionMenuRef = useRef(null);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
   const [liveEvents, setLiveEvents] = useState([]);
@@ -408,10 +410,14 @@ function App() {
 
   useEffect(() => {
     const onKey = (e) => {
+      const inInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
       if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) {
-        if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+        if (inInput) return;
         e.preventDefault();
         createSession();
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !inInput) {
+        setShowShortcuts(p => !p);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -880,6 +886,7 @@ function App() {
             onToggleMetrics={() => setShowMetricsPanel(p => !p)}
           />
         )}
+        {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
       </div>
     </div>
   );
