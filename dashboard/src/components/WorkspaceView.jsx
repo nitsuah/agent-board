@@ -52,7 +52,8 @@ const TASK_FILTERS = [
 function TasksPanel({
   tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience, createTask, updateTaskStatus,
-  deleteTask, dispatchTask, setActiveSession, fetchSessionDetails, setActiveTab,
+  deleteTask, dispatchTask, clearCompletedTasks,
+  setActiveSession, fetchSessionDetails, setActiveTab,
 }) {
   const [filter, setFilter] = useState('active');
 
@@ -96,6 +97,14 @@ function TasksPanel({
             )}
           </button>
         ))}
+        {tasks.some(t => t.status === 'completed') && (
+          <button
+            className="task-filter-tab"
+            style={{ marginLeft: 'auto', opacity: 0.7 }}
+            onClick={clearCompletedTasks}
+            title="Delete all completed tasks"
+          >Clear done</button>
+        )}
       </div>
       <div className="task-list">
         {filtered.map(task => (
@@ -146,7 +155,7 @@ export default function WorkspaceView({
   artifactFiles,
   tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
   taskExperience, setTaskExperience,
-  createTask, updateTaskStatus, dispatchTask, deleteTask,
+  createTask, updateTaskStatus, dispatchTask, deleteTask, clearCompletedTasks,
   activeSession, setActiveSession, fetchSessionDetails, setActiveTab,
   selectedExperience,
   contentClients, contentFiles, contentExpanded, setContentExpanded,
@@ -661,6 +670,7 @@ export default function WorkspaceView({
               taskExperience={taskExperience} setTaskExperience={setTaskExperience}
               createTask={createTask} updateTaskStatus={updateTaskStatus}
               deleteTask={deleteTask} dispatchTask={dispatchTask}
+              clearCompletedTasks={clearCompletedTasks}
               setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
               setActiveTab={setActiveTab}
             />

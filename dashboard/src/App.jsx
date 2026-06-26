@@ -138,7 +138,7 @@ function App() {
 
   const {
     tasks, taskSummary, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
-    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask,
+    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
   } = useTaskManagement({
     activeSession, selectedExperience,
     wsLayout: wsOps.wsLayout, setActiveTab,
@@ -775,7 +775,7 @@ function App() {
               taskPriority={taskPriority} setTaskPriority={setTaskPriority}
               taskExperience={taskExperience} setTaskExperience={setTaskExperience}
               createTask={createTask} updateTaskStatus={updateTaskStatus}
-              dispatchTask={dispatchTask} deleteTask={deleteTask}
+              dispatchTask={dispatchTask} deleteTask={deleteTask} clearCompletedTasks={clearCompletedTasks}
               activeSession={activeSession} setActiveSession={setActiveSession}
               fetchSessionDetails={fetchSessionDetails} setActiveTab={setActiveTab}
               selectedExperience={selectedExperience}

@@ -96,8 +96,14 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
     } catch (error) { console.error('Error deleting task:', error); }
   };
 
+  const clearCompletedTasks = async () => {
+    const completed = tasks.filter(t => t.status === 'completed');
+    await Promise.all(completed.map(t => fetch(`/api/tasks/${t.id}`, { method: 'DELETE' }).catch(() => {})));
+    fetchTasks();
+  };
+
   return {
     tasks, taskSummary, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
-    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask,
+    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
   };
 }
