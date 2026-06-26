@@ -243,13 +243,24 @@ body {
   color: var(--accent);
 }
 
-/* ── Session tab strip ── */
+/* ── Session tabs — now inline in topbar ── */
+.topbar-session-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0.25rem;
+  min-width: 0;
+  height: 100%;
+}
+.topbar-session-tabs::-webkit-scrollbar { display: none; }
+
+/* Keep .session-tabs as alias in case anything still references it */
 .session-tabs {
   display: flex;
   align-items: center;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 0.5rem;
   gap: 0.15rem;
   overflow-x: auto;
   flex-shrink: 0;
@@ -259,26 +270,25 @@ body {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.25rem 0.6rem 0.25rem 0.5rem;
-  font-size: 0.78rem;
-  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 0.2rem 0.5rem 0.2rem 0.45rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-muted);
   border: 1px solid transparent;
-  border-bottom: none;
   white-space: nowrap;
   transition: background 0.1s, color 0.1s;
-  max-width: 180px;
+  max-width: 160px;
+  flex-shrink: 0;
 }
 .session-tab:hover {
   background: var(--surface-2);
   color: var(--text);
 }
 .session-tab.active {
-  background: var(--bg);
+  background: var(--surface-2);
   color: var(--text);
   border-color: var(--border);
-  border-bottom-color: var(--bg);
 }
 .session-tab-icon { flex-shrink: 0; }
 .session-tab-name {
@@ -2770,9 +2780,35 @@ code {
   color: var(--text);
   padding: 0.18rem 0.4rem;
   cursor: pointer;
-  max-width: 160px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ws-branch-select-inline:focus { outline: none; border-color: var(--accent); }
+
+/* Icon-only git action buttons */
+.ws-git-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  flex-shrink: 0;
+}
+.ws-git-icon-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+.ws-git-icon-btn:disabled { opacity: 0.35; cursor: default; }
 .ws-new-branch-inline {
   display: flex;
   align-items: center;
@@ -3106,12 +3142,13 @@ code {
   margin-bottom: 0.4rem;
 }
 
-/* Explorer panel: fill IDE height properly */
+/* Explorer panel: fill full IDE height */
 .ws-explorer-panel {
   overflow: hidden;
-  flex-shrink: 0;
+  flex: 0 0 auto; /* width is set inline; height fills parent */
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 

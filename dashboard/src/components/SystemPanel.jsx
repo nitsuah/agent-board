@@ -12,6 +12,7 @@ function SystemPanel({
   serviceActionsInFlight, serviceActionErrors, servicesStarting,
   onRunServiceAction, onPullModel,
   runningServices, totalServices, knownModels,
+  showMetricsPanel, onToggleMetrics,
 }) {
   const [expandedSvcs, setExpandedSvcs] = React.useState({});
 
@@ -228,6 +229,7 @@ function SystemPanel({
           onClick={onToggleTheme}
           title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >{darkMode ? '☀️' : '🌙'}</button>
+        <button className={`icon-btn ${showMetricsPanel ? 'active' : ''}`} onClick={onToggleMetrics} title="Metrics">📊</button>
         <button className="icon-btn" onClick={onClose} title="Close">✕</button>
       </div>
 

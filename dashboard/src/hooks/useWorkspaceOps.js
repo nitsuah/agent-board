@@ -7,7 +7,7 @@ export function useWorkspaceOps() {
   const [activeFilePath, setActiveFilePath] = useState(null);
   const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
   const [workspaceBranches, setWorkspaceBranches] = useState({ branches: [], remotes: [], current: '' });
-  const [wsNewBranch, setWsNewBranch] = useState('');
+  const [wsNewBranch, setWsNewBranch] = useState(null); // null=hidden, ''=show input
   const [wsGitBusy, setWsGitBusy] = useState('');
   const [wsGitMsg, setWsGitMsg] = useState('');
   const [wsGitPopover, setWsGitPopover] = useState(false);

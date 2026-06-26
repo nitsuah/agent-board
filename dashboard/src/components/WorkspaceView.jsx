@@ -52,41 +52,50 @@ export default function WorkspaceView({
         <div className="ws-toolbar-left">
           {dockerStatus?.workspace?.configured ? (
             <>
-              <span className="ws-root-label">{dockerStatus.workspace.root}</span>
-              {workspaceBranches.branches.length > 0 ? (
-                <select
-                  className="ws-branch-select-inline"
-                  value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
-                  onChange={e => checkoutBranch(e.target.value)}
-                  disabled={wsGitBusy === 'checkout'}
-                  title="Switch branch"
-                >
-                  {workspaceBranches.branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  {workspaceBranches.remotes.filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, ''))).map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              ) : workspaceGitStatus && (
-                <span className={`ws-branch-badge ${workspaceGitStatus.dirty ? 'dirty' : 'clean'}`}>
-                  ⎇ {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' ●' : ''}
-                </span>
-              )}
-              <div className="ws-new-branch-inline">
-                <input
-                  className="ws-new-branch-input"
-                  type="text"
-                  placeholder="new-branch…"
-                  value={wsNewBranch}
-                  onChange={e => setWsNewBranch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && wsNewBranch && checkoutBranch(wsNewBranch, true)}
-                />
-                {wsNewBranch && (
-                  <button className="ws-new-branch-btn" disabled={wsGitBusy === 'checkout'} onClick={() => checkoutBranch(wsNewBranch, true)} title="Create branch">+</button>
-                )}
-              </div>
+              <span className="ws-root-label" title={dockerStatus.workspace.root}>⎇</span>
+              {workspaceBranches.branches.length > 0 || workspaceGitStatus?.branch ? (
+                wsNewBranch !== null ? (
+                  /* New-branch inline input — shown when user picks "New branch…" */
+                  <div className="ws-new-branch-inline">
+                    <input
+                      className="ws-new-branch-input"
+                      autoFocus
+                      type="text"
+                      placeholder="new-branch-name…"
+                      value={wsNewBranch}
+                      onChange={e => setWsNewBranch(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && wsNewBranch) checkoutBranch(wsNewBranch, true);
+                        if (e.key === 'Escape') setWsNewBranch(null);
+                      }}
+                    />
+                    <button className="ws-git-icon-btn" disabled={!wsNewBranch || wsGitBusy === 'checkout'} onClick={() => checkoutBranch(wsNewBranch, true)} title="Create & checkout branch">
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="3,8 8,13 13,8"/><line x1="8" y1="3" x2="8" y2="13"/></svg>
+                    </button>
+                    <button className="ws-git-icon-btn" onClick={() => setWsNewBranch(null)} title="Cancel">✕</button>
+                  </div>
+                ) : (
+                  <select
+                    className="ws-branch-select-inline"
+                    value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
+                    onChange={e => {
+                      if (e.target.value === '__new__') { setWsNewBranch(''); }
+                      else checkoutBranch(e.target.value);
+                    }}
+                    disabled={wsGitBusy === 'checkout'}
+                    title="Switch branch"
+                  >
+                    {workspaceBranches.branches.map(b => <option key={b} value={b}>{b}</option>)}
+                    {workspaceBranches.remotes
+                      .filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, '')))
+                      .map(r => <option key={r} value={r}>{r}</option>)}
+                    <option value="__new__">+ New branch…</option>
+                  </select>
+                )
+              ) : null}
             </>
           ) : (
-            <span className="ws-root-label" style={{ opacity: 0.45 }}>No workspace mounted</span>
+            <span className="ws-root-label" style={{ opacity: 0.45 }}>No workspace</span>
           )}
         </div>
         <div className="ws-toolbar-right">
@@ -130,11 +139,18 @@ export default function WorkspaceView({
                   )}
                 </div>
               )}
-              <button className="btn-docker-action ws-git-btn" disabled={wsGitBusy === 'pull'} onClick={pullBranch} title="Pull">
-                {wsGitBusy === 'pull' ? '…' : '↓ Pull'}
+              <button className="ws-git-icon-btn" disabled={wsGitBusy === 'pull'} onClick={pullBranch} title="Pull">
+                {wsGitBusy === 'pull' ? <span style={{fontSize:'0.75rem'}}>…</span> : (
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="2" x2="8" y2="11"/><polyline points="4,7 8,12 12,7"/><line x1="3" y1="14" x2="13" y2="14"/></svg>
+                )}
               </button>
-              <button className="btn-docker-action ws-git-btn" disabled={workspaceActions.pushing} onClick={pushWorkspace} title="Push">
-                {workspaceActions.pushing ? '…' : '↑ Push'}
+              <button className="ws-git-icon-btn" disabled={workspaceActions.pushing} onClick={pushWorkspace} title="Push">
+                {workspaceActions.pushing ? <span style={{fontSize:'0.75rem'}}>…</span> : (
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="14" x2="8" y2="5"/><polyline points="4,9 8,4 12,9"/><line x1="3" y1="2" x2="13" y2="2"/></svg>
+                )}
+              </button>
+              <button className="ws-git-icon-btn" disabled={!!wsGitBusy} onClick={() => { refreshWorkspaceGit(); fetchBranches(); }} title="Sync / Refresh">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2"/><polyline points="10,1 13,5 9,5"/></svg>
               </button>
               {workspaceActions.error && <span className="ws-git-err-icon" title={workspaceActions.error}>⚠</span>}
               <button className={`icon-btn ${wsShowExplorer ? 'active' : ''}`} onClick={() => setWsShowExplorer(p => !p)} title="Toggle Explorer">≡</button>
