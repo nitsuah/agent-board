@@ -66,7 +66,7 @@ export default function MessageList({ messages, loading, streamingContent, onFee
           ) : (
           <div key={index} className={`message ${msg.role}`}>
             <div className="message-content">
-              <span className="message-role">{msg.role === 'user' ? 'You' : 'AI'}</span>
+              <span className="message-role" title={msg.timestamp ? new Date(msg.timestamp).toLocaleString() : undefined}>{msg.role === 'user' ? 'You' : 'AI'}</span>
               {msg.role === 'assistant'
                 ? <Markdown content={msg.content} />
                 : <span className="message-text">{msg.content}</span>

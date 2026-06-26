@@ -709,6 +709,7 @@ function App() {
         currentEndpoint={currentEndpoint} handleEndpointSelection={handleEndpointSelection}
         sessions={sessions} activeSession={activeSession}
         setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
+        deleteSession={deleteSession}
         wsConnected={wsConnected}
         showMetricsPanel={showMetricsPanel} setShowMetricsPanel={setShowMetricsPanel}
         showSystemPanel={showSystemPanel} setShowSystemPanel={setShowSystemPanel}

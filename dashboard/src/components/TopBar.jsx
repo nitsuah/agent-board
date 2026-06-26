@@ -9,7 +9,7 @@ export default function TopBar({
   showNewSessionMenu, setShowNewSessionMenu, newSessionMenuRef,
   selectedExperience, setSelectedExperience,
   allEndpointMeta, selectableEndpointKeys, currentEndpoint, handleEndpointSelection,
-  sessions, activeSession, setActiveSession, fetchSessionDetails,
+  sessions, activeSession, setActiveSession, fetchSessionDetails, deleteSession,
   wsConnected,
   showMetricsPanel, setShowMetricsPanel, showSystemPanel, setShowSystemPanel,
   dockerStatus, fetchContentClients,
@@ -107,7 +107,7 @@ export default function TopBar({
           >
             <span className="session-tab-icon">{EXPERIENCE_META[s.experience]?.icon || '💬'}</span>
             <span className="session-tab-name">{s.name}</span>
-            <button className="session-tab-close" onClick={e => { e.stopPropagation(); if (activeSession === s.id) setActiveSession(null); }} title="Close tab">×</button>
+            <button className="session-tab-close" onClick={e => { e.stopPropagation(); deleteSession(s.id); }} title="Close tab">×</button>
           </div>
         ))}
       </div>
