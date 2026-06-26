@@ -2,22 +2,32 @@
  * Task auto-runner — picks up pending tasks and dispatches them via priority queue.
  * Priority: critical(4) > high(3) > normal/medium(2) > low(1)
  *
- * TODO: wire to actual session creation + LLM message dispatch once
- *       the sessions / sendMessageCore functions are extracted to a shared module.
- *       For now, tasks advance through pending → running → completed after a stub delay.
+ * dispatchMessage(task) is an async callback provided by server.js.
+ * It creates or reuses a session and sends task.title as the first message.
+ * Falls back to a stub (for test environments) if not provided.
  */
 
 const PRIORITY_ORDER = { critical: 4, high: 3, normal: 2, medium: 2, low: 1 };
 
-export function startTaskRunner(tasks, eventBus) {
+export function startTaskRunner(tasks, eventBus, dispatchMessage) {
   let runnerInterval = null;
 
+  const emitStatus = (task, status, extra = {}) => {
+    task.status = status;
+    task.updatedAt = new Date().toISOString();
+    if (status === 'completed') task.completedAt = new Date().toISOString();
+    eventBus.emit('task_status_changed', {
+      session_id: task.sessionId,
+      user_id: task.assignedUserId || 'anonymous',
+      model: null, endpoint: null, experience: task.experience || null,
+      metadata: { taskId: task.id, status, ...extra },
+    });
+  };
+
   const tick = async () => {
-    // Skip if any task is already running
     const running = [...tasks.values()].find(t => t.status === 'running');
     if (running) return;
 
-    // Find highest priority pending task (priority desc, then oldest first)
     const pending = [...tasks.values()]
       .filter(t => t.status === 'pending')
       .sort((a, b) => {
@@ -28,38 +38,20 @@ export function startTaskRunner(tasks, eventBus) {
     if (pending.length === 0) return;
     const task = pending[0];
 
-    task.status = 'running';
-    task.updatedAt = new Date().toISOString();
-    eventBus.emit('task_status_changed', {
-      session_id: task.sessionId,
-      user_id: task.assignedUserId || 'anonymous',
-      model: null, endpoint: null, experience: task.experience || null,
-      metadata: { taskId: task.id, status: 'running' },
-    });
+    emitStatus(task, 'running');
 
     try {
-      // TODO: create a session and dispatch task.title to it via sendMessageCore
-      // For now: stub — mark completed after a short delay
-      await new Promise(r => setTimeout(r, 2000));
-
-      task.status = 'completed';
-      task.completedAt = new Date().toISOString();
-      task.updatedAt = new Date().toISOString();
-      eventBus.emit('task_status_changed', {
-        session_id: task.sessionId,
-        user_id: task.assignedUserId || 'anonymous',
-        model: null, endpoint: null, experience: task.experience || null,
-        metadata: { taskId: task.id, status: 'completed' },
-      });
+      if (typeof dispatchMessage === 'function') {
+        const result = await dispatchMessage(task);
+        task.result = result?.content ? result.content.slice(0, 2000) : null;
+        emitStatus(task, 'completed');
+      } else {
+        // stub for test environments without LLM
+        await new Promise(r => setTimeout(r, 500));
+        emitStatus(task, 'completed');
+      }
     } catch (err) {
-      task.status = 'failed';
-      task.updatedAt = new Date().toISOString();
-      eventBus.emit('task_status_changed', {
-        session_id: task.sessionId,
-        user_id: task.assignedUserId || 'anonymous',
-        model: null, endpoint: null, experience: task.experience || null,
-        metadata: { taskId: task.id, status: 'failed', error: err.message },
-      });
+      emitStatus(task, 'failed', { error: err.message });
     }
   };
 

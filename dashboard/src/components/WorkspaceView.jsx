@@ -61,6 +61,19 @@ export default function WorkspaceView({
     setCtxMenu({ x: e.clientX, y: e.clientY, entry, fullPath });
   }, []);
 
+  // Ctrl+S / Cmd+S — save the active file
+  useEffect(() => {
+    const handleSave = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && activeFilePath) {
+        e.preventDefault();
+        const file = openFiles?.find(f => f.path === activeFilePath);
+        if (file && !file.saving) saveWorkspaceFile(activeFilePath, file.content);
+      }
+    };
+    window.addEventListener('keydown', handleSave);
+    return () => window.removeEventListener('keydown', handleSave);
+  }, [activeFilePath, openFiles, saveWorkspaceFile]);
+
   // Re-focus terminal input after command finishes or tab switches to terminal
   useEffect(() => {
     if (!termBusy && wsBottomTab === 'terminal') {

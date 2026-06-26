@@ -21,20 +21,11 @@ export function createWebhooksRouter({
 }) {
   const router = express.Router();
 
-  // Use raw body parser so we can verify HMAC signatures when WEBHOOK_SECRET is set
-  const webhookBody = webhookSecret
-    ? [express.raw({ type: 'application/json' }), (req, _res, next) => {
-        if (Buffer.isBuffer(req.body)) {
-          try { req._rawBody = req.body; req.body = JSON.parse(req.body.toString()); } catch { req.body = {}; }
-        }
-        next();
-      }]
-    : [express.json()];
-
-  router.post('/webhooks/trigger', ...webhookBody, (req, res) => {
+  router.post('/webhooks/trigger', (req, res) => {
     if (webhookSecret) {
       const sig = req.headers['x-hub-signature-256'];
-      if (!sig || !verifySignature(webhookSecret, req._rawBody || Buffer.alloc(0), sig)) {
+      const rawBody = req._rawBodyBuffer || Buffer.alloc(0);
+      if (!sig || !verifySignature(webhookSecret, rawBody, sig)) {
         logStructured('warn', 'webhook_signature_invalid', { source: req.body?.source });
         return res.status(401).json({ success: false, error: 'Invalid or missing webhook signature' });
       }

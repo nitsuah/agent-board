@@ -403,6 +403,19 @@ const workspaceRouter = createWorkspaceRouter(WORKSPACE_ROOT);
 
 // Middleware
 app.use(cors());
+// Capture raw body on the webhook trigger path before JSON parsing (needed for HMAC verification)
+// Sets req._rawBodyBuffer for HMAC verification; sets req._body = true so express.json() skips it.
+app.use('/api/webhooks/trigger', (req, _res, next) => {
+  if (req.method !== 'POST') return next();
+  const chunks = [];
+  req.on('data', c => chunks.push(c));
+  req.on('end', () => {
+    req._rawBodyBuffer = Buffer.concat(chunks);
+    try { req.body = JSON.parse(req._rawBodyBuffer.toString()); } catch { req.body = {}; }
+    req._body = true; // prevent express.json() from re-parsing
+    next();
+  });
+});
 app.use(express.json());
 app.use((req, res, next) => {
   const start = Date.now();
@@ -588,7 +601,43 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
   attachEventWebSocketServer(server);
 
   // Start the background task auto-runner (picks up pending tasks by priority)
-  startTaskRunner(tasks, eventBus);
+  // dispatchMessage: creates or reuses a session, then runs the agent loop non-streaming
+  const dispatchTaskMessage = async (task) => {
+    const sessionId = `sess_task_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const endpoint = 'primary';
+    const resolvedLlmUrl = await resolveEndpointUrl(endpoint);
+    const experience = task.experience || 'developer';
+    const session = {
+      id: sessionId,
+      name: `[task] ${task.title.slice(0, 40)}`,
+      model: LLM_CONFIG[endpoint]?.defaultModel || 'llama3',
+      endpoint,
+      llmUrl: resolvedLlmUrl,
+      messages: [],
+      createdAt: new Date(), updatedAt: new Date(),
+      userId: task.assignedUserId || 'task-runner',
+      userRole: null, experience, safetyMode: null, useSafeModeEnabled: false,
+    };
+    sessions.set(sessionId, session);
+    upsertSessionContext(session, logStructured);
+
+    session.messages.push({ role: 'user', content: task.title, timestamp: new Date() });
+    const prepared = await prepareSessionForLlmCall(session);
+    const { llmUrl, apiStyle, apiKey } = prepared;
+    const streamHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const { buildSystemMessages } = await import('./safety.js');
+    const systemMessages = buildSystemMessages({ ...session, safetyMode: null });
+    const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
+    const msgs = [...systemMessages, ...historyMessages];
+    const tools = getExperienceTools(experience);
+    const result = await runAgentLoop(msgs, apiStyle, llmUrl, streamHeaders, tools, session);
+    session.messages.push({ role: 'assistant', content: result.content, timestamp: new Date(), toolLog: result.toolLog?.length ? result.toolLog : undefined });
+    session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
+    task.sessionId = sessionId;
+    return result;
+  };
+  startTaskRunner(tasks, eventBus, dispatchTaskMessage);
 
   process.on('SIGTERM', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });
   process.on('SIGINT', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });
