@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from './Toast.jsx';
 
 const BACKEND_TYPE_LABEL = {
   'ollama-container': 'local', sandbox: 'sandbox', mcp: 'mcp',
@@ -338,7 +339,7 @@ function SystemPanel({
             title="Pull all configured models"
             onClick={async () => {
               try { await fetch('/api/models/pull-all', { method: 'POST' }); }
-              catch (err) { console.error('pull-all failed:', err); }
+              catch (err) { toast.error(`Pull all failed: ${err.message}`); }
             }}
           >Pull All</button>
         </div>

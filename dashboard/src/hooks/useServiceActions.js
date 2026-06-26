@@ -77,7 +77,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       const res = await fetch('/api/models/pull-status');
       const data = await res.json();
       if (data.success) setModelPulls(data.pulls || {});
-    } catch (error) { console.error('Error fetching model pull status:', error); }
+    } catch (error) { toast.error(`Failed to fetch pull status: ${error.message}`); }
   };
 
   const pullModel = async (endpoint, model) => {

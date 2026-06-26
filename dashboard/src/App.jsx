@@ -478,7 +478,7 @@ function App() {
           : s
         ));
       }
-    } catch (error) { console.error('Error fetching session details:', error); }
+    } catch (error) { toast.error(`Failed to load session: ${error.message}`); }
   };
   fetchSessionDetailsRef.current = fetchSessionDetails;
 
@@ -679,9 +679,9 @@ function App() {
         body: JSON.stringify({ messageIndex, positive }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error sending feedback:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to send feedback'); return; }
       setActiveSessionMessages((prev) => prev.map((msg, idx) => (idx === messageIndex ? { ...msg, feedback: positive ? 'up' : 'down' } : msg)));
-    } catch (error) { console.error('Error sending feedback:', error); }
+    } catch (error) { toast.error(`Failed to send feedback: ${error.message}`); }
   };
 
   // ── Derived state ─────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ToolField from './ToolField.jsx';
+import { toast } from './Toast.jsx';
 
 function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlight }) {
   const [toolServer, setToolServer] = useState(null);
@@ -20,7 +21,7 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
         setToolServer(data.tools.find(t => t.key === toolKey) || null);
       }
     } catch (error) {
-      console.error('Error fetching tool servers:', error);
+      toast.error(`Failed to fetch tool servers: ${error.message}`);
       setToolServer(null);
     }
   }, [toolKey]);
