@@ -22,6 +22,9 @@ function SystemPanel({
   const [byokForm, setByokForm] = useState({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
   const [byokOpen, setByokOpen] = useState(false);
   const [byokBusy, setByokBusy] = useState(false);
+  const [discovered, setDiscovered] = useState(null);
+  const [discoverBusy, setDiscoverBusy] = useState(false);
+  const [addingKey, setAddingKey] = useState(null);
 
   const fetchByokEndpoints = useCallback(async () => {
     try {
@@ -450,6 +453,90 @@ function SystemPanel({
             >✕</button>
           </div>
         ))}
+
+        <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Discover Local Services</span>
+            <button
+              className="btn-docker-action"
+              style={{ fontSize: '0.72rem' }}
+              disabled={discoverBusy}
+              onClick={async () => {
+                setDiscoverBusy(true);
+                setDiscovered(null);
+                try {
+                  const res = await fetch('/api/discover/endpoints');
+                  const data = await res.json();
+                  if (data.success) {
+                    setDiscovered(data.discovered);
+                    if (data.discovered.length === 0) toast.info?.(`Scanned ${data.scanned} ports — nothing found`);
+                  } else {
+                    toast.error(data.error || 'Discovery failed');
+                  }
+                } catch (err) { toast.error(err.message); }
+                finally { setDiscoverBusy(false); }
+              }}
+            >{discoverBusy ? 'Scanning…' : '⟳ Scan'}</button>
+          </div>
+          {discoverBusy && (
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
+              Probing localhost + host.docker.internal on common LLM ports…
+            </div>
+          )}
+          {discovered !== null && discovered.length === 0 && !discoverBusy && (
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
+              No local LLM services found.
+            </div>
+          )}
+          {discovered && discovered.map(svc => (
+            <div key={svc.key} style={{ marginTop: '0.4rem', fontSize: '0.72rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.4rem' }}>
+              <div style={{ minWidth: 0 }}>
+                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{svc.name}</span>
+                <span style={{ color: 'var(--text-faint)', marginLeft: '0.4rem' }}>{svc.url}</span>
+                <span style={{ color: 'var(--text-muted)', marginLeft: '0.4rem', fontSize: '0.65rem' }}>{svc.apiStyle}</span>
+                {svc.models.length > 0 && (
+                  <div style={{ color: 'var(--text-faint)', fontSize: '0.65rem', marginTop: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {svc.models.slice(0, 3).join(', ')}{svc.models.length > 3 ? ` +${svc.models.length - 3}` : ''}
+                  </div>
+                )}
+              </div>
+              {svc.alreadyRegistered ? (
+                <span style={{ fontSize: '0.65rem', color: 'var(--green)', flexShrink: 0, paddingTop: '0.1rem' }}>✓ added</span>
+              ) : (
+                <button
+                  className="btn-docker-action"
+                  style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }}
+                  disabled={addingKey === svc.key}
+                  onClick={async () => {
+                    setAddingKey(svc.key);
+                    try {
+                      const res = await fetch('/api/config/endpoints', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          key: svc.key,
+                          name: svc.name,
+                          url: svc.url,
+                          apiStyle: svc.apiStyle,
+                          defaultModel: svc.defaultModel,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        toast.success?.(`Added: ${svc.name}`);
+                        fetchByokEndpoints();
+                        setDiscovered(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
+                      } else {
+                        toast.error(data.error || 'Failed to add');
+                      }
+                    } catch (err) { toast.error(err.message); }
+                    finally { setAddingKey(null); }
+                  }}
+                >{addingKey === svc.key ? '…' : '+ Add'}</button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </aside>
   );
