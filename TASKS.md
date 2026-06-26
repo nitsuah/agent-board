@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-25
+Last Updated: 2026-06-26
 
 ## Todo
 
@@ -53,12 +53,12 @@ Last Updated: 2026-06-25
   - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
   - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
 
-- [ ] Expand coverage after the reporting baseline is restored.
+- [x] Expand coverage after the reporting baseline is restored.
   - Priority: P2
   - Context: once coverage reporting is working, the repo still needs broader automated coverage around lifecycle, safety, and task orchestration.
   - Acceptance Criteria: at least 20 focused tests cover the core agent flows and publish coverage.
 
-- [ ] **[ARCH] Replace Docker socket mount in content-gen with MPT sidecar service**
+- [x] **[ARCH] Replace Docker socket mount in content-gen with MPT sidecar service**
   - Priority: P2
   - Context: content-gen currently mounts `/var/run/docker.sock` so it can dynamically start MoneyPrinterTurbo via `docker compose`. This gives the container root-equivalent access to the host Docker daemon — a significant security risk. The right pattern is MPT as a declared top-level sidecar in `docker-compose.yml` (under the `tools` profile, like `tool-content-gen`), always up when content-gen is up. Content-gen then just calls `MPT_API_URL` via HTTP — same pattern as Ollama. `ensureMptRunning()` in content-gen's server gets deleted. Longer-term: all local model services should follow the Ollama shape (HTTP API, no socket access) — LM Studio and similar tools fit this pattern too.
   - Acceptance Criteria: Docker socket volume removed from content-gen in `docker-compose.yml`; MPT runs as a first-class sidecar service; content-gen returns 503 cleanly when MPT is not in the stack; no regression in video generation flow.
