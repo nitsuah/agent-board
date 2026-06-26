@@ -997,8 +997,218 @@ Valid `event` values: `ci_pass`, `ci_fail`, `deploy`, `deploy_fail`, `alert`, `r
 
 ---
 
+---
+
+## Model Lifecycle
+
+These endpoints manage the pull and unload lifecycle of models across Ollama and
+Docker Model Runner backends.
+
+### List Available Models
+
+```
+GET /api/models
+```
+
+Returns models available at each configured endpoint. Falls back to the configured
+`defaultModel` if the endpoint is unreachable.
+
+**Response**
+```json
+{
+  "success": true,
+  "models": [
+    {
+      "id": "primary",
+      "endpoint": "Ollama (local)",
+      "endpointUrl": "http://ollama:8080",
+      "backendType": "ollama-container",
+      "type": "general",
+      "name": "llama3.2:3b",
+      "model": "llama3.2",
+      "size": "3.2B"
+    }
+  ],
+  "endpoints": ["primary", "docker_runner", "glm_flash"],
+  "demoMode": false
+}
+```
+
+### Pull a Model
+
+```
+POST /api/models/pull
+```
+
+Pulls a model into the specified endpoint. Returns `202 Accepted` immediately;
+poll `/api/models/pull-status` for progress.
+
+- **Ollama (`primary`)**: uses the Ollama `/api/pull` streaming endpoint.
+- **Docker Model Runner (`docker_runner`, `glm_flash`)**: runs `docker model pull`.
+  Requires `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`.
+- **OpenLLM / custom**: not supported (model is fixed at container build time).
+
+**Request body**
+```json
+{ "endpoint": "primary", "model": "llama3.2:3b" }
+```
+
+**Response (202)**
+```json
+{ "success": true, "pullKey": "primary:llama3.2:3b", "endpoint": "primary", "model": "llama3.2:3b", "status": "pulling" }
+```
+
+### Pull Status
+
+```
+GET /api/models/pull-status
+```
+
+Returns the status of all in-progress or recently completed pulls, keyed by
+`${endpoint}:${model}`.
+
+**Response**
+```json
+{
+  "success": true,
+  "pulls": {
+    "primary:llama3.2:3b": {
+      "status": "pulling",
+      "progress": 42,
+      "total": 100,
+      "message": "pulling manifest"
+    }
+  }
+}
+```
+
+`status` values: `pulling` | `done` | `error`
+
+### Pull All Models
+
+```
+POST /api/models/pull-all
+```
+
+Kicks off pulls for all configured endpoints where the default model is not
+already installed. Reports which pulls were initiated vs. skipped.
+
+**Response**
+```json
+{
+  "success": true,
+  "initiated": [{ "endpoint": "primary", "model": "llama3.2:3b" }],
+  "skipped": [{ "endpoint": "docker_runner", "model": "ai/qwen3-coder:latest", "reason": "already_loaded" }]
+}
+```
+
+### Unload a Docker Runner Model
+
+```
+POST /api/models/unload
+```
+
+Removes a Docker Model Runner model from disk/memory via `docker model rm`.
+Requires `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true`.
+
+**Request body**
+```json
+{ "model": "ai/qwen3-coder:latest" }
+```
+
+**Response**
+```json
+{ "success": true, "model": "ai/qwen3-coder:latest" }
+```
+
+---
+
+## External Endpoints (BYOK)
+
+Register named LLM endpoints with API keys at runtime without restarting the
+server. Endpoints merge into the live LLM config and become available immediately
+in the session model selector. Built-in endpoints (`primary`, `docker_runner`,
+`glm_flash`, `openllm`) cannot be overwritten or removed via this API.
+
+### List Endpoints
+
+```
+GET /api/config/endpoints
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "endpoints": [
+    {
+      "key": "claude",
+      "name": "Claude API",
+      "url": "https://api.anthropic.com",
+      "apiStyle": "anthropic",
+      "defaultModel": "claude-sonnet-4-6",
+      "hasApiKey": true,
+      "builtin": false
+    }
+  ]
+}
+```
+
+`hasApiKey` is `true` when an API key was supplied; the key itself is never
+returned.
+
+### Add Endpoint
+
+```
+POST /api/config/endpoints
+```
+
+**Request body**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `key` | yes | Unique alphanumeric/dash/underscore identifier |
+| `url` | yes | API base URL |
+| `name` | no | Display name (defaults to `key`) |
+| `apiStyle` | no | `openai` (default) \| `anthropic` \| `ollama` |
+| `defaultModel` | no | Model ID to use when none is specified |
+| `apiKey` | no | Bearer token / API key sent with requests |
+
+**Response**
+```json
+{
+  "success": true,
+  "endpoint": { "key": "claude", "name": "Claude API", "url": "...", "apiStyle": "anthropic", "hasApiKey": true }
+}
+```
+
+### Remove Endpoint
+
+```
+DELETE /api/config/endpoints/:key
+```
+
+Removes a runtime-added endpoint. Returns `400` if the key is a built-in, `404`
+if it doesn't exist.
+
+**Response**
+```json
+{ "success": true, "removed": "claude" }
+```
+
+> **Note:** BYOK endpoints are in-memory only and are cleared on server restart.
+> To persist across restarts, add them to `CUSTOM_LLM_ENDPOINTS` in `config/.env`
+> as a JSON array:
+>
+> ```env
+> CUSTOM_LLM_ENDPOINTS=[{"key":"claude","url":"https://api.anthropic.com","apiStyle":"anthropic","apiKey":"sk-ant-...","defaultModel":"claude-sonnet-4-6"}]
+> ```
+
+---
+
 ## See Also
 
 - [README.md](../README.md) — Quick start, profiles, Docker control
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — System design
+- [DEPLOYMENT.md](./DEPLOYMENT.md) — Production deployment guide
 - [MIGRATION.md](./MIGRATION.md) — Upgrading from v0.3

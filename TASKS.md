@@ -18,7 +18,7 @@ Last Updated: 2026-06-26
   - Context: the repo needs an explicit plan for which large and small models should live on GPU without displacing the existing CPU workflows.
   - Acceptance Criteria: selected GPU models are documented, pulled successfully, surfaced in the dashboard, and kept within VRAM limits.
 
-- [ ] Document model lifecycle and resource management APIs.
+- [x] Document model lifecycle and resource management APIs.
   - Priority: P2
   - Context: once GPU models are added, the system will need a documented load and unload story for reclaiming VRAM.
   - Acceptance Criteria: API design is written down and the dashboard has a defined model-management surface.
