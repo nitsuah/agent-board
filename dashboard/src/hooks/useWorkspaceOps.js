@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { toast } from '../components/Toast.jsx';
 
 export function useWorkspaceOps() {
   const [workspacePath, setWorkspacePath] = useState('');
@@ -43,7 +44,7 @@ export function useWorkspaceOps() {
         setWorkspacePath(path);
         setWorkspaceLs(data);
       }
-    } catch (err) { console.error('Workspace ls failed:', err); }
+    } catch (err) { toast.error(`Workspace ls failed: ${err.message}`); }
   };
 
   const openWorkspaceFile = async (path) => {
@@ -56,7 +57,7 @@ export function useWorkspaceOps() {
         setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: data.content, editing: true }]);
         setActiveFilePath(data.path);
       }
-    } catch (err) { console.error('Workspace read failed:', err); }
+    } catch (err) { toast.error(`Workspace read failed: ${err.message}`); }
   };
 
   const closeFile = (path) => {
@@ -75,7 +76,7 @@ export function useWorkspaceOps() {
       const res = await fetch('/api/workspace/git/status');
       const data = await res.json();
       if (!data.error) setWorkspaceGitStatus(data);
-    } catch (err) { console.error('Workspace git status failed:', err); }
+    } catch (err) { toast.error(`Git status failed: ${err.message}`); }
   };
 
   const fetchArtifacts = async () => {
@@ -257,7 +258,7 @@ export function useWorkspaceOps() {
         body: JSON.stringify({ from: fromPath, to: toPath }),
       });
       browseWorkspace(workspacePath);
-    } catch (err) { console.error('Move failed:', err); }
+    } catch (err) { toast.error(`Move failed: ${err.message}`); }
   };
 
   const deleteWorkspaceEntry = async (path) => {
@@ -267,7 +268,7 @@ export function useWorkspaceOps() {
       closeFile(path);
       browseWorkspace(workspacePath);
       refreshWorkspaceGit();
-    } catch (err) { console.error('Delete failed:', err); }
+    } catch (err) { toast.error(`Delete failed: ${err.message}`); }
   };
 
   const createWorkspaceEntry = async (type) => {
