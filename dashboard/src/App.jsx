@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
+import { toast } from './components/Toast.jsx';
 import AgentStatusCard from './components/AgentStatusCard.jsx';
 import ToolWorkbench from './components/ToolWorkbench.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
@@ -274,8 +275,9 @@ function App() {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        console.error('Service action failed:', data.error || 'Unknown error');
-        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
+        const msg = data.error || 'Action failed';
+        toast.error(`Service ${action} failed: ${msg}`);
+        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: msg }));
       } else if (action === 'start') {
         setServicesStarting(prev => ({ ...prev, [serviceKey]: true }));
         clearTimeout(startingTimeoutsRef.current[serviceKey]);
@@ -286,7 +288,7 @@ function App() {
       }
       await Promise.all([fetchDockerStatus(), fetchSystemServices()]);
     } catch (error) {
-      console.error('Service action failed:', error);
+      toast.error(`Service ${action} failed: ${error.message}`);
       setServiceActionErrors(prev => ({ ...prev, [serviceKey]: error.message }));
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
@@ -411,7 +413,7 @@ function App() {
         setActiveSession(data.session.id);
         fetchSessions();
       }
-    } catch (error) { console.error('Error creating session:', error); }
+    } catch (error) { toast.error(`Failed to create session: ${error.message}`); }
   };
 
   const fetchSessionDetails = async (id) => {
@@ -519,7 +521,7 @@ function App() {
               const toolMsg = { role: 'tool_call', tool: event.tool, args: event.args, result: event.result, timestamp: new Date() };
               if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, toolMsg]);
             } else if (event.type === 'done' || event.type === 'error') {
-              if (event.type === 'error') console.error('LLM stream error:', event.message);
+              if (event.type === 'error') toast.error(event.message || 'LLM stream error');
               setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
               fetchSessionDetails(sessionId);
@@ -529,7 +531,6 @@ function App() {
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
-        console.error('Error sending message via stream, falling back:', error);
         try {
           const res = await fetch(`/api/sessions/${sessionId}/message`, {
             method: 'POST',
@@ -539,9 +540,9 @@ function App() {
           const data = await res.json();
           fetchSessions();
           fetchSessionDetails(sessionId);
-          if (!data.success) console.error('LLM error:', data.response);
+          if (!data.success) toast.error(data.response || 'LLM error');
         } catch (fbErr) {
-          console.error('Fallback also failed:', fbErr);
+          toast.error(`Send failed: ${fbErr.message}`);
           if (sessionId === activeSession) setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
         }
       }
@@ -582,11 +583,11 @@ function App() {
         body: JSON.stringify({ endpoint, model }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error switching endpoint:', data.error || data.message || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || data.message || 'Failed to switch model'); return; }
       setCurrentEndpoint(endpoint);
       setCurrentModel(model);
       fetchSessions();
-    } catch (error) { console.error('Error switching endpoint:', error); }
+    } catch (error) { toast.error(`Model switch failed: ${error.message}`); }
   };
 
   const handleEndpointSelection = (endpoint) => {
@@ -605,8 +606,9 @@ function App() {
         body: JSON.stringify({ name: name.trim() }),
       });
       const data = await res.json();
-      if (data.success) fetchSessions();
-    } catch (err) { console.error('Rename failed:', err); }
+      if (data.success) { fetchSessions(); toast.success('Session renamed'); }
+      else toast.error(data.error || 'Rename failed');
+    } catch (err) { toast.error(`Rename failed: ${err.message}`); }
   };
 
   const deleteSession = async (id) => {
@@ -614,7 +616,7 @@ function App() {
       await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
       if (activeSession === id) setActiveSession(null);
       fetchSessions();
-    } catch (error) { console.error('Error deleting session:', error); }
+    } catch (error) { toast.error(`Delete failed: ${error.message}`); }
   };
 
   const sendFeedback = async (messageIndex, positive) => {
