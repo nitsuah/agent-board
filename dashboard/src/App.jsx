@@ -874,6 +874,8 @@ function App() {
               setSelectedExperience={setSelectedExperience}
               createSession={createSession}
               dockerStatus={dockerStatus}
+              sessions={sessions}
+              setActiveSession={setActiveSession}
             />
           )}
         </div>
@@ -914,6 +916,34 @@ function App() {
           />
         )}
         {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      </div>
+
+      {/* ── Status bar ── */}
+      <div className="status-bar">
+        <div className="status-bar-left">
+          <span className="status-bar-item clickable" onClick={() => setShowSystemPanel(p => !p)} title="Open system panel">
+            <span className={`status-bar-dot ${wsConnected ? 'green' : 'red'}`} />
+            {wsConnected ? 'connected' : 'offline'}
+          </span>
+          <span className="status-bar-item">
+            {runningServices}/{totalServices} services
+          </span>
+        </div>
+        <div className="status-bar-right">
+          {allEndpointMeta[currentEndpoint] && (
+            <span className="status-bar-item" title="Current endpoint">
+              ⚡ {allEndpointMeta[currentEndpoint].label}
+            </span>
+          )}
+          {activeSessionData && (
+            <span className="status-bar-item" title="Active session">
+              💬 {activeSessionData.name || 'Session'}
+            </span>
+          )}
+          <span className="status-bar-item" title="Selected experience">
+            {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
+          </span>
+        </div>
       </div>
     </div>
   );

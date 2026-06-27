@@ -50,6 +50,8 @@ export default function ChatColumn({
   setSelectedExperience,
   createSession,
   dockerStatus,
+  sessions,
+  setActiveSession,
 }) {
   const textareaRef = useAutoResize(messageInput);
   const [editingName, setEditingName] = useState(false);
@@ -290,6 +292,30 @@ export default function ChatColumn({
               })}
             </ul>
           </div>
+
+          {sessions && sessions.length > 0 && (
+            <div className="empty-state-recent">
+              <div className="empty-state-recent-label">Recent sessions</div>
+              <div className="empty-state-recent-list">
+                {sessions.slice(0, 6).map(s => (
+                  <div
+                    key={s.id}
+                    className="empty-state-recent-item"
+                    onClick={() => setActiveSession(s.id)}
+                  >
+                    <span className="empty-state-recent-icon">
+                      {EXPERIENCE_META[s.experience]?.icon || '💬'}
+                    </span>
+                    <span className="empty-state-recent-name">{s.name}</span>
+                    <span className="empty-state-recent-meta">
+                      {s.messageCount != null ? `${s.messageCount} msgs` : ''}
+                      {s.updatedAt ? ` · ${new Date(s.updatedAt).toLocaleDateString()}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
