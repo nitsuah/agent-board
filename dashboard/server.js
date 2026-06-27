@@ -215,10 +215,12 @@ function getServiceRegistry() {
 
 async function runComposeAction(action, serviceName, composeProfile = null) {
   const profileFlag = composeProfile ? ['--profile', composeProfile] : [];
+  const envFileFlag = existsSync(DOCKER_ENV_FILE) ? ['--env-file', DOCKER_ENV_FILE] : [];
+  const base = ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...envFileFlag];
   const actionArgs = {
-    start:   ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'up', '-d', serviceName],
-    stop:    ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, 'stop', serviceName],
-    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'restart', serviceName],
+    start:   [...base, ...profileFlag, 'up', '-d', serviceName],
+    stop:    [...base, 'stop', serviceName],
+    restart: [...base, ...profileFlag, 'restart', serviceName],
   };
   const args = actionArgs[action];
   if (!args) throw new Error(`Unsupported action: ${action}`);
