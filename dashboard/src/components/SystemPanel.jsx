@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from './Toast.jsx';
 
-function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEndpoints, setDiscovered, setKnownProviders, isCloudProvider }) {
-  const needsKey = svc.requiresAuth || svc.requiresKey;
+function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEndpoints, setDiscovered, onEndpointAdded }) {
+  const needsKey = svc.requiresAuth;
   const [apiKey, setApiKey] = React.useState('');
   const [showKey, setShowKey] = React.useState(false);
 
@@ -29,8 +29,8 @@ function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEn
       if (data.success) {
         toast.success?.(`Added: ${svc.name}`);
         fetchByokEndpoints();
+        onEndpointAdded?.();
         if (setDiscovered) setDiscovered(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
-        if (setKnownProviders) setKnownProviders(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
       } else {
         toast.error(data.error || 'Failed to add');
       }
@@ -43,15 +43,12 @@ function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEn
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.4rem' }}>
         <div style={{ minWidth: 0 }}>
           <span style={{ color: 'var(--text)', fontWeight: 500 }}>{svc.name}</span>
-          {needsKey && !isCloudProvider && (
+          {needsKey && (
             <span style={{ marginLeft: '0.4rem', fontSize: '0.63rem', color: 'var(--yellow, #f5a623)', background: 'rgba(245,166,35,0.12)', borderRadius: '3px', padding: '0 0.25rem' }}>key required</span>
-          )}
-          {isCloudProvider && svc.keyHint && (
-            <span style={{ marginLeft: '0.4rem', fontSize: '0.63rem', color: 'var(--text-muted)' }}>{svc.keyHint}</span>
           )}
           <div style={{ color: 'var(--text-faint)', fontSize: '0.63rem', marginTop: '0.05rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {svc.url}
-            {!isCloudProvider && <span style={{ color: 'var(--text-muted)', marginLeft: '0.35rem' }}>{svc.apiStyle}</span>}
+            <span style={{ color: 'var(--text-muted)', marginLeft: '0.35rem' }}>{svc.apiStyle}</span>
           </div>
           {svc.models && svc.models.length > 0 && (
             <div style={{ color: 'var(--text-faint)', fontSize: '0.63rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -67,7 +64,7 @@ function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEn
             style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }}
             disabled={addingKey === svc.key}
             onClick={handleAdd}
-          >{addingKey === svc.key ? '…' : isCloudProvider ? '+ Configure' : '+ Add'}</button>
+          >{addingKey === svc.key ? '…' : '+ Add'}</button>
         )}
       </div>
       {!svc.alreadyRegistered && (showKey || needsKey) && (
@@ -85,7 +82,7 @@ function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEn
               fontFamily: 'var(--font-mono)',
             }}
           />
-          {!needsKey && (
+          {showKey && !needsKey && (
             <button
               className="btn-docker-action"
               style={{ fontSize: '0.63rem', padding: '0.15rem 0.35rem', flexShrink: 0 }}
@@ -104,6 +101,16 @@ const BACKEND_TYPE_LABEL = {
 };
 const SVC_ORDER = ['ollama', 'tool_content_gen', 'tool_website', 'docker-runner', 'nemoclaw', 'llm_openllm', 'bb_mcp'];
 
+const PROVIDER_PRESETS = [
+  { label: 'Anthropic', key: 'anthropic', name: 'Anthropic (Claude)', url: 'https://api.anthropic.com', apiStyle: 'anthropic', defaultModel: 'claude-sonnet-4-6', keyHint: 'sk-ant-...' },
+  { label: 'OpenAI', key: 'openai', name: 'OpenAI', url: 'https://api.openai.com', apiStyle: 'openai', defaultModel: 'gpt-4o', keyHint: 'sk-...' },
+  { label: 'Gemini', key: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com', apiStyle: 'gemini', defaultModel: 'gemini-2.5-flash', keyHint: 'AIza...' },
+  { label: 'Groq', key: 'groq', name: 'Groq', url: 'https://api.groq.com/openai', apiStyle: 'openai', defaultModel: 'llama-3.3-70b-versatile', keyHint: 'gsk_...' },
+  { label: 'Mistral', key: 'mistral', name: 'Mistral AI', url: 'https://api.mistral.ai', apiStyle: 'openai', defaultModel: 'mistral-large-latest', keyHint: '' },
+  { label: 'Together', key: 'together', name: 'Together AI', url: 'https://api.together.xyz', apiStyle: 'openai', defaultModel: 'meta-llama/Llama-3-70b-chat-hf', keyHint: '' },
+  { label: 'Perplexity', key: 'perplexity', name: 'Perplexity', url: 'https://api.perplexity.ai', apiStyle: 'openai', defaultModel: 'llama-3.1-sonar-large-128k-online', keyHint: 'pplx-...' },
+];
+
 function SystemPanel({
   dockerStatus, systemServices, modelPulls, systemInfo,
   darkMode, onToggleTheme, onClose,
@@ -111,6 +118,7 @@ function SystemPanel({
   onRunServiceAction, onPullModel,
   runningServices, totalServices, knownModels,
   showMetricsPanel, onToggleMetrics,
+  onEndpointAdded,
 }) {
   const [expandedSvcs, setExpandedSvcs] = useState({});
   const [diagResults, setDiagResults] = useState(null);
@@ -477,6 +485,16 @@ function SystemPanel({
         </div>
         {byokOpen && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginBottom: '0.1rem' }}>
+              {PROVIDER_PRESETS.map(p => (
+                <button
+                  key={p.key}
+                  className="btn-docker-action"
+                  style={{ fontSize: '0.63rem', padding: '0.1rem 0.4rem', opacity: byokForm.key === p.key ? 1 : 0.75 }}
+                  onClick={() => setByokForm({ key: p.key, name: p.name, url: p.url, apiStyle: p.apiStyle, defaultModel: p.defaultModel, apiKey: '' })}
+                >{p.label}</button>
+              ))}
+            </div>
             {[
               ['key', 'Endpoint key (e.g. claude)', byokForm.key],
               ['name', 'Display name', byokForm.name],
@@ -525,6 +543,7 @@ function SystemPanel({
                     setByokForm({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
                     setByokOpen(false);
                     fetchByokEndpoints();
+                    onEndpointAdded?.();
                   } else {
                     toast.error(data.error || 'Failed to add endpoint');
                   }
@@ -597,17 +616,8 @@ function SystemPanel({
           )}
           {discovered && discovered.length > 0 && (
             <div style={{ marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Local / Docker</div>
               {discovered.map(svc => (
-                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} />
-              ))}
-            </div>
-          )}
-          {knownProviders && knownProviders.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cloud Providers (BYOK)</div>
-              {knownProviders.map(svc => (
-                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={null} setKnownProviders={setKnownProviders} isCloudProvider />
+                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} onEndpointAdded={onEndpointAdded} />
               ))}
             </div>
           )}

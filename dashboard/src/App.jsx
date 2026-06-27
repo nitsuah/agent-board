@@ -910,6 +910,7 @@ function App() {
             knownModels={knownModels}
             showMetricsPanel={showMetricsPanel}
             onToggleMetrics={() => setShowMetricsPanel(p => !p)}
+            onEndpointAdded={fetchDockerStatus}
           />
         )}
         {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
