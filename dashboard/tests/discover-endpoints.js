@@ -33,7 +33,7 @@ assert.ok(dataHost.success === true, 'custom host+port success');
 for (const entry of data.discovered) {
   assert.ok(typeof entry.key === 'string', 'entry has key');
   assert.ok(typeof entry.url === 'string', 'entry has url');
-  assert.ok(['openai', 'ollama'].includes(entry.apiStyle), `apiStyle is valid: ${entry.apiStyle}`);
+  assert.ok(['openai', 'ollama', 'unknown'].includes(entry.apiStyle), `apiStyle is valid: ${entry.apiStyle}`);
   assert.ok(Array.isArray(entry.models), 'models is array');
   assert.ok(typeof entry.alreadyRegistered === 'boolean', 'alreadyRegistered is bool');
 }

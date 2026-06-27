@@ -5,13 +5,20 @@
  * Probes common LLM ports on localhost and host.docker.internal in parallel,
  * identifies OpenAI-compatible (/v1/models) and Ollama (/api/tags) endpoints,
  * and returns discovered services with detected API style and available models.
+ *
+ * Also returns WELL_KNOWN_PROVIDERS — cloud APIs (Anthropic, OpenAI, etc.) that
+ * are always surfaced for BYOK configuration regardless of scan results.
  */
 import express from 'express';
 
-// Ports likely to host a local LLM or OpenAI-compatible proxy
+// Ports likely to host a local LLM, OpenAI-compatible proxy, or external tool
 const DEFAULT_PORTS = [
   1234,   // LM Studio
   1337,   // Jan AI
+  3000,   // generic dev server / tools
+  3100,   // bb-mcp
+  3200,   // tool-content-gen
+  3201,   // tool-website
   4891,   // LM Studio alternate
   5000,
   5001,
@@ -23,9 +30,13 @@ const DEFAULT_PORTS = [
   8083,
   8084,
   8888,
+  9000,
   11434,  // Ollama (native host)
   11435,
+  11436,
   20128,  // 9router
+  20200,
+  20201,
 ];
 
 const PROBE_TIMEOUT_MS = 1500;
@@ -35,6 +46,9 @@ const HOSTS = ['localhost', 'host.docker.internal'];
 const PORT_HINTS = {
   1234:  'LM Studio',
   1337:  'Jan AI',
+  3100:  'bb-mcp',
+  3200:  'tool-content-gen',
+  3201:  'tool-website',
   4891:  'LM Studio',
   7860:  'text-gen-webui',
   11434: 'Ollama (host)',
@@ -42,17 +56,97 @@ const PORT_HINTS = {
   20128: '9router',
 };
 
+/**
+ * Cloud and well-known API providers. These are always returned so the user can
+ * quickly add them via BYOK. requiresKey=true means they need an API key to work.
+ */
+const WELL_KNOWN_PROVIDERS = [
+  {
+    key:          'wk_anthropic',
+    name:         'Anthropic (Claude)',
+    url:          'https://api.anthropic.com',
+    apiStyle:     'anthropic',
+    requiresKey:  true,
+    keyHint:      'ANTHROPIC_API_KEY',
+    docsUrl:      'https://docs.anthropic.com/en/api',
+    defaultModel: 'claude-sonnet-4-6',
+  },
+  {
+    key:          'wk_openai',
+    name:         'OpenAI',
+    url:          'https://api.openai.com',
+    apiStyle:     'openai',
+    requiresKey:  true,
+    keyHint:      'OPENAI_API_KEY',
+    docsUrl:      'https://platform.openai.com/docs',
+    defaultModel: 'gpt-4o',
+  },
+  {
+    key:          'wk_gemini',
+    name:         'Google Gemini',
+    url:          'https://generativelanguage.googleapis.com',
+    apiStyle:     'gemini',
+    requiresKey:  true,
+    keyHint:      'GEMINI_API_KEY',
+    docsUrl:      'https://ai.google.dev/docs',
+    defaultModel: 'gemini-2.5-flash',
+  },
+  {
+    key:          'wk_groq',
+    name:         'Groq',
+    url:          'https://api.groq.com/openai',
+    apiStyle:     'openai',
+    requiresKey:  true,
+    keyHint:      'GROQ_API_KEY',
+    docsUrl:      'https://console.groq.com/docs',
+    defaultModel: 'llama-3.3-70b-versatile',
+  },
+  {
+    key:          'wk_mistral',
+    name:         'Mistral AI',
+    url:          'https://api.mistral.ai',
+    apiStyle:     'openai',
+    requiresKey:  true,
+    keyHint:      'MISTRAL_API_KEY',
+    docsUrl:      'https://docs.mistral.ai',
+    defaultModel: 'mistral-large-latest',
+  },
+  {
+    key:          'wk_together',
+    name:         'Together AI',
+    url:          'https://api.together.xyz',
+    apiStyle:     'openai',
+    requiresKey:  true,
+    keyHint:      'TOGETHER_API_KEY',
+    docsUrl:      'https://docs.together.ai',
+    defaultModel: 'meta-llama/Llama-3-70b-chat-hf',
+  },
+  {
+    key:          'wk_perplexity',
+    name:         'Perplexity',
+    url:          'https://api.perplexity.ai',
+    apiStyle:     'openai',
+    requiresKey:  true,
+    keyHint:      'PERPLEXITY_API_KEY',
+    docsUrl:      'https://docs.perplexity.ai',
+    defaultModel: 'llama-3.1-sonar-large-128k-online',
+  },
+];
+
 async function probeEndpoint(host, port) {
   const baseUrl = `http://${host}:${port}`;
-  const signal = AbortSignal.timeout(PROBE_TIMEOUT_MS);
 
   // Try OpenAI-compatible first
   try {
-    const res = await fetch(`${baseUrl}/v1/models`, { signal });
+    const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
     if (res.ok) {
       const data = await res.json().catch(() => null);
       const models = data?.data?.map(m => m.id) || [];
-      return { url: baseUrl, apiStyle: 'openai', models };
+      return { url: baseUrl, apiStyle: 'openai', models, requiresAuth: false };
+    }
+    // 401/403 means the port is alive but needs an API key
+    if (res.status === 401 || res.status === 403) {
+      return { url: baseUrl, apiStyle: 'openai', models: [], requiresAuth: true };
     }
   } catch { /* not openai */ }
 
@@ -62,9 +156,27 @@ async function probeEndpoint(host, port) {
     if (res2.ok) {
       const data = await res2.json().catch(() => null);
       const models = data?.models?.map(m => m.name) || [];
-      return { url: baseUrl, apiStyle: 'ollama', models };
+      return { url: baseUrl, apiStyle: 'ollama', models, requiresAuth: false };
+    }
+    if (res2.status === 401 || res2.status === 403) {
+      return { url: baseUrl, apiStyle: 'ollama', models: [], requiresAuth: true };
     }
   } catch { /* not ollama */ }
+
+  // Generic health/root probe — detect any live service (may be a tool or proxy)
+  for (const path of ['/health', '/']) {
+    try {
+      const res3 = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+      if (res3.ok || res3.status === 401 || res3.status === 403) {
+        return {
+          url: baseUrl,
+          apiStyle: 'unknown',
+          models: [],
+          requiresAuth: res3.status === 401 || res3.status === 403,
+        };
+      }
+    } catch { /* not alive on this path */ }
+  }
 
   return null;
 }
@@ -100,7 +212,7 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
 
     for (const r of results) {
       if (r.status !== 'fulfilled' || !r.value) continue;
-      const { host, port, url, apiStyle, models } = r.value;
+      const { host, port, url, apiStyle, models, requiresAuth } = r.value;
 
       // De-duplicate: same port on both hosts often resolves to same service
       const dedupeKey = `${port}:${apiStyle}`;
@@ -108,7 +220,7 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
       seen.add(dedupeKey);
 
       const hint = PORT_HINTS[port];
-      const name = hint || `${apiStyle === 'ollama' ? 'Ollama' : 'LLM'} on :${port}`;
+      const name = hint || (apiStyle === 'ollama' ? `Ollama on :${port}` : apiStyle === 'openai' ? `OpenAI-compatible on :${port}` : `Service on :${port}`);
       const key = `local_${port}`;
 
       discovered.push({
@@ -118,16 +230,23 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
         apiStyle,
         models,
         defaultModel: models[0] || '',
+        requiresAuth,
         alreadyRegistered: knownUrls.has(url.replace(/\/$/, '')),
       });
     }
+
+    // Annotate well-known providers with registration status
+    const knownProviders = WELL_KNOWN_PROVIDERS.map(p => ({
+      ...p,
+      alreadyRegistered: knownUrls.has(p.url.replace(/\/$/, '')),
+    }));
 
     logStructured('info', 'endpoint_discovery', {
       portsScanned: ports.length * hosts.length,
       found: discovered.length,
     });
 
-    res.json({ success: true, discovered, scanned: ports.length * hosts.length });
+    res.json({ success: true, discovered, knownProviders, scanned: ports.length * hosts.length });
   });
 
   return router;

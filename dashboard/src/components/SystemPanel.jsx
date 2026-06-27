@@ -1,6 +1,66 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from './Toast.jsx';
 
+function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEndpoints, setDiscovered, setKnownProviders, isCloudProvider }) {
+  return (
+    <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.4rem' }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{svc.name}</span>
+        {svc.requiresAuth && !isCloudProvider && (
+          <span style={{ marginLeft: '0.4rem', fontSize: '0.63rem', color: 'var(--yellow, #f5a623)', background: 'rgba(245,166,35,0.12)', borderRadius: '3px', padding: '0 0.25rem' }}>key required</span>
+        )}
+        {isCloudProvider && svc.requiresKey && (
+          <span style={{ marginLeft: '0.4rem', fontSize: '0.63rem', color: 'var(--text-muted)' }}>{svc.keyHint}</span>
+        )}
+        <div style={{ color: 'var(--text-faint)', fontSize: '0.63rem', marginTop: '0.05rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {svc.url}
+          {!isCloudProvider && <span style={{ color: 'var(--text-muted)', marginLeft: '0.35rem' }}>{svc.apiStyle}</span>}
+        </div>
+        {svc.models && svc.models.length > 0 && (
+          <div style={{ color: 'var(--text-faint)', fontSize: '0.63rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {svc.models.slice(0, 3).join(', ')}{svc.models.length > 3 ? ` +${svc.models.length - 3}` : ''}
+          </div>
+        )}
+      </div>
+      {svc.alreadyRegistered ? (
+        <span style={{ fontSize: '0.65rem', color: 'var(--green)', flexShrink: 0, paddingTop: '0.1rem' }}>✓ added</span>
+      ) : (
+        <button
+          className="btn-docker-action"
+          style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }}
+          disabled={addingKey === svc.key}
+          onClick={async () => {
+            setAddingKey(svc.key);
+            try {
+              const res = await fetch('/api/config/endpoints', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  key: svc.key,
+                  name: svc.name,
+                  url: svc.url,
+                  apiStyle: svc.apiStyle,
+                  defaultModel: svc.defaultModel || '',
+                }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                toast.success?.(`Added: ${svc.name}`);
+                fetchByokEndpoints();
+                if (setDiscovered) setDiscovered(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
+                if (setKnownProviders) setKnownProviders(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
+              } else {
+                toast.error(data.error || 'Failed to add');
+              }
+            } catch (err) { toast.error(err.message); }
+            finally { setAddingKey(null); }
+          }}
+        >{addingKey === svc.key ? '…' : isCloudProvider ? '+ Configure' : '+ Add'}</button>
+      )}
+    </div>
+  );
+}
+
 const BACKEND_TYPE_LABEL = {
   'ollama-container': 'local', sandbox: 'sandbox', mcp: 'mcp',
   'docker-runner': 'runner', 'openllm-container': 'custom',
@@ -23,6 +83,7 @@ function SystemPanel({
   const [byokOpen, setByokOpen] = useState(false);
   const [byokBusy, setByokBusy] = useState(false);
   const [discovered, setDiscovered] = useState(null);
+  const [knownProviders, setKnownProviders] = useState(null);
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
 
@@ -471,11 +532,13 @@ function SystemPanel({
               onClick={async () => {
                 setDiscoverBusy(true);
                 setDiscovered(null);
+                setKnownProviders(null);
                 try {
                   const res = await fetch('/api/discover/endpoints');
                   const data = await res.json();
                   if (data.success) {
                     setDiscovered(data.discovered);
+                    setKnownProviders(data.knownProviders || []);
                     if (data.discovered.length === 0) toast.info?.(`Scanned ${data.scanned} ports — nothing found`);
                   } else {
                     toast.error(data.error || 'Discovery failed');
@@ -495,54 +558,22 @@ function SystemPanel({
               No local LLM services found.
             </div>
           )}
-          {discovered && discovered.map(svc => (
-            <div key={svc.key} style={{ marginTop: '0.4rem', fontSize: '0.72rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.4rem' }}>
-              <div style={{ minWidth: 0 }}>
-                <span style={{ color: 'var(--text)', fontWeight: 500 }}>{svc.name}</span>
-                <span style={{ color: 'var(--text-faint)', marginLeft: '0.4rem' }}>{svc.url}</span>
-                <span style={{ color: 'var(--text-muted)', marginLeft: '0.4rem', fontSize: '0.65rem' }}>{svc.apiStyle}</span>
-                {svc.models.length > 0 && (
-                  <div style={{ color: 'var(--text-faint)', fontSize: '0.65rem', marginTop: '0.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {svc.models.slice(0, 3).join(', ')}{svc.models.length > 3 ? ` +${svc.models.length - 3}` : ''}
-                  </div>
-                )}
-              </div>
-              {svc.alreadyRegistered ? (
-                <span style={{ fontSize: '0.65rem', color: 'var(--green)', flexShrink: 0, paddingTop: '0.1rem' }}>✓ added</span>
-              ) : (
-                <button
-                  className="btn-docker-action"
-                  style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', flexShrink: 0 }}
-                  disabled={addingKey === svc.key}
-                  onClick={async () => {
-                    setAddingKey(svc.key);
-                    try {
-                      const res = await fetch('/api/config/endpoints', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          key: svc.key,
-                          name: svc.name,
-                          url: svc.url,
-                          apiStyle: svc.apiStyle,
-                          defaultModel: svc.defaultModel,
-                        }),
-                      });
-                      const data = await res.json();
-                      if (data.success) {
-                        toast.success?.(`Added: ${svc.name}`);
-                        fetchByokEndpoints();
-                        setDiscovered(prev => prev.map(s => s.key === svc.key ? { ...s, alreadyRegistered: true } : s));
-                      } else {
-                        toast.error(data.error || 'Failed to add');
-                      }
-                    } catch (err) { toast.error(err.message); }
-                    finally { setAddingKey(null); }
-                  }}
-                >{addingKey === svc.key ? '…' : '+ Add'}</button>
-              )}
+          {discovered && discovered.length > 0 && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Local / Docker</div>
+              {discovered.map(svc => (
+                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} />
+              ))}
             </div>
-          ))}
+          )}
+          {knownProviders && knownProviders.length > 0 && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, marginBottom: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cloud Providers (BYOK)</div>
+              {knownProviders.map(svc => (
+                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={null} setKnownProviders={setKnownProviders} isCloudProvider />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </aside>
