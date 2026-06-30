@@ -1,6 +1,6 @@
-# Agent-Board — Product Improvement Roadmap
+# motor-pool — Product Improvement Roadmap
 
-> Goal: Evolve agent-board from a personal internal tool into a consumer-facing product with meaningful safety guardrails, user context, and observable metrics. This is the "wrapping and splitting the logic" phase.
+> Goal: Evolve motor-pool from a personal internal tool into a consumer-facing product with meaningful safety guardrails, user context, and observable metrics. This is the "wrapping and splitting the logic" phase.
 
 ---
 
@@ -216,7 +216,7 @@ The rest is polish. Even getting through steps 1-4 gives you a story in an inter
 
 When they ask about consumer-facing product experience:
 
-> "I recognized it was a gap so I started building toward it deliberately. Agent-board started as a personal tool. I've been evolving it to understand what it takes to build for users who aren't me — adding user context, safety guardrails with configurable rails per experience type, and an event-driven metrics layer so I can watch where users succeed and where they bail. The core insight was that the agent logic doesn't change — it's the wrapping, the safety model, and the observability that turn an internal tool into a product."
+> "I recognized it was a gap so I started building toward it deliberately. motor-pool started as a personal tool. I've been evolving it to understand what it takes to build for users who aren't me — adding user context, safety guardrails with configurable rails per experience type, and an event-driven metrics layer so I can watch where users succeed and where they bail. The core insight was that the agent logic doesn't change — it's the wrapping, the safety model, and the observability that turn an internal tool into a product."
 
 That's a real answer. And you'll have the code to back it up.
 

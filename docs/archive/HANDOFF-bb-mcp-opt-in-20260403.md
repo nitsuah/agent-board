@@ -2,9 +2,9 @@
 
 ## Repository Context
 
-- Repository: nitsuah/agent-board
+- Repository: nitsuah/motor-pool
 - Default branch: master
-- Working branch: feat/agent-board/bb-mcp-opt-in-20260403
+- Working branch: feat/motor-pool/bb-mcp-opt-in-20260403
 - PR link: (pending)
 - Related issue/task: TASKS.md — [Q2-CEO] bb-mcp opt-in integration
 

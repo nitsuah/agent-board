@@ -5,7 +5,7 @@
 ## Current Quick Start
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose up -d
 Start-Process "http://localhost:3000"
 ```
@@ -30,7 +30,7 @@ See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) for all commands.
 Run this PowerShell script to set everything up:
 
 ```powershell
-# From C:\Users\$env:USERNAME\code\agent-board directory
+# From C:\Users\$env:USERNAME\code\motor-pool directory
 
 # Copy dashboard files to dashboard/ subdirectory
 Copy-Item -Path "index.html" -Destination "dashboard/index.html" -Force
@@ -60,7 +60,7 @@ Start-Process "http://localhost:3000"
 
 ```powershell
 # Navigate to project
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 
 # Copy HTML entry point
 Copy-Item index.html dashboard/
@@ -104,7 +104,7 @@ After copying files:
 
 ```powershell
 # Check dashboard directory
-Get-ChildItem C:\Users\$env:USERNAME\code\agent-board\dashboard
+Get-ChildItem C:\Users\$env:USERNAME\code\motor-pool\dashboard
 
 # Should show:
 # Dockerfile
@@ -147,7 +147,7 @@ Start-Process "http://localhost:3000"
 
 **Before:** All files at root level (messy)
 ```bash
-agent-board/
+motor-pool/
 ├── index.html
 ├── server.js
 ├── package.json
@@ -159,7 +159,7 @@ agent-board/
 
 **After:** Organized by component (clean)
 ```bash
-agent-board/
+motor-pool/
 ├── docker-compose.yml
 ├── docker-compose.legacy.yml
 ├── .env
@@ -211,7 +211,7 @@ The old setup scripts (`setup-docker-stack.ps1`, `stack-manager.ps1`) still work
 ### "Dockerfile not found"
 
 - Make sure `dashboard/Dockerfile` exists
-- Check: `Test-Path C:\Users\$env:USERNAME\code\agent-board\dashboard\Dockerfile`
+- Check: `Test-Path C:\Users\$env:USERNAME\code\motor-pool\dashboard\Dockerfile`
 
 ### "Cannot find file: index.html"
 

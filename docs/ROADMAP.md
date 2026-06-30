@@ -60,13 +60,13 @@ Last Updated: 2026-06-25
 
 ## 2027 Q2 - Blackboard & MCP Frontend
 
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
+> motor-pool is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
 
 - [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the chat/task panel with typing indicators and incremental display.
 - [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp flows as selectable agent personas with permitted toolsets.
 - [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
 - [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other providers showing status, last invocation, and role availability.
-- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
+- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + motor-pool integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
 
 ## Notes
 

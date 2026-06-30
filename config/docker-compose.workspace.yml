@@ -30,9 +30,9 @@ services:
   agent-dashboard:
     environment:
       - WORKSPACE_ROOT=/workspace
-      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-agent-board}
+      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-motor-pool}
       - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-agent@board.local}
-      - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-agent-board}
+      - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-motor-pool}
       - GIT_COMMITTER_EMAIL=${GIT_COMMITTER_EMAIL:-agent@board.local}
     volumes:
       - type: bind

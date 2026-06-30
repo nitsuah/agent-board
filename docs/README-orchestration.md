@@ -32,7 +32,7 @@ Local AI agent dashboard backed by Ollama (container: ollama), with NemoClaw saf
 ## Quick Start
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose up -d
 Start-Process "http://localhost:3000"
 ```

@@ -5,7 +5,7 @@ This document captures what changed when the project was reorganized from a flat
 ## Current Structure (post-migration)
 
 ```
-agent-board/
+motor-pool/
 ├── docker-compose.yml
 ├── dashboard/
 │   ├── Dockerfile
@@ -62,7 +62,7 @@ Body: { "message": "...", "useSafeMode": true }
 
 ### Before
 ```
-agent-board/
+motor-pool/
 ├── Dockerfile              # Dashboard build
 ├── Dockerfile.ollama       # LLM build
 ├── docker-compose.yml      # Single setup
@@ -75,7 +75,7 @@ agent-board/
 
 ### After
 ```
-agent-board/
+motor-pool/
 ├── docker-compose.yml          # PRIMARY: Docker Hub models
 ├── docker-compose.legacy.yml   # FALLBACK: Custom build
 ├── dashboard/

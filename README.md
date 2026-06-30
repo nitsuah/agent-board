@@ -40,15 +40,15 @@ Captured from the local Docker stack at `http://localhost:3000`.
 Minimal stack (dashboard + Ollama + DB — fits a 16 GB host):
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml --project-directory . up -d
 ```
 
 or for GPU:
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
-PS C:\Users\ajhar\code\agent-board> docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up
+cd C:\Users\$env:USERNAME\code\motor-pool
+PS C:\Users\ajhar\code\motor-pool> docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up
 ```
 
 Open [http://localhost:3000](http://localhost:3000) — that's it.

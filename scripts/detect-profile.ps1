@@ -1,4 +1,4 @@
-# detect-profile.ps1 — detect local hardware and recommend a device profile for agent-board.
+# detect-profile.ps1 — detect local hardware and recommend a device profile for motor-pool.
 #
 # Usage:
 #   .\scripts\detect-profile.ps1              # print detected profile + .env snippet

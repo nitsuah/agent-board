@@ -16,7 +16,7 @@
 ### Directory Structure Created
 
 ```
-agent-board/
+motor-pool/
 ├── docker-compose.yml              ✨ NEW: Primary - Docker Hub models
 ├── docker-compose.legacy.yml       ✨ NEW: Fallback - Custom Ollama
 ├── .env                            ✨ NEW: Multi-endpoint config
@@ -173,7 +173,7 @@ All three primary models run simultaneously, allowing instant model switching wi
 
 ```powershell
 # Navigate to project
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 
 # Start primary setup (Docker Hub models)
 docker-compose up -d
@@ -261,7 +261,7 @@ Original files kept in place:
 
 ---
 
-**Your agent-board is now:**
+**Your motor-pool is now:**
 - 🎯 Better organized
 - 🚀 Faster (Docker Hub models)
 - 🔄 More flexible (model switching)

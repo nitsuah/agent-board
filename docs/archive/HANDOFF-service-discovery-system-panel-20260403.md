@@ -2,9 +2,9 @@
 
 ## Repository Context
 
-- Repository: nitsuah/agent-board
+- Repository: nitsuah/motor-pool
 - Default branch: master
-- Working branch: feat/agent-board/service-discovery-system-panel-20260403
+- Working branch: feat/motor-pool/service-discovery-system-panel-20260403
 - PR link: (pending)
 - Related issue/task: System panel service startup/restart control + endpoint discovery hardening
 
