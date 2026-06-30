@@ -44,6 +44,13 @@ cd C:\Users\$env:USERNAME\code\agent-board
 docker compose -f config/docker-compose.yml --project-directory . up -d
 ```
 
+or for GPU:
+
+```powershell
+cd C:\Users\$env:USERNAME\code\agent-board
+PS C:\Users\ajhar\code\agent-board> docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up
+```
+
 Open [http://localhost:3000](http://localhost:3000) — that's it.
 
 Add opt-in profiles as needed:
