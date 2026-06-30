@@ -1,4 +1,4 @@
-# Agent Board - Docker Stack
+# motor-pool - Docker Stack
 
 services:
   # ===== PERSISTENCE =====

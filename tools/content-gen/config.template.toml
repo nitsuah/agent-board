@@ -1,5 +1,5 @@
 # MoneyPrinterTurbo config — content-gen setup
-# Managed by: C:\Users\ajhar\code\agent-board\tools\content-gen\
+# Managed by: C:\Users\ajhar\code\motor-pool\tools\content-gen\
 # Copy this to MoneyPrinterTurbo/config.toml then fill in API keys.
 #
 # NOTE: ALL runtime keys must be inside [app] — get_api_key() reads config.app only.

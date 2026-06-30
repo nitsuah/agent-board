@@ -1,6 +1,6 @@
 1
 00:00:00,000 --> 00:00:07,000
-This is Agent Board:
+This is motor-pool:
 a local AI ops cockpit with built-in safety and observability.
 
 2
@@ -30,5 +30,5 @@ fast and transparent.
 
 7
 00:00:57,000 --> 00:01:00,000
-Agent Board:
+motor-pool:
 local-first AI operations you can trust.

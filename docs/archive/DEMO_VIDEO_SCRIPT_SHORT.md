@@ -1,4 +1,4 @@
-# Agent Board Short Demo Script (60-75s)
+# motor-pool Short Demo Script (60-75s)
 
 ## Purpose
 A short-form version of the main demo designed for quick sharing on X, LinkedIn, and YouTube Shorts while preserving the core proof points.
@@ -19,7 +19,7 @@ Screen:
 - Dashboard header and active session area visible
 
 Voiceover:
-"This is Agent Board: a local AI ops cockpit with built-in safety and observability."
+"This is motor-pool: a local AI ops cockpit with built-in safety and observability."
 
 ### 0:07-0:16 - Experience Proof
 Screen:
@@ -62,7 +62,7 @@ Screen:
 - Back to dashboard
 
 Voiceover:
-"Agent Board: local-first AI operations you can trust."
+"motor-pool: local-first AI operations you can trust."
 
 ---
 
@@ -75,7 +75,7 @@ Screen:
 - Dashboard intro shot
 
 Voiceover:
-"Agent Board is a local-first AI operations cockpit for safety, routing, and observability."
+"motor-pool is a local-first AI operations cockpit for safety, routing, and observability."
 
 ### 0:08-0:20 - Experience Selection
 Screen:
@@ -117,7 +117,7 @@ Screen:
 - Return to dashboard hero
 
 Voiceover:
-"That’s Agent Board in 75 seconds."
+"That’s motor-pool in 75 seconds."
 
 ---
 

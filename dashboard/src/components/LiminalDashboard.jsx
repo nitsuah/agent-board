@@ -1,5 +1,5 @@
 /**
- * LiminalDashboard — 3D force-directed mind map of the agent board's live system state.
+ * LiminalDashboard — 3D force-directed mind map of the motor-pool's live system state.
  * Nodes = hub, services, endpoints, sessions. Links = spring-physics edges.
  * Built with Three.js: starfield, glow sprites, OrbitControls, raycasting.
  */
@@ -58,7 +58,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   const links = [];
 
   nodes.push({
-    id: 'hub', label: 'Agent Board', type: 'hub', fixed: true,
+    id: 'hub', label: 'motor-pool', type: 'hub', fixed: true,
     pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(),
     meta: { desc: 'Central AI orchestration hub', detail: 'All agents, models and sessions radiate from here.' },
   });
@@ -509,7 +509,7 @@ export default function LiminalDashboard({
       {/* ── Floating CTA — only when nothing selected ── */}
       {!selected && (
         <div className="liminal-hero">
-          <div className="liminal-hero-title">Agent Board</div>
+          <div className="liminal-hero-title">motor-pool</div>
           <div className="liminal-hero-sub">Your AI motor pool · click any node to explore</div>
           <button className="liminal-hero-btn" onClick={onCreateSession}>
             ＋ New Session

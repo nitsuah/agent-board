@@ -791,7 +791,7 @@ function App() {
       {showOnboarding && (
         <div className="onboarding-strip">
           <div className="onboarding-copy">
-            <strong>Welcome to Agent Board.</strong>
+            <strong>Welcome to motor-pool.</strong>
             <span>
               Choose an experience, pick a model, then click <strong>+ New ▾</strong> to create a session.
               {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}

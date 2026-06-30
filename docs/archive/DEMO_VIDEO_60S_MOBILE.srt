@@ -1,6 +1,6 @@
 1
 00:00:00,000 --> 00:00:02,500
-Agent Board.
+motor-pool.
 
 2
 00:00:02,500 --> 00:00:07,000
@@ -57,5 +57,5 @@ Find latency fast.
 
 13
 00:00:57,000 --> 00:01:00,000
-Agent Board:
+motor-pool:
 local-first AI operations.

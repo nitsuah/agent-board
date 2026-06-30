@@ -216,7 +216,7 @@ docker-compose up -d
 - [Docker Compose Docs](https://docs.docker.com/compose/)
 - [Ollama Documentation](https://github.com/ollama/ollama)
 - [Qwen Model Card](https://huggingface.co/Qwen)
-- [Agent Board Repo](https://github.com/yourusername/motor-pool)
+- [motor-pool Repo](https://github.com/yourusername/motor-pool)
 
 ## 📞 Support
 

@@ -1,4 +1,4 @@
-# Agent Board 2-Minute Demo Script (Ready to Record)
+# motor-pool 2-Minute Demo Script (Ready to Record)
 
 ## Goal
 Show the core product story in 120 seconds:
@@ -22,7 +22,7 @@ Screen:
 - Land on dashboard home with header and badges visible
 
 Voiceover:
-"This is Agent Board, a local AI operations cockpit. It gives you model routing, safety controls, and observability in one place so you can ship AI workflows with confidence."
+"This is motor-pool, a local AI operations cockpit. It gives you model routing, safety controls, and observability in one place so you can ship AI workflows with confidence."
 
 ### 0:10-0:25 - Experience Selection
 Screen:
@@ -75,7 +75,7 @@ Screen:
 - Expand one trace briefly to show span timeline
 
 Voiceover:
-"On the critical path, Agent Board emits OpenTelemetry traces. In Jaeger, I can inspect request spans end-to-end to pinpoint latency and routing behavior."
+"On the critical path, motor-pool emits OpenTelemetry traces. In Jaeger, I can inspect request spans end-to-end to pinpoint latency and routing behavior."
 
 ### 1:52-2:00 - Close / Call to Action
 Screen:
@@ -83,7 +83,7 @@ Screen:
 - Hold steady for final line
 
 Voiceover:
-"That’s Agent Board: local-first AI operations with built-in safety and observability. If you want, I can next show the public deployment path beyond localhost."
+"That’s motor-pool: local-first AI operations with built-in safety and observability. If you want, I can next show the public deployment path beyond localhost."
 
 ## Shot List (Director View)
 
