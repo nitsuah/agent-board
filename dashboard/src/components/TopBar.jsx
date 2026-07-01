@@ -11,9 +11,6 @@ export default function TopBar({
   allEndpointMeta, selectableEndpointKeys, currentEndpoint, handleEndpointSelection,
   sessions, activeSession, setActiveSession, fetchSessionDetails, deleteSession,
   wsConnected,
-  showMetricsPanel, setShowMetricsPanel, showSystemPanel, setShowSystemPanel,
-  dockerStatus, fetchContentClients,
-  runningServices, totalServices,
   createSession,
 }) {
   const [sessionSearch, setSessionSearch] = useState('');
@@ -29,10 +26,21 @@ export default function TopBar({
 
   return (
     <div className="topbar">
-      {/* ── Far-left: New button ── */}
+      {/* ── Far-left: motor-pool logo / new-session button ── */}
       <div className="topbar-new-wrap" ref={newSessionMenuRef} style={{ marginRight: '0.25rem' }}>
-        <button className="topbar-new-btn" onClick={() => setShowNewSessionMenu(p => !p)}>
-          + New ▾
+        <button className="topbar-new-btn topbar-logo-btn" onClick={() => setShowNewSessionMenu(p => !p)} title="New session">
+          <span className="topbar-logo-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="3"/>
+              <line x1="12" y1="2" x2="12" y2="5"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="2" y1="12" x2="5" y2="12"/>
+              <line x1="19" y1="12" x2="22" y2="12"/>
+            </svg>
+          </span>
+          <span className="topbar-logo-label">motor-pool</span>
+          <span className="topbar-logo-caret">▾</span>
         </button>
         {showNewSessionMenu && (
           <div className="topbar-new-panel">
@@ -128,26 +136,11 @@ export default function TopBar({
         ))}
       </div>
 
-      {/* ── Right: status + system panel ── */}
+      {/* ── Right: live status indicator ── */}
       <div className="topbar-right">
         <span className={`live-dot-wrap ${wsConnected ? 'live' : 'offline'}`} title={wsConnected ? 'Live' : 'Offline'}>
           <span className="live-dot" />
         </span>
-        <button
-          className={`icon-btn svc-cog-btn ${showSystemPanel ? 'active' : ''}`}
-          onClick={() => {
-            setShowSystemPanel(prev => {
-              const next = !prev;
-              if (next) {
-                setShowMetricsPanel(false);
-                if (dockerStatus?.workspace?.configured) { browseWorkspace(''); refreshWorkspaceGit(); }
-                fetchContentClients();
-              }
-              return next;
-            });
-          }}
-          title={`System — ${runningServices}/${totalServices} services`}
-        >⚙️ <span className="svc-cog-count">{totalServices > 0 ? `${runningServices}/${totalServices}` : '…'}</span></button>
       </div>
     </div>
   );

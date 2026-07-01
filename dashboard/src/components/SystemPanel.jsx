@@ -386,10 +386,36 @@ function SystemPanel({
     return (pa < 0 ? 999 : pa) - (pb < 0 ? 999 : pb);
   });
 
+  // ── Service categorization helpers ───────────────────────────────────────
+  const MODEL_SVC_KEYS = new Set(['ollama', 'docker-runner', 'llm_openllm', 'openllm']);
+  const MCP_SVC_KEYS   = new Set(['bb_mcp']);
+  const TOOL_SVC_KEYS  = new Set(['tool_content_gen', 'tool_website', 'nemoclaw']);
+
+  const modelSvcs   = allSvcs.filter(s => MODEL_SVC_KEYS.has(s.key));
+  const mcpSvcs     = allSvcs.filter(s => MCP_SVC_KEYS.has(s.key));
+  const toolSvcs    = allSvcs.filter(s => TOOL_SVC_KEYS.has(s.key));
+  const otherSvcs   = allSvcs.filter(s => !MODEL_SVC_KEYS.has(s.key) && !MCP_SVC_KEYS.has(s.key) && !TOOL_SVC_KEYS.has(s.key));
+
+  const bbRunning = mcpSvcs.find(s => s.key === 'bb_mcp')?.info?.running ?? false;
+
+  // Device profile helpers
+  const deviceProfile  = dockerStatus?.deviceProfile;
+  const isLaptop       = deviceProfile?.name?.toLowerCase().includes('laptop') || deviceProfile?.name?.toLowerCase().includes('macbook');
+  const deviceIcon     = isLaptop ? '💻' : '🖥️';
+  const deviceColor    = isLaptop ? 'var(--orange)' : 'var(--green)';
+  const deviceTitle    = deviceProfile
+    ? `${deviceProfile.name}${deviceProfile.gpu ? ' · GPU' : ' · CPU-only'}`
+    : 'Device unknown';
+
   return (
     <aside className="drawer drawer-right">
       <div className="drawer-header">
         <h2>System</h2>
+        {/* Device icon — inline with theme/graph/close */}
+        <span
+          title={deviceTitle}
+          style={{ fontSize: '1rem', cursor: 'default', color: deviceColor, display: 'flex', alignItems: 'center' }}
+        >{deviceIcon}</span>
         <button
           className="icon-btn"
           onClick={onToggleTheme}
@@ -399,25 +425,61 @@ function SystemPanel({
         <button className="icon-btn" onClick={onClose} title="Close">✕</button>
       </div>
 
+      {/* ── Stack Status (expanded) + sub-metrics ── */}
       <div className="system-info">
-        <div className="system-info-item">
-          <h3>Stack Status</h3>
+        <div className="system-info-item system-info-item-wide">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3>Stack Status</h3>
+            <button
+              className="btn-docker-action"
+              style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}
+              disabled={diagBusy}
+              onClick={async () => {
+                setDiagBusy(true);
+                try {
+                  const res = await fetch('/api/system/config-check');
+                  const data = await res.json();
+                  setDiagResults(data);
+                } catch (err) { setDiagResults({ error: err.message }); }
+                finally { setDiagBusy(false); }
+              }}
+            >{diagBusy ? '…' : '⟳ Diag'}</button>
+          </div>
           {(() => {
             const anyNotReady = dockerStatus?.endpoints &&
               Object.values(dockerStatus.endpoints).some(ep => !ep.live && !ep.disabledReason);
             const healthy = dockerStatus?.dockerRunning && !anyNotReady;
             return (
-              <div className={`value ${healthy ? '' : anyNotReady ? 'warning' : 'error'}`}>
+              <div className={`value ${healthy ? '' : anyNotReady ? 'warning' : 'error'}`} style={{ marginTop: '0.2rem' }}>
                 {healthy ? 'Healthy' : anyNotReady ? 'Degraded' : 'Offline'}
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-faint)', marginLeft: '0.5rem' }}>
+                  {runningServices}/{totalServices} up
+                </span>
               </div>
             );
           })()}
-        </div>
-        <div className="system-info-item">
-          <h3>Active Services</h3>
-          <div className="value">
-            {runningServices}/{totalServices}
-          </div>
+          {diagResults && !diagResults.error && (
+            <div style={{ marginTop: '0.4rem', fontSize: '0.68rem' }}>
+              <div style={{ marginBottom: '0.3rem', color: 'var(--text-muted)' }}>
+                {diagResults.summary.passing} passing · {diagResults.summary.failing} failing
+                {' · '}<span style={{ color: diagResults.dockerControlEnabled ? 'var(--green)' : 'var(--text-faint)' }}>
+                  {diagResults.dockerControlEnabled ? 'control on' : 'control off'}
+                </span>
+              </div>
+              {diagResults.checks.map(c => (
+                <div key={c.key} style={{ display: 'flex', gap: '0.3rem', alignItems: 'baseline', lineHeight: 1.5 }}>
+                  <span style={{ color: c.reachable === true ? 'var(--green)' : c.reachable === false ? 'var(--red)' : 'var(--text-faint)' }}>
+                    {c.reachable === true ? '✓' : c.reachable === false ? '✗' : '—'}
+                  </span>
+                  <span style={{ color: 'var(--text)' }}>{c.label}</span>
+                  {c.hint && <span style={{ color: 'var(--text-faint)', fontSize: '0.63rem' }}>— {c.hint}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {diagResults?.error && (
+            <div style={{ fontSize: '0.68rem', color: 'var(--red)', marginTop: '0.3rem' }}>{diagResults.error}</div>
+          )}
         </div>
         <div className="system-info-item">
           <h3>Memory</h3>
@@ -426,17 +488,6 @@ function SystemPanel({
         <div className="system-info-item">
           <h3>Uptime</h3>
           <div className="value">{systemInfo?.uptime ? `${Math.round(systemInfo.uptime / 60)} min` : 'N/A'}</div>
-        </div>
-        <div className="system-info-item">
-          <h3>Device</h3>
-          <div className="value" style={{ fontSize: '0.9rem' }}>
-            {dockerStatus?.deviceProfile?.name || 'N/A'}
-          </div>
-          {dockerStatus?.deviceProfile && (
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-              {dockerStatus.deviceProfile.gpu ? '● GPU' : '● CPU-only'}
-            </div>
-          )}
         </div>
         <div className="system-info-item">
           <h3>LLM</h3>
@@ -451,51 +502,10 @@ function SystemPanel({
         </div>
       </div>
 
-      <div className="docker-status" style={{ marginBottom: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3>Diagnostics</h3>
-          <button
-            className="btn-docker-action"
-            style={{ fontSize: '0.72rem' }}
-            disabled={diagBusy}
-            onClick={async () => {
-              setDiagBusy(true);
-              try {
-                const res = await fetch('/api/system/config-check');
-                const data = await res.json();
-                setDiagResults(data);
-              } catch (err) { setDiagResults({ error: err.message }); }
-              finally { setDiagBusy(false); }
-            }}
-          >{diagBusy ? '…' : 'Run'}</button>
-        </div>
-        {diagResults && !diagResults.error && (
-          <div style={{ marginTop: '0.4rem', fontSize: '0.68rem' }}>
-            <div style={{ marginBottom: '0.3rem', color: 'var(--text-muted)' }}>
-              {diagResults.summary.passing} passing · {diagResults.summary.failing} failing · {diagResults.summary.disabled} disabled
-              {' · '}<span style={{ color: diagResults.dockerControlEnabled ? 'var(--green)' : 'var(--text-faint)' }}>
-                {diagResults.dockerControlEnabled ? 'control on' : 'control off'}
-              </span>
-            </div>
-            {diagResults.checks.map(c => (
-              <div key={c.key} style={{ display: 'flex', gap: '0.3rem', alignItems: 'baseline', lineHeight: 1.5 }}>
-                <span style={{ color: c.reachable === true ? 'var(--green)' : c.reachable === false ? 'var(--red)' : 'var(--text-faint)' }}>
-                  {c.reachable === true ? '✓' : c.reachable === false ? '✗' : '—'}
-                </span>
-                <span style={{ color: 'var(--text)' }}>{c.label}</span>
-                {c.hint && <span style={{ color: 'var(--text-faint)', fontSize: '0.63rem' }}>— {c.hint}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-        {diagResults?.error && (
-          <div style={{ fontSize: '0.68rem', color: 'var(--red)', marginTop: '0.3rem' }}>{diagResults.error}</div>
-        )}
-      </div>
-
+      {/* ── Services: Models ── */}
       <div className="docker-status">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3>Services</h3>
+          <h3>Models</h3>
           <button
             className="btn-docker-action"
             style={{ fontSize: '0.72rem' }}
@@ -506,25 +516,161 @@ function SystemPanel({
             }}
           >Pull All</button>
         </div>
-        {allSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
+        {[...modelSvcs, ...otherSvcs].map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
+
+        {/* External endpoints (BYOK) in models section */}
+        {byokEndpoints.length > 0 && (
+          <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.4rem' }}>
+            <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: '0.3rem' }}>External</div>
+            {byokEndpoints.map(ep => (
+              <div key={ep.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.3rem', fontSize: '0.72rem' }}>
+                <div>
+                  <span style={{ color: 'var(--text)' }}>{ep.name}</span>
+                  <span style={{ color: 'var(--text-faint)', marginLeft: '0.4rem' }}>{ep.apiStyle}</span>
+                  {ep.hasApiKey && <span style={{ color: 'var(--green)', marginLeft: '0.4rem' }}>● key</span>}
+                </div>
+                <button
+                  className="btn-docker-action"
+                  style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
+                  onClick={async () => {
+                    try {
+                      await fetch(`/api/config/endpoints/${ep.key}`, { method: 'DELETE' });
+                      fetchByokEndpoints();
+                    } catch (err) { toast.error(err.message); }
+                  }}
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add external endpoint */}
+        <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: byokOpen ? '0.5rem' : 0 }}>
+            <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Add external model</span>
+            <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={() => setByokOpen(p => !p)}>
+              {byokOpen ? 'Cancel' : '+ Add'}
+            </button>
+          </div>
+          {byokOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginBottom: '0.1rem' }}>
+                {PROVIDER_PRESETS.map(p => (
+                  <button
+                    key={p.key}
+                    className="btn-docker-action"
+                    style={{ fontSize: '0.63rem', padding: '0.1rem 0.4rem', opacity: byokForm.key === p.key ? 1 : 0.75 }}
+                    onClick={() => setByokForm({ key: p.key, name: p.name, url: p.url, apiStyle: p.apiStyle, defaultModel: p.defaultModel, apiKey: '' })}
+                  >{p.label}</button>
+                ))}
+              </div>
+              {[
+                ['key', 'Endpoint key (e.g. claude)', byokForm.key],
+                ['name', 'Display name', byokForm.name],
+                ['url', 'API base URL', byokForm.url],
+                ['defaultModel', 'Default model (optional)', byokForm.defaultModel],
+                ['apiKey', 'API key (optional)', byokForm.apiKey],
+              ].map(([field, placeholder, value]) => (
+                <input
+                  key={field}
+                  type={field === 'apiKey' ? 'password' : 'text'}
+                  placeholder={placeholder}
+                  value={value}
+                  className="select"
+                  style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
+                  onChange={e => setByokForm(p => ({ ...p, [field]: e.target.value }))}
+                />
+              ))}
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Style:</label>
+                <select
+                  value={byokForm.apiStyle}
+                  className="select"
+                  style={{ fontSize: '0.72rem', padding: '0.25rem 0.4rem' }}
+                  onChange={e => setByokForm(p => ({ ...p, apiStyle: e.target.value }))}
+                >
+                  <option value="openai">OpenAI-compatible</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </div>
+              <button
+                className="btn-primary"
+                style={{ fontSize: '0.75rem' }}
+                disabled={byokBusy || !byokForm.key || !byokForm.url}
+                onClick={async () => {
+                  setByokBusy(true);
+                  try {
+                    const res = await fetch('/api/config/endpoints', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(byokForm),
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      toast.success?.(`Added endpoint: ${byokForm.key}`);
+                      setByokForm({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
+                      setByokOpen(false);
+                      fetchByokEndpoints();
+                      onEndpointAdded?.();
+                    } else {
+                      toast.error(data.error || 'Failed to add endpoint');
+                    }
+                  } catch (err) { toast.error(err.message); }
+                  finally { setByokBusy(false); }
+                }}
+              >{byokBusy ? 'Adding…' : 'Add Endpoint'}</button>
+            </div>
+          )}
+
+          {/* Discover Local Services */}
+          <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Discover local services</span>
+              <button
+                className="btn-docker-action"
+                style={{ fontSize: '0.68rem' }}
+                disabled={discoverBusy}
+                onClick={async () => {
+                  setDiscoverBusy(true);
+                  setDiscovered(null);
+                  setKnownProviders(null);
+                  try {
+                    const res = await fetch('/api/discover/endpoints');
+                    const data = await res.json();
+                    if (data.success) {
+                      setDiscovered(data.discovered);
+                      setKnownProviders(data.knownProviders || []);
+                      if (data.discovered.length === 0) toast.info?.(`Scanned ${data.scanned} ports — nothing found`);
+                    } else {
+                      toast.error(data.error || 'Discovery failed');
+                    }
+                  } catch (err) { toast.error(err.message); }
+                  finally { setDiscoverBusy(false); }
+                }}
+              >{discoverBusy ? 'Scanning…' : '⟳ Scan'}</button>
+            </div>
+            {discovered && discovered.length > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                {discovered.map(svc => (
+                  <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} onEndpointAdded={onEndpointAdded} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Blackboard MCP — persona selector + tool registry ── */}
-      {(() => {
-        const bbInfo = allSvcs.find(s => s.key === 'bb_mcp');
-        const bbRunning = bbInfo?.info?.running;
-        return (
-          <div className="docker-status" style={{ marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3>Blackboard MCP</h3>
-              <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: bbRunning ? 'var(--green)' : 'var(--text-faint)' }}>
-                {bbRunning ? '● live' : '● offline'}
-              </span>
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.3rem 0 0.5rem' }}>
-              Agent persona
-            </div>
-            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+      {/* ── Services: MCPs (hidden if bb-mcp offline) ── */}
+      {bbRunning && (
+        <div className="docker-status">
+          <h3>MCPs</h3>
+          {mcpSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
+
+          {/* Blackboard MCP persona + tool registry */}
+          <div style={{ marginTop: '0.6rem' }}>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Agent persona</div>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
               {BB_PERSONAS.map(p => (
                 <button
                   key={p.id}
@@ -540,9 +686,6 @@ function SystemPanel({
                 >{p.icon} {p.label}</button>
               ))}
             </div>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginBottom: '0.4rem' }}>
-              {BB_PERSONAS.find(p => p.id === bbPersona)?.desc}
-            </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <button
                 className="btn-docker-action"
@@ -552,11 +695,7 @@ function SystemPanel({
               >{bbToolsBusy ? 'Loading…' : '⟳ Load tools'}</button>
             </div>
             {bbToolsError && (
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
-                {bbToolsError.includes('Unknown connector') || bbToolsError.includes('404')
-                  ? 'bb-mcp offline — enable BB_MCP_ENABLED=true to load real tools'
-                  : bbToolsError}
-              </div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>{bbToolsError}</div>
             )}
             {bbTools && bbTools.length > 0 && (
               <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -572,160 +711,18 @@ function SystemPanel({
                 ))}
               </div>
             )}
-            {bbTools && bbTools.length === 0 && (
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>No tools available for {bbPersona} persona.</div>
-            )}
           </div>
-        );
-      })()}
-
-      <div className="docker-status">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3>External Endpoints (BYOK)</h3>
-          <button className="btn-docker-action" style={{ fontSize: '0.72rem' }} onClick={() => setByokOpen(p => !p)}>
-            {byokOpen ? 'Cancel' : '+ Add'}
-          </button>
         </div>
-        {byokOpen && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginBottom: '0.1rem' }}>
-              {PROVIDER_PRESETS.map(p => (
-                <button
-                  key={p.key}
-                  className="btn-docker-action"
-                  style={{ fontSize: '0.63rem', padding: '0.1rem 0.4rem', opacity: byokForm.key === p.key ? 1 : 0.75 }}
-                  onClick={() => setByokForm({ key: p.key, name: p.name, url: p.url, apiStyle: p.apiStyle, defaultModel: p.defaultModel, apiKey: '' })}
-                >{p.label}</button>
-              ))}
-            </div>
-            {[
-              ['key', 'Endpoint key (e.g. claude)', byokForm.key],
-              ['name', 'Display name', byokForm.name],
-              ['url', 'API base URL', byokForm.url],
-              ['defaultModel', 'Default model (optional)', byokForm.defaultModel],
-              ['apiKey', 'API key (optional)', byokForm.apiKey],
-            ].map(([field, placeholder, value]) => (
-              <input
-                key={field}
-                type={field === 'apiKey' ? 'password' : 'text'}
-                placeholder={placeholder}
-                value={value}
-                className="select"
-                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem' }}
-                onChange={e => setByokForm(p => ({ ...p, [field]: e.target.value }))}
-              />
-            ))}
-            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-              <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Style:</label>
-              <select
-                value={byokForm.apiStyle}
-                className="select"
-                style={{ fontSize: '0.72rem', padding: '0.25rem 0.4rem' }}
-                onChange={e => setByokForm(p => ({ ...p, apiStyle: e.target.value }))}
-              >
-                <option value="openai">OpenAI-compatible</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </div>
-            <button
-              className="btn-primary"
-              style={{ fontSize: '0.75rem' }}
-              disabled={byokBusy || !byokForm.key || !byokForm.url}
-              onClick={async () => {
-                setByokBusy(true);
-                try {
-                  const res = await fetch('/api/config/endpoints', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(byokForm),
-                  });
-                  const data = await res.json();
-                  if (data.success) {
-                    toast.success?.(`Added endpoint: ${byokForm.key}`);
-                    setByokForm({ key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' });
-                    setByokOpen(false);
-                    fetchByokEndpoints();
-                    onEndpointAdded?.();
-                  } else {
-                    toast.error(data.error || 'Failed to add endpoint');
-                  }
-                } catch (err) { toast.error(err.message); }
-                finally { setByokBusy(false); }
-              }}
-            >{byokBusy ? 'Adding…' : 'Add Endpoint'}</button>
-          </div>
-        )}
-        {byokEndpoints.length === 0 && !byokOpen && (
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-faint)', marginTop: '0.4rem' }}>
-            No external endpoints added. Click + Add to register a Claude, OpenAI, or custom API key.
-          </div>
-        )}
-        {byokEndpoints.map(ep => (
-          <div key={ep.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem', fontSize: '0.72rem' }}>
-            <div>
-              <span style={{ color: 'var(--text)' }}>{ep.name}</span>
-              <span style={{ color: 'var(--text-faint)', marginLeft: '0.4rem' }}>{ep.apiStyle}</span>
-              {ep.hasApiKey && <span style={{ color: 'var(--green)', marginLeft: '0.4rem' }}>● key set</span>}
-            </div>
-            <button
-              className="btn-docker-action"
-              style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
-              onClick={async () => {
-                try {
-                  await fetch(`/api/config/endpoints/${ep.key}`, { method: 'DELETE' });
-                  fetchByokEndpoints();
-                } catch (err) { toast.error(err.message); }
-              }}
-            >✕</button>
-          </div>
-        ))}
+      )}
 
-        <div style={{ marginTop: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.6rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Discover Local Services</span>
-            <button
-              className="btn-docker-action"
-              style={{ fontSize: '0.72rem' }}
-              disabled={discoverBusy}
-              onClick={async () => {
-                setDiscoverBusy(true);
-                setDiscovered(null);
-                setKnownProviders(null);
-                try {
-                  const res = await fetch('/api/discover/endpoints');
-                  const data = await res.json();
-                  if (data.success) {
-                    setDiscovered(data.discovered);
-                    setKnownProviders(data.knownProviders || []);
-                    if (data.discovered.length === 0) toast.info?.(`Scanned ${data.scanned} ports — nothing found`);
-                  } else {
-                    toast.error(data.error || 'Discovery failed');
-                  }
-                } catch (err) { toast.error(err.message); }
-                finally { setDiscoverBusy(false); }
-              }}
-            >{discoverBusy ? 'Scanning…' : '⟳ Scan'}</button>
-          </div>
-          {discoverBusy && (
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
-              Probing localhost + host.docker.internal on common LLM ports…
-            </div>
-          )}
-          {discovered !== null && discovered.length === 0 && !discoverBusy && (
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
-              No local LLM services found.
-            </div>
-          )}
-          {discovered && discovered.length > 0 && (
-            <div style={{ marginTop: '0.5rem' }}>
-              {discovered.map(svc => (
-                <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} onEndpointAdded={onEndpointAdded} />
-              ))}
-            </div>
-          )}
+      {/* ── Services: Tools ── */}
+      {toolSvcs.length > 0 && (
+        <div className="docker-status">
+          <h3>Tools</h3>
+          {toolSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
         </div>
-      </div>
+      )}
+
     </aside>
   );
 }

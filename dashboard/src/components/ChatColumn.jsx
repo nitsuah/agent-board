@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import MessageList from './MessageList.jsx';
 import ToolWorkbench from './ToolWorkbench.jsx';
 import LiminalDashboard from './LiminalDashboard.jsx';
@@ -57,6 +57,13 @@ export default function ChatColumn({
   runningServices,
   totalServices,
   wsConnected,
+  showSystemPanel,
+  setShowSystemPanel,
+  browseWorkspace,
+  refreshWorkspaceGit,
+  fetchContentClients,
+  showMetricsPanel,
+  setShowMetricsPanel,
 }) {
   const textareaRef = useAutoResize(messageInput);
   const [editingName, setEditingName] = useState(false);
@@ -201,14 +208,40 @@ export default function ChatColumn({
               value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
               onKeyDown={handleMessageInputKeyDown}
-              placeholder={loading ? 'Type to queue next message…' : 'Type your message… (Enter or Ctrl+Enter to send, Shift+Enter for newline)'}
+              placeholder={loading ? 'Queue next message…' : 'Type a message…'}
               maxLength={4000}
             />
-            <span className="input-counter" style={messageInput.length > 3200 ? { color: messageInput.length > 3800 ? 'var(--red)' : 'var(--yellow, orange)' } : undefined}>
-              {messageInput.length}/4000
-            </span>
+            <div className="chat-input-actions">
+              {loading && queueLengths[activeSession] > 0 && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  title="Stop current response and send next queued message immediately"
+                  onClick={() => forceSend(activeSession)}
+                >⚡ Force ({queueLengths[activeSession]})</button>
+              )}
+              {loading && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  title="Stop responding"
+                  onClick={() => stopSession(activeSession)}
+                >■ Stop</button>
+              )}
+              <button type="submit" className="btn-send">
+                {loading ? '+ Queue' : 'Send'}
+              </button>
+              <span className="input-counter" style={messageInput.length > 3200 ? { color: messageInput.length > 3800 ? 'var(--red)' : 'var(--yellow, orange)' } : undefined}>
+                {messageInput.length}/4k
+              </span>
+            </div>
+          </form>
+
+          {/* ── Model selector row ── */}
+          <div className="chat-model-row">
+            <span className="chat-model-row-icon">🤖</span>
             <select
-              className="select-inline"
+              className="chat-model-select"
               value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
               onChange={e => handleEndpointSelection(e.target.value)}
               title="Choose model endpoint"
@@ -222,34 +255,12 @@ export default function ChatColumn({
                 ))
               )}
             </select>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={useNemoClaw}
-                onChange={e => setUseNemoClaw(e.target.checked)}
-              />
-              NemoClaw
+            <label className="chat-nemo-toggle" title="Enable NemoClaw safety layer">
+              <input type="checkbox" checked={useNemoClaw} onChange={e => setUseNemoClaw(e.target.checked)} style={{ display: 'none' }} />
+              <span style={{ opacity: useNemoClaw ? 1 : 0.45, fontSize: '0.85rem' }}>🦅</span>
+              <span style={{ fontSize: '0.7rem', color: useNemoClaw ? 'var(--text-muted)' : 'var(--text-faint)' }}>NemoClaw</span>
             </label>
-            {loading && queueLengths[activeSession] > 0 && (
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                title="Stop current response and send next queued message immediately"
-                onClick={() => forceSend(activeSession)}
-              >⚡ Force ({queueLengths[activeSession]})</button>
-            )}
-            {loading && (
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                title="Stop responding"
-                onClick={() => stopSession(activeSession)}
-              >■ Stop</button>
-            )}
-            <button type="submit" className="btn-send">
-              {loading ? '+ Queue' : 'Send'}
-            </button>
-          </form>
+          </div>
         </>
       ) : (
         <LiminalDashboard

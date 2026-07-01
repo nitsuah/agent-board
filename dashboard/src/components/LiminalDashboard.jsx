@@ -531,9 +531,6 @@ export default function LiminalDashboard({
 
       {/* ── Top stats bar ── */}
       <div className="liminal-topbar">
-        <span className={`liminal-chip ${wsConnected ? 'liminal-chip-green' : 'liminal-chip-red'}`}>
-          <span className="liminal-dot" /> {wsConnected ? 'connected' : 'offline'}
-        </span>
         <span className="liminal-chip">{runningServices ?? 0}/{totalServices ?? 0} services</span>
         <span className="liminal-chip">{(sessions || []).length} sessions</span>
         <span className="liminal-chip liminal-chip-dim">{(selectableEndpointKeys || []).length} endpoints</span>

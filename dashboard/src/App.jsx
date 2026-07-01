@@ -102,6 +102,8 @@ function App() {
   const getAvailableEndpoints = useCallback((experienceKey) => {
     if (demoMode.enabled) return ['primary'];
     const base = EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
+    // Custom/BYOK endpoints (9router etc.) are excluded from safe chat
+    if (experienceKey === 'safechat') return base;
     const customKeys = Object.entries(dockerStatus?.endpoints || {})
       .filter(([, ep]) => ep.backendType === 'custom' || ep.backendType === 'byok')
       .map(([k]) => k);
@@ -780,10 +782,6 @@ function App() {
         setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
         deleteSession={deleteSession}
         wsConnected={wsConnected}
-        showMetricsPanel={showMetricsPanel} setShowMetricsPanel={setShowMetricsPanel}
-        showSystemPanel={showSystemPanel} setShowSystemPanel={setShowSystemPanel}
-        dockerStatus={dockerStatus} fetchContentClients={fetchContentClients}
-        runningServices={runningServices} totalServices={totalServices}
         createSession={createSession}
       />
 
@@ -881,6 +879,13 @@ function App() {
               runningServices={runningServices}
               totalServices={totalServices}
               wsConnected={wsConnected}
+              showSystemPanel={showSystemPanel}
+              setShowSystemPanel={setShowSystemPanel}
+              showMetricsPanel={showMetricsPanel}
+              setShowMetricsPanel={setShowMetricsPanel}
+              browseWorkspace={wsOps.browseWorkspace}
+              refreshWorkspaceGit={wsOps.refreshWorkspaceGit}
+              fetchContentClients={fetchContentClients}
             />
           )}
         </div>
@@ -926,28 +931,43 @@ function App() {
       {/* ── Status bar ── */}
       <div className="status-bar">
         <div className="status-bar-left">
-          <span className="status-bar-item clickable" onClick={() => setShowSystemPanel(p => !p)} title="Open system panel">
-            <span className={`status-bar-dot ${wsConnected ? 'green' : 'red'}`} />
-            {wsConnected ? 'connected' : 'offline'}
-          </span>
-          <span className="status-bar-item">
-            {runningServices}/{totalServices} services
-          </span>
-        </div>
-        <div className="status-bar-right">
+          <span className={`status-bar-dot ${wsConnected ? 'green' : 'red'}`} title={wsConnected ? 'Connected' : 'Offline'} />
           {allEndpointMeta[currentEndpoint] && (
-            <span className="status-bar-item" title="Current endpoint">
-              ⚡ {allEndpointMeta[currentEndpoint].label}
+            <span className="status-bar-item status-bar-item-mobile-icon" title={`Model: ${allEndpointMeta[currentEndpoint].label}`}>
+              <span className="status-bar-icon">🤖</span>
+              <span className="status-bar-label">{allEndpointMeta[currentEndpoint].label}</span>
             </span>
           )}
           {activeSessionData && (
-            <span className="status-bar-item" title="Active session">
-              💬 {activeSessionData.name || 'Session'}
+            <span className="status-bar-item status-bar-item-mobile-icon" title={`Session: ${activeSessionData.name}`}>
+              <span className="status-bar-icon">💬</span>
+              <span className="status-bar-label">{activeSessionData.name || 'Session'}</span>
             </span>
           )}
-          <span className="status-bar-item" title="Selected experience">
-            {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
+          <span className="status-bar-item status-bar-item-mobile-icon" title={`Experience: ${EXPERIENCE_META[selectedExperience]?.name}`}>
+            <span className="status-bar-icon">{EXPERIENCE_META[selectedExperience]?.icon}</span>
+            <span className="status-bar-label">{EXPERIENCE_META[selectedExperience]?.name}</span>
           </span>
+        </div>
+        <div className="status-bar-right">
+          {/* Services cog — far right, opens system panel */}
+          <button
+            className={`status-bar-cog ${showSystemPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowSystemPanel(prev => {
+                const next = !prev;
+                if (next) {
+                  setShowMetricsPanel(false);
+                  if (dockerStatus?.workspace?.configured) { wsOps.browseWorkspace(''); wsOps.refreshWorkspaceGit(); }
+                  fetchContentClients();
+                }
+                return next;
+              });
+            }}
+            title={`System — ${runningServices}/${totalServices} services`}
+          >
+            ⚙️ <span className="status-bar-label">{totalServices > 0 ? `${runningServices}/${totalServices}` : '…'}</span>
+          </button>
         </div>
       </div>
     </div>

@@ -25,11 +25,11 @@ export const DEVELOPER_TOOLS = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Create or overwrite a file in the workspace.',
+      description: 'Create or overwrite a file in the workspace. For documents, reports, summaries, research notes, and other output artifacts, use the artifacts/ subdirectory (e.g. artifacts/report.md). Source code and configuration go in their natural project locations.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Relative path inside workspace.' },
+          path: { type: 'string', description: 'Relative path inside workspace. Use artifacts/ prefix for output documents and reports.' },
           content: { type: 'string', description: 'Content to write.' },
         },
         required: ['path', 'content'],
