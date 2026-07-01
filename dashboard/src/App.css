@@ -3778,6 +3778,75 @@ code {
   flex-shrink: 0;
 }
 
+/* ── ToolStream — SSE streaming tool output ── */
+.tool-stream {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.8rem;
+  background: var(--surface-2);
+}
+.tool-stream-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+}
+.tool-stream-badge {
+  background: rgba(91,140,255,0.18);
+  color: var(--accent);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+.tool-stream-tool {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.tool-stream-done { color: var(--green); font-family: var(--font-mono); margin-left: auto; }
+.tool-stream-error { color: var(--red, #e05050); font-family: var(--font-mono); margin-left: auto; }
+.tool-stream-typing {
+  margin-left: auto;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.tool-stream-typing span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ts-bounce 1s infinite;
+}
+.tool-stream-typing span:nth-child(2) { animation-delay: 0.15s; }
+.tool-stream-typing span:nth-child(3) { animation-delay: 0.30s; }
+@keyframes ts-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+.tool-stream-output {
+  padding: 0.6rem 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.tool-stream-line {
+  padding: 0.1rem 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  animation: ts-fade 0.2s ease;
+}
+.tool-stream-line-faint { color: var(--text-faint); }
+@keyframes ts-fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; } }
+
 /* ── Dot-grid background on empty state (Odysseus-inspired) ── */
 .empty-state {
   background-image: radial-gradient(color-mix(in srgb, var(--border) 60%, transparent) 1px, transparent 1px);

@@ -36,6 +36,73 @@ export function createConnectorsRouter({ BB_MCP_ENABLED, BB_MCP_URL, logStructur
     }
   });
 
+  // SSE streaming endpoint for bb-mcp tool invocations
+  // GET /api/mcp/:connectorId/stream?tool=<toolName>&...params
+  // Streams tokens as text/event-stream; supports demo mode when bb-mcp is unavailable
+  router.get('/mcp/:connectorId/stream', async (req, res) => {
+    const { connectorId } = req.params;
+    const { tool = 'list_courses', demo } = req.query;
+    const baseUrl = resolveConnectorUrl(connectorId);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.flushHeaders();
+
+    const send = (evt, data) => res.write(`event: ${evt}\ndata: ${JSON.stringify(data)}\n\n`);
+
+    // If real bb-mcp is reachable, proxy the stream
+    if (baseUrl && !demo) {
+      try {
+        const proxyRes = await axios({
+          method: 'GET',
+          url: `${baseUrl}/stream`,
+          params: req.query,
+          responseType: 'stream',
+          timeout: 60000,
+          validateStatus: () => true,
+        });
+        proxyRes.data.on('data', chunk => res.write(chunk));
+        proxyRes.data.on('end', () => res.end());
+        proxyRes.data.on('error', () => { send('error', { message: 'stream error' }); res.end(); });
+        return;
+      } catch { /* fall through to demo */ }
+    }
+
+    // Demo mode: simulate a streaming tool response
+    const DEMO_SCRIPTS = {
+      list_courses: [
+        'Fetching courses from Blackboard Learn…',
+        'Found 3 active courses.',
+        '📘 CS101 — Introduction to Computer Science',
+        '📗 MATH201 — Calculus II',
+        '📙 ENG301 — Technical Writing',
+        'Done.',
+      ],
+      get_announcements: [
+        'Fetching announcements…',
+        '📢 [CS101] Midterm on Friday — bring a calculator.',
+        '📢 [MATH201] Office hours cancelled this week.',
+        'Done.',
+      ],
+      submit_assignment: [
+        'Preparing submission…',
+        'Uploading file (1/1)…',
+        '✅ Submitted successfully. Receipt ID: #A-20260701-00042',
+      ],
+    };
+    const lines = DEMO_SCRIPTS[tool] || [`Tool "${tool}" demo not available.`];
+
+    send('start', { tool, demo: true });
+    for (const line of lines) {
+      await new Promise(r => setTimeout(r, 220 + Math.random() * 180));
+      send('token', { text: line });
+    }
+    send('done', { tool, demo: true });
+    res.end();
+  });
+
   router.use('/mcp/:connectorId', async (req, res) => {
     const { connectorId } = req.params;
     const baseUrl = resolveConnectorUrl(connectorId);
