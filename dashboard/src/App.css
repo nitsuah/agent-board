@@ -1064,6 +1064,12 @@ body {
   overflow-y: auto;
   position: relative;
 }
+.chat-column.liminal-mode {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
 .content.layout-split-h .chat-column,
 .content.layout-split-v .chat-column {
   max-width: none;

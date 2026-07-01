@@ -788,7 +788,7 @@ function App() {
 
       {/* session tabs are now inline in TopBar */}
 
-      {showOnboarding && (
+      {showOnboarding && activeSession && (
         <div className="onboarding-strip">
           <div className="onboarding-copy">
             <strong>Welcome to motor-pool.</strong>

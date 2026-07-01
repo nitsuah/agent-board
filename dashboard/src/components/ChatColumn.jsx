@@ -72,7 +72,7 @@ export default function ChatColumn({
   }, [editingName]);
 
   return (
-    <div className="chat-column">
+    <div className={`chat-column${!activeSessionData ? ' liminal-mode' : ''}`}>
       {activeSessionData ? (
         <>
           <div className="chat-header">
