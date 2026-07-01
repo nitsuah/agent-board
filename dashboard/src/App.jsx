@@ -876,6 +876,10 @@ function App() {
               dockerStatus={dockerStatus}
               sessions={sessions}
               setActiveSession={setActiveSession}
+              systemServices={systemServices}
+              runningServices={runningServices}
+              totalServices={totalServices}
+              wsConnected={wsConnected}
             />
           )}
         </div>

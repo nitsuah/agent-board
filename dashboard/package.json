@@ -14,25 +14,26 @@
     "test:coverage": "node --input-type=module -e \"import { rmSync, mkdirSync } from 'node:fs'; rmSync('.v8-coverage', { recursive: true, force: true }); mkdirSync('.v8-coverage', { recursive: true });\" && node --input-type=module -e \"import { spawnSync } from 'node:child_process'; const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'; const result = spawnSync(npmCmd, ['run', 'test:unit'], { stdio: 'inherit', env: { ...process.env, NODE_V8_COVERAGE: '.v8-coverage' } }); process.exit(result.status ?? 1);\" && c8 report --temp-directory=.v8-coverage --reporter=text --reporter=lcov"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "axios": "^1.6.0",
-    "pg": "^8.13.1",
-    "ws": "^8.18.3",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-node": "^0.214.0",
-    "@opentelemetry/sdk-trace-node": "^2.6.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.72.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
     "@opentelemetry/resources": "^2.6.0",
+    "@opentelemetry/sdk-node": "^0.214.0",
+    "@opentelemetry/sdk-trace-node": "^2.6.0",
     "@opentelemetry/semantic-conventions": "^1.40.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.72.0"
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "pg": "^8.13.1",
+    "three": "^0.167.1",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
-    "vite": "^5.0.0",
     "@vitejs/plugin-react": "^4.2.0",
+    "c8": "^10.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "c8": "^10.1.2"
+    "vite": "^5.0.0"
   }
 }

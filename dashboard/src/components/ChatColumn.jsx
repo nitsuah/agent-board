@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import MessageList from './MessageList.jsx';
 import ToolWorkbench from './ToolWorkbench.jsx';
+import LiminalDashboard from './LiminalDashboard.jsx';
 
 function useAutoResize(value) {
   const ref = useRef(null);
@@ -52,6 +53,10 @@ export default function ChatColumn({
   dockerStatus,
   sessions,
   setActiveSession,
+  systemServices,
+  runningServices,
+  totalServices,
+  wsConnected,
 }) {
   const textareaRef = useAutoResize(messageInput);
   const [editingName, setEditingName] = useState(false);
@@ -247,76 +252,20 @@ export default function ChatColumn({
           </form>
         </>
       ) : (
-        <div className="empty-state">
-          <h2>No session selected</h2>
-          <p>Choose an experience and create a session to get started.</p>
-
-          <div className="experience-options">
-            {Object.entries(EXPERIENCE_META)
-              .filter(([key]) => !demoMode.enabled || key === 'safechat')
-              .map(([key, exp]) => (
-              <div
-                key={key}
-                className={`experience-option ${selectedExperience === key ? 'selected' : ''}`}
-                onClick={() => setSelectedExperience(key)}
-              >
-                <span className="exp-icon">{exp.icon}</span>
-                <div>
-                  <div className="exp-name">{exp.name}</div>
-                  <div className="exp-desc">{exp.description}</div>
-                </div>
-                {selectedExperience === key && <span className="exp-check">✓</span>}
-              </div>
-            ))}
-          </div>
-
-          <button className="btn-primary" onClick={createSession} style={{ marginBottom: '1.5rem' }}>
-            + Start a {EXPERIENCE_META[selectedExperience]?.name} Session
-          </button>
-
-          <div className="endpoint-preview">
-            <h3>Available Endpoints:</h3>
-            <ul>
-              {Object.entries(allEndpointMeta)
-                .filter(([key]) => selectableEndpointKeys.includes(key))
-                .map(([key, { label, desc }]) => {
-                const ep = dockerStatus?.endpoints?.[key];
-                return (
-                  <li key={key}>
-                    <strong>{label}</strong> — {desc}
-                    {ep && <span style={{ marginLeft: '0.4rem', color: ep.live ? 'var(--green)' : 'var(--text-faint)' }}>
-                      {ep.live ? '● live' : '● offline'}
-                    </span>}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          {sessions && sessions.length > 0 && (
-            <div className="empty-state-recent">
-              <div className="empty-state-recent-label">Recent sessions</div>
-              <div className="empty-state-recent-list">
-                {sessions.slice(0, 6).map(s => (
-                  <div
-                    key={s.id}
-                    className="empty-state-recent-item"
-                    onClick={() => setActiveSession(s.id)}
-                  >
-                    <span className="empty-state-recent-icon">
-                      {EXPERIENCE_META[s.experience]?.icon || '💬'}
-                    </span>
-                    <span className="empty-state-recent-name">{s.name}</span>
-                    <span className="empty-state-recent-meta">
-                      {s.messageCount != null ? `${s.messageCount} msgs` : ''}
-                      {s.updatedAt ? ` · ${new Date(s.updatedAt).toLocaleDateString()}` : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <LiminalDashboard
+          systemServices={systemServices}
+          dockerStatus={dockerStatus}
+          sessions={sessions}
+          allEndpointMeta={allEndpointMeta}
+          selectableEndpointKeys={selectableEndpointKeys}
+          runningServices={runningServices}
+          totalServices={totalServices}
+          wsConnected={wsConnected}
+          onSelectSession={setActiveSession}
+          onCreateSession={createSession}
+          selectedExperience={selectedExperience}
+          EXPERIENCE_META={EXPERIENCE_META}
+        />
       )}
 
       {replayMode && replayData && (
