@@ -103,7 +103,7 @@ function App() {
     if (demoMode.enabled) return ['primary'];
     const base = EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
     const customKeys = Object.entries(dockerStatus?.endpoints || {})
-      .filter(([, ep]) => ep.backendType === 'custom')
+      .filter(([, ep]) => ep.backendType === 'custom' || ep.backendType === 'byok')
       .map(([k]) => k);
     return customKeys.length ? [...new Set([...base, ...customKeys])] : base;
   }, [demoMode.enabled, dockerStatus]);

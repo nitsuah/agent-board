@@ -41,7 +41,7 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
     LLM_CONFIG[key] = {
       url,
       name: name || key,
-      backendType: 'byok',
+      backendType: 'custom',
       type: 'custom',
       apiStyle: apiStyle || 'openai',
       defaultModel: defaultModel || '',

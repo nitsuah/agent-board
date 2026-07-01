@@ -97,7 +97,9 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
         type: meta.backendBadge || 'custom',
       },
     });
-    links.push({ from: 'hub', to: `ep_${key}` });
+    const parentId = ep.backendType === 'ollama-container' && nodes.some(n => n.id === 'svc_ollama')
+      ? 'svc_ollama' : 'hub';
+    links.push({ from: parentId, to: `ep_${key}` });
   });
 
   // Sessions (latest 10)
@@ -172,16 +174,46 @@ export default function LiminalDashboard({
   runningServices, totalServices, wsConnected,
   onSelectSession, onCreateSession, selectedExperience, EXPERIENCE_META,
 }) {
-  const mountRef  = useRef(null);
-  const sceneRef  = useRef(null);
+  const mountRef      = useRef(null);
+  const sceneRef      = useRef(null);
+  const graphDataRef  = useRef(null);
   const [selected, setSelected] = useState(null);
   const [hovered,  setHovered]  = useState(null);
 
+  // Compute topology key: node IDs + link structure — changes only when nodes added/removed
+  const topologyKey = useMemo(() => {
+    const svcKeys = Object.keys(systemServices?.services || {}).sort().join(',');
+    const epKeys = (selectableEndpointKeys || []).slice().sort().join(',');
+    const sessIds = (sessions || []).slice(0, 10).map(s => s.id).join(',');
+    return `${svcKeys}|${epKeys}|${sessIds}`;
+  }, [systemServices, selectableEndpointKeys, sessions]);
+
   const graphData = useMemo(
     () => buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [systemServices, dockerStatus, sessions],
+    [systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys],
   );
+
+  // Keep a ref to the latest graphData so the topology effect can read fresh live status
+  graphDataRef.current = graphData;
+
+  // Update node materials in-place when only live status changes (no full scene rebuild)
+  useEffect(() => {
+    const sRef = sceneRef.current;
+    if (!sRef?._nodeMap) return;
+    const latest = graphDataRef.current;
+    if (!latest) return;
+    const latestByType = new Map(latest.nodes.map(n => [n.id, n.type]));
+    for (const [id, node] of sRef._nodeMap) {
+      const newType = latestByType.get(id);
+      if (newType && node.type !== newType && node._mat) {
+        node.type = newType;
+        const cfg = TYPE_CFG[newType] ?? TYPE_CFG.offline;
+        node._mat.color.setHex(cfg.hex);
+        node._mat.emissive.setHex(cfg.emissive);
+        node._mat.opacity = newType === 'offline' ? 0.45 : 0.92;
+      }
+    }
+  }, [graphData]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -469,7 +501,7 @@ export default function LiminalDashboard({
     }
 
     animate();
-    sceneRef.current = { renderer, scene, camera, controls };
+    sceneRef.current = { renderer, scene, camera, controls, _nodeMap: nodeMap };
 
     return () => {
       cancelAnimationFrame(rafId);
@@ -482,7 +514,8 @@ export default function LiminalDashboard({
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       if (mount.contains(labelCv)) mount.removeChild(labelCv);
     };
-  }, [graphData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topologyKey]);
 
   const handleOpenSession = useCallback(() => {
     if (selected?.sessionId) onSelectSession?.(selected.sessionId);
