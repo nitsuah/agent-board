@@ -3850,9 +3850,11 @@ code {
   cursor: default;
 }
 
-.liminal-chip.green  { background: rgba(137,201,127,0.15); border-color: rgba(137,201,127,0.35); color: #89c97f; }
-.liminal-chip.red    { background: rgba(224, 80, 80,0.15);  border-color: rgba(224,80,80,0.35);   color: #e05050; }
-.liminal-chip.blue   { background: rgba(91,140,255,0.15);  border-color: rgba(91,140,255,0.35);  color: #5b8cff; }
+.liminal-chip.green, .liminal-chip-green  { background: rgba(137,201,127,0.15); border-color: rgba(137,201,127,0.35); color: #89c97f; }
+.liminal-chip.red,   .liminal-chip-red    { background: rgba(224, 80, 80,0.15);  border-color: rgba(224,80,80,0.35);   color: #e05050; }
+.liminal-chip.blue,  .liminal-chip-blue   { background: rgba(91,140,255,0.15);  border-color: rgba(91,140,255,0.35);  color: #5b8cff; }
+.liminal-chip-dim { opacity: 0.7; }
+.liminal-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
 
 /* Hero CTA — centred below hub when nothing selected */
 .liminal-hero {
@@ -3992,6 +3994,7 @@ code {
   pointer-events: auto;
 }
 
+.liminal-exp-chip,
 .liminal-exp-btn {
   display: flex;
   flex-direction: column;
@@ -4007,9 +4010,20 @@ code {
   transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
+.liminal-exp-chip:hover,
 .liminal-exp-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); }
+.liminal-exp-chip.liminal-exp-chip-active,
 .liminal-exp-btn.active { background: rgba(91,140,255,0.2); border-color: rgba(91,140,255,0.5); color: #5b8cff; }
 .liminal-exp-btn .exp-emoji { font-size: 1rem; }
+
+/* Panel sub-classes used in LiminalDashboard JSX */
+.liminal-panel-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.liminal-panel-badge { font-size: 0.68rem; font-family: var(--font-mono); padding: 0.15rem 0.45rem; border-radius: 4px; background: rgba(255,255,255,0.1); }
+.liminal-panel-meta { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.5rem; }
+.liminal-panel-key { font-size: 0.7rem; color: rgba(255,255,255,0.4); }
+.liminal-panel-val { font-size: 0.7rem; font-family: var(--font-mono); color: rgba(255,255,255,0.8); word-break: break-all; }
+.liminal-panel-action { display: block; width: 100%; margin-top: 0.5rem; padding: 0.4rem; border-radius: 6px; background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; transition: filter 0.15s; }
+.liminal-panel-action:hover { filter: brightness(1.15); }
 
 /* Legend (bottom-left) */
 .liminal-legend {
@@ -4023,6 +4037,7 @@ code {
   pointer-events: none;
 }
 
+.liminal-legend-row,
 .liminal-legend-item {
   display: flex;
   align-items: center;

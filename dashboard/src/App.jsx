@@ -283,7 +283,8 @@ function App() {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        const msg = data.error || 'Action failed';
+        const raw = data.error || 'Action failed';
+        const msg = raw.includes('ENOENT') || raw.includes('spawn') ? 'compose unavailable in this environment' : raw;
         toast.error(`Service ${action} failed: ${msg}`);
         setServiceActionErrors(prev => ({ ...prev, [serviceKey]: msg }));
       } else if (action === 'start') {

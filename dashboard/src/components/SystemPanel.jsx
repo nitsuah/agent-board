@@ -280,9 +280,12 @@ function SystemPanel({
         </div>
         {allErrors.length > 0 && (
           <div className="docker-status-error-zone">
-            {allErrors.map((err, i) => (
-              <div key={i} className="docker-service-error">{err}</div>
-            ))}
+            {allErrors.map((err, i) => {
+              const friendly = typeof err === 'string' && (err.includes('ENOENT') || err.includes('docker-compose') || err.includes('spawn'))
+                ? 'compose unavailable in this environment'
+                : err;
+              return <div key={i} className="docker-service-error">{friendly}</div>;
+            })}
           </div>
         )}
       </div>
