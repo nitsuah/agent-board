@@ -74,8 +74,9 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
         body: JSON.stringify({ experience: selectedExperience, endpoint, model }),
       });
       const data = await res.json();
+      if (!res.ok || !data.success) { toast.error(data.error || 'Failed to create session'); return; }
       const sessionId = data.session?.id;
-      if (!sessionId) return;
+      if (!sessionId) { toast.error('Session created but ID missing'); return; }
       await fetch(`/api/tasks/${task.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

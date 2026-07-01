@@ -783,6 +783,7 @@ function App() {
         deleteSession={deleteSession}
         wsConnected={wsConnected}
         createSession={createSession}
+        systemServices={systemServices}
       />
 
       {/* session tabs are now inline in TopBar */}

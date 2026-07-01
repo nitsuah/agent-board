@@ -10,6 +10,16 @@
 import express from 'express';
 
 const BUILTIN_KEYS = new Set(['primary', 'docker_runner', 'glm_flash', 'openllm']);
+const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const VALID_API_STYLES = new Set(['openai', 'ollama']);
+
+function validateUrl(url) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return 'Invalid URL'; }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return 'URL must use http or https';
+  if (parsed.username || parsed.password) return 'URL must not contain embedded credentials';
+  return null;
+}
 
 export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
   const router = express.Router();
@@ -35,8 +45,13 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
     if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
       return res.status(400).json({ success: false, error: 'key must be alphanumeric/underscore/dash only' });
     }
-    if (BUILTIN_KEYS.has(key)) {
-      return res.status(400).json({ success: false, error: `"${key}" is a built-in endpoint and cannot be overwritten` });
+    if (RESERVED_KEYS.has(key) || BUILTIN_KEYS.has(key)) {
+      return res.status(400).json({ success: false, error: `"${key}" is a reserved or built-in key` });
+    }
+    const urlError = validateUrl(url);
+    if (urlError) return res.status(400).json({ success: false, error: urlError });
+    if (apiStyle && !VALID_API_STYLES.has(apiStyle)) {
+      return res.status(400).json({ success: false, error: `apiStyle must be one of: ${[...VALID_API_STYLES].join(', ')}` });
     }
     LLM_CONFIG[key] = {
       url,
@@ -47,7 +62,7 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
       defaultModel: defaultModel || '',
       apiKey: apiKey || '',
     };
-    logStructured('info', 'byok_endpoint_added', { key, url, apiStyle });
+    logStructured('info', 'byok_endpoint_added', { key, apiStyle });
     res.json({ success: true, endpoint: { key, name: LLM_CONFIG[key].name, url, apiStyle, defaultModel, hasApiKey: !!(apiKey) } });
   });
 
@@ -56,7 +71,7 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
     if (BUILTIN_KEYS.has(key)) {
       return res.status(400).json({ success: false, error: `"${key}" is a built-in endpoint and cannot be removed` });
     }
-    if (!LLM_CONFIG[key]) {
+    if (!Object.hasOwn(LLM_CONFIG, key)) {
       return res.status(404).json({ success: false, error: `Endpoint "${key}" not found` });
     }
     delete LLM_CONFIG[key];

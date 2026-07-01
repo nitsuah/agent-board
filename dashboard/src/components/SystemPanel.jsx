@@ -350,7 +350,7 @@ function SystemPanel({
         label: status.label || name, running: status.running,
         status: status.status, ports: status.ports,
         controllable: sm?.controllable, disabledReason: sm?.disabledReason,
-        backendType: sm?.backendType,
+        backendType: sm?.backendType, stats: status.stats,
       }, endpoints: containerToEndpoints[name] || null });
     }
   }
@@ -438,8 +438,13 @@ function SystemPanel({
                 setDiagBusy(true);
                 try {
                   const res = await fetch('/api/system/config-check');
+                  if (!res.ok) { setDiagResults({ error: `HTTP ${res.status}` }); return; }
                   const data = await res.json();
-                  setDiagResults(data);
+                  if (!data?.summary || !Array.isArray(data?.checks)) {
+                    setDiagResults({ error: 'Unexpected response shape' });
+                  } else {
+                    setDiagResults(data);
+                  }
                 } catch (err) { setDiagResults({ error: err.message }); }
                 finally { setDiagBusy(false); }
               }}
@@ -534,8 +539,10 @@ function SystemPanel({
                   style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
                   onClick={async () => {
                     try {
-                      await fetch(`/api/config/endpoints/${ep.key}`, { method: 'DELETE' });
+                      const res = await fetch(`/api/config/endpoints/${ep.key}`, { method: 'DELETE' });
+                      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || `HTTP ${res.status}`); return; }
                       fetchByokEndpoints();
+                      onEndpointAdded?.();
                     } catch (err) { toast.error(err.message); }
                   }}
                 >✕</button>

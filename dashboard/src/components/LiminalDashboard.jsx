@@ -180,13 +180,17 @@ export default function LiminalDashboard({
   const [selected, setSelected] = useState(null);
   const [hovered,  setHovered]  = useState(null);
 
-  // Compute topology key: node IDs + link structure — changes only when nodes added/removed
+  // Compute topology key: node IDs + link structure — changes only when nodes/links added/removed
   const topologyKey = useMemo(() => {
     const svcKeys = Object.keys(systemServices?.services || {}).sort().join(',');
     const epKeys = (selectableEndpointKeys || []).slice().sort().join(',');
+    const epTypes = selectableEndpointKeys
+      ? selectableEndpointKeys.map(k => allEndpointMeta?.[k]?.backendType || '').join(',')
+      : '';
     const sessIds = (sessions || []).slice(0, 10).map(s => s.id).join(',');
-    return `${svcKeys}|${epKeys}|${sessIds}`;
-  }, [systemServices, selectableEndpointKeys, sessions]);
+    const sessEps = (sessions || []).slice(0, 10).map(s => s.endpoint || '').join(',');
+    return `${svcKeys}|${epKeys}:${epTypes}|${sessIds}:${sessEps}`;
+  }, [systemServices, selectableEndpointKeys, allEndpointMeta, sessions]);
 
   const graphData = useMemo(
     () => buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys }),

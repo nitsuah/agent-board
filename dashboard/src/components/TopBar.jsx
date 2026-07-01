@@ -12,6 +12,7 @@ export default function TopBar({
   sessions, activeSession, setActiveSession, fetchSessionDetails, deleteSession,
   wsConnected,
   createSession,
+  systemServices,
 }) {
   const [sessionSearch, setSessionSearch] = useState('');
   const filteredSessions = sessionSearch.trim()
@@ -19,8 +20,8 @@ export default function TopBar({
     : sessions;
 
   const isServiceUp = (key) => {
-    if (key === 'content_gen') return dockerStatus?.services?.tool_content_gen?.status === 'up';
-    if (key === 'website') return dockerStatus?.services?.tool_website?.status === 'up';
+    if (key === 'content_gen') return systemServices?.services?.tool_content_gen?.status === 'up';
+    if (key === 'website') return systemServices?.services?.tool_website?.status === 'up';
     return true;
   };
 

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import MessageList from './MessageList.jsx';
 import ToolWorkbench from './ToolWorkbench.jsx';
 import LiminalDashboard from './LiminalDashboard.jsx';
+import { toast } from './Toast.jsx';
 
 function useAutoResize(value) {
   const ref = useRef(null);
@@ -140,13 +141,13 @@ export default function ChatColumn({
                     setReplayBusy(true);
                     try {
                       const res = await fetch(`/api/sessions/${activeSession}/replay`);
+                      if (!res.ok) { toast.error(`Replay failed: HTTP ${res.status}`); return; }
                       const data = await res.json();
-                      if (data.success) {
-                        setReplayData(data.replay);
-                        setReplayStep(0);
-                        setReplayMode(true);
-                      }
-                    } catch { /* ignore */ }
+                      if (!data.success) { toast.error(data.error || 'Replay unavailable'); return; }
+                      setReplayData(data.replay);
+                      setReplayStep(0);
+                      setReplayMode(true);
+                    } catch (err) { toast.error(`Replay error: ${err.message}`); }
                     finally { setReplayBusy(false); }
                   }}
                 >{replayBusy ? '…' : '▶ Replay'}</button>
@@ -256,7 +257,7 @@ export default function ChatColumn({
               )}
             </select>
             <label className="chat-nemo-toggle" title="Enable NemoClaw safety layer">
-              <input type="checkbox" checked={useNemoClaw} onChange={e => setUseNemoClaw(e.target.checked)} style={{ display: 'none' }} />
+              <input type="checkbox" checked={useNemoClaw} onChange={e => setUseNemoClaw(e.target.checked)} className="sr-only" />
               <span style={{ opacity: useNemoClaw ? 1 : 0.45, fontSize: '0.85rem' }}>🦅</span>
               <span style={{ fontSize: '0.7rem', color: useNemoClaw ? 'var(--text-muted)' : 'var(--text-faint)' }}>NemoClaw</span>
             </label>
