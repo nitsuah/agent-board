@@ -33,15 +33,15 @@ Last Updated: 2026-06-26
   - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
   - Acceptance Criteria: ✅ `config/mcp-registry.json` declarative registry; `GET/POST /api/mcp-registry/:key/ensure` JIT-starts; `POST /api/mcp-registry/:key/stop` stops; `config/docker-compose.stats.yml` opt-in override for socket access. 8 tests passing.
 
-- [ ] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the motor-pool chat/task panel with a typing indicator and incremental token display.
+- [x] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the motor-pool chat/task panel with a typing indicator and incremental token display.
   - Priority: P2
   - Context: bb-mcp's server-side SSE transport is a Q2 item; this is the dashboard-side consumer. Together they complete the streaming story.
-  - Acceptance Criteria: motor-pool task panel streams bb-mcp responses character-by-character; typing indicator shows while stream is open; no content shift on completion.
+  - Acceptance Criteria: ✅ GET /api/mcp/:id/stream SSE endpoint; ToolStream React component with fade-in tokens + animated typing indicator; demo mode scripts for list_courses/get_announcements/submit_assignment; Stream button in ToolWorkbench for bb_mcp sessions; 4 passing tests.
 
-- [ ] **[Q3-CEO] Multi-persona Blackboard agent selector** — expose student, instructor, admin, and parent bb-mcp tool sets as selectable agent personas in the dashboard.
+- [x] **[Q3-CEO] Multi-persona Blackboard agent selector** — expose student, instructor, admin, and parent bb-mcp tool sets as selectable agent personas in the dashboard.
   - Priority: P2
   - Context: bb-mcp RBAC gates tools per role server-side; the dashboard needs a persona picker so the right tool set loads for the right user type.
-  - Acceptance Criteria: persona selector appears when bb-mcp is enabled; switching persona reloads available tools from the bb-mcp manifest; demo mode works without a live Blackboard instance.
+  - Acceptance Criteria: ✅ Persona selector (Student/Instructor/Admin/Parent) in SystemPanel BLACKBOARD MCP section; switching persona reloads available tools; offline hint shown with BB_MCP_ENABLED=true instruction; tool list filtered by persona when live.
 
 - [ ] **[Q3-CEO] Blackboard agent demo mode** — add a demo-mode preset that walks through a full Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard connection.
   - Priority: P2

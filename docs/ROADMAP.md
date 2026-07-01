@@ -45,6 +45,7 @@ Last Updated: 2026-06-25
 - [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with distinct worktrees, contexts, and output streams.
 - [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
 - [x] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
+- [x] **3D LiminalDashboard home screen**: Three.js force-directed motor-pool mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
 - [ ] **Agent skills system**: Loadable first-class skill modules registered and invoked within the agent runtime (similar to Odysseus); skills layer on top of tools/ MCP servers for task-specific capabilities. Lowest priority — after plugin architecture and BYOK.
 - [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
@@ -62,10 +63,10 @@ Last Updated: 2026-06-25
 
 > motor-pool is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
 
-- [ ] **bb-mcp streaming UI**: Render streaming SSE responses from bb-mcp tools in the chat/task panel with typing indicators and incremental display.
-- [ ] **Multi-persona Blackboard workflows**: Surface student, instructor, admin, and parent bb-mcp flows as selectable agent personas with permitted toolsets.
+- [x] **bb-mcp streaming UI**: SSE endpoint `/api/mcp/:id/stream`; ToolStream React component with animated typing indicator + fade-in tokens; demo mode scripts; Stream button in ToolWorkbench; 4 passing tests.
+- [x] **Multi-persona Blackboard workflows**: Student/Instructor/Admin/Parent persona picker in SystemPanel BLACKBOARD MCP section; tool list filtered by persona; offline hint guiding BB_MCP_ENABLED=true.
 - [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
-- [ ] **bb-mcp tool registry UI**: Display available bb-mcp tools alongside other providers showing status, last invocation, and role availability.
+- [x] **bb-mcp tool registry UI**: BLACKBOARD MCP section in SystemPanel shows tool list with name/description; Load tools button fetches from /api/mcp/blackboard-learn/tools; per-persona filtering.
 - [ ] **Portfolio-grade showcase path**: Package the bb-mcp + motor-pool integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
 
 ## Notes
