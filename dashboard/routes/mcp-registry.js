@@ -113,7 +113,7 @@ export function createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRe
       await runComposeAction('stop', provider.composeService, provider.composeProfile);
       res.json({ success: true, stopped: true });
     } catch (err) {
-      res.status(500).json({ success: false, error: `Failed to stop ${provider.key}: ${err.message}` });
+      res.status(503).json({ success: false, error: `Failed to stop ${provider.key}: ${err.message}` });
     }
   });
 
