@@ -132,6 +132,36 @@ function SystemPanel({
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
 
+  // bb-mcp persona + tool registry
+  const BB_PERSONAS = [
+    { id: 'student',    label: 'Student',    icon: '🎓', desc: 'Course access, assignment submission, grade view' },
+    { id: 'instructor', label: 'Instructor', icon: '📋', desc: 'Grade management, course creation, announcements' },
+    { id: 'admin',      label: 'Admin',      icon: '⚙️',  desc: 'User management, system configuration' },
+    { id: 'parent',     label: 'Parent',     icon: '👨‍👩‍👧', desc: 'Student grade observer, limited read access' },
+  ];
+  const [bbPersona, setBbPersona] = useState('student');
+  const [bbTools, setBbTools] = useState(null);
+  const [bbToolsBusy, setBbToolsBusy] = useState(false);
+  const [bbToolsError, setBbToolsError] = useState(null);
+
+  const fetchBbTools = useCallback(async () => {
+    setBbToolsBusy(true);
+    setBbToolsError(null);
+    try {
+      const res = await fetch('/api/mcp/blackboard-learn/tools');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tools)) {
+        setBbTools(data.tools);
+      } else {
+        setBbToolsError(data.error || 'Tools unavailable');
+      }
+    } catch (err) {
+      setBbToolsError(err.message);
+    } finally {
+      setBbToolsBusy(false);
+    }
+  }, []);
+
   const fetchByokEndpoints = useCallback(async () => {
     try {
       const res = await fetch('/api/config/endpoints');
@@ -478,6 +508,76 @@ function SystemPanel({
         </div>
         {allSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
       </div>
+
+      {/* ── Blackboard MCP — persona selector + tool registry ── */}
+      {(() => {
+        const bbInfo = allSvcs.find(s => s.key === 'bb_mcp');
+        const bbRunning = bbInfo?.info?.running;
+        return (
+          <div className="docker-status" style={{ marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3>Blackboard MCP</h3>
+              <span style={{ fontSize: '0.68rem', fontFamily: 'var(--font-mono)', color: bbRunning ? 'var(--green)' : 'var(--text-faint)' }}>
+                {bbRunning ? '● live' : '● offline'}
+              </span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.3rem 0 0.5rem' }}>
+              Agent persona
+            </div>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              {BB_PERSONAS.map(p => (
+                <button
+                  key={p.id}
+                  className="btn-docker-action"
+                  title={p.desc}
+                  style={{
+                    fontSize: '0.68rem', padding: '0.2rem 0.5rem',
+                    background: bbPersona === p.id ? 'var(--accent)' : undefined,
+                    color: bbPersona === p.id ? '#fff' : undefined,
+                    borderColor: bbPersona === p.id ? 'var(--accent)' : undefined,
+                  }}
+                  onClick={() => { setBbPersona(p.id); setBbTools(null); setBbToolsError(null); }}
+                >{p.icon} {p.label}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginBottom: '0.4rem' }}>
+              {BB_PERSONAS.find(p => p.id === bbPersona)?.desc}
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                className="btn-docker-action"
+                style={{ fontSize: '0.68rem' }}
+                disabled={bbToolsBusy}
+                onClick={fetchBbTools}
+              >{bbToolsBusy ? 'Loading…' : '⟳ Load tools'}</button>
+            </div>
+            {bbToolsError && (
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>
+                {bbToolsError.includes('Unknown connector') || bbToolsError.includes('404')
+                  ? 'bb-mcp offline — enable BB_MCP_ENABLED=true to load real tools'
+                  : bbToolsError}
+              </div>
+            )}
+            {bbTools && bbTools.length > 0 && (
+              <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {bbTools.filter(t => !t.persona || t.persona === bbPersona).map(t => (
+                  <div key={t.name} style={{
+                    fontSize: '0.68rem', padding: '0.25rem 0.4rem',
+                    background: 'var(--surface-3)', borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                  }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginRight: '0.4rem' }}>{t.name}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t.description}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {bbTools && bbTools.length === 0 && (
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>No tools available for {bbPersona} persona.</div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="docker-status">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
