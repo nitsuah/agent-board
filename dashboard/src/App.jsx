@@ -936,7 +936,8 @@ function App() {
 
       {/* ── Status bar ── */}
       <div className="status-bar">
-        <div className="status-bar-left">
+        <div className="status-bar-left" />
+        <div className="status-bar-right">
           <span className={`status-bar-dot ${wsConnected ? 'green' : 'red'}`} title={wsConnected ? 'Connected' : 'Offline'} />
           {allEndpointMeta[currentEndpoint] && (
             <span className="status-bar-item status-bar-item-mobile-icon" title={`Model: ${allEndpointMeta[currentEndpoint].label}`}>
@@ -954,8 +955,6 @@ function App() {
             <span className="status-bar-icon">{EXPERIENCE_META[selectedExperience]?.icon}</span>
             <span className="status-bar-label">{EXPERIENCE_META[selectedExperience]?.name}</span>
           </span>
-        </div>
-        <div className="status-bar-right">
           {/* Services cog — far right, opens system panel */}
           <button
             className={`status-bar-cog ${showSystemPanel ? 'active' : ''}`}

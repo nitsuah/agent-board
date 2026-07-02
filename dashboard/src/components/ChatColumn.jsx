@@ -80,6 +80,30 @@ export default function ChatColumn({
   const [replayStep, setReplayStep] = useState(0);
   const [replayBusy, setReplayBusy] = useState(false);
 
+  // 9router combo detection — fetch available combos when 9router is the active endpoint
+  const [nineRouterCombos, setNineRouterCombos] = useState([]);
+  const [nineRouterCombo, setNineRouterCombo] = useState('MAX');
+  const is9Router = allEndpointMeta[currentEndpoint]?.label?.toLowerCase().includes('9router')
+    || currentEndpoint?.toLowerCase().includes('9router')
+    || currentEndpoint?.toLowerCase().includes('local_20128');
+
+  useEffect(() => {
+    if (!is9Router) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Hit 9router's /v1/models to get available combos
+        const res = await fetch('/api/proxy-models?endpoint=' + encodeURIComponent(currentEndpoint));
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.models)) {
+          setNineRouterCombos(data.models.map(m => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean));
+        }
+      } catch { /* ignore — combos will default to MAX */ }
+    })();
+    return () => { cancelled = true; };
+  }, [is9Router, currentEndpoint]);
+
   useEffect(() => {
     if (editingName && nameInputRef.current) nameInputRef.current.select();
   }, [editingName]);
@@ -137,6 +161,19 @@ export default function ChatColumn({
                   ))
                 )}
               </select>
+              {is9Router && (
+                <select
+                  className="chat-model-select chat-model-select--header"
+                  value={nineRouterCombo}
+                  onChange={e => setNineRouterCombo(e.target.value)}
+                  title="9router combo (model group)"
+                  style={{ maxWidth: '110px' }}
+                >
+                  {(nineRouterCombos.length > 0 ? nineRouterCombos : ['MAX']).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              )}
               <button
                 className={`btn-secondary btn-sm ${pausedSessions.has(activeSession) ? 'active' : ''}`}
                 title={pausedSessions.has(activeSession) ? 'Responses paused — click to resume' : 'Pause auto-response'}

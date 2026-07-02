@@ -58,7 +58,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   const links = [];
 
   nodes.push({
-    id: 'hub', label: 'motor-pool', type: 'hub', fixed: true,
+    id: 'hub', label: 'motor-pool', type: 'hub', fixed: true, internal: true,
     pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(),
     meta: { desc: 'Central AI orchestration hub', detail: 'All agents, models and sessions radiate from here.' },
   });
@@ -71,6 +71,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       id: `svc_${key}`, label: svc.label || key,
       type: svc.running ? 'service' : 'offline',
       pos: p, vel: new THREE.Vector3(),
+      internal: true,
       svcKey: key,
       meta: {
         desc: svc.running ? '● running' : '○ stopped',
@@ -102,10 +103,13 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       p.x += 3.0;
     }
 
+    // Custom/BYOK/scanned endpoints are external; ollama-container is internal
+    const isExternal = ep.backendType === 'custom' || ep.type === 'custom';
     nodes.push({
       id: `ep_${key}`, label: meta.label || key,
       type: ep.live ? 'endpoint' : 'offline',
       pos: p, vel: new THREE.Vector3(),
+      internal: !isExternal,
       epKey: key,
       meta: {
         desc: ep.live ? '● live' : '○ offline',
@@ -141,9 +145,14 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
 }
 
 // ── Physics step ──────────────────────────────────────────────────────────────
+// Active nodes attract same-state neighbors; inactive nodes cluster with other
+// inactive nodes. Cross-state pairs use standard repulsion.
 const _tmp = new THREE.Vector3();
+function isActive(node) { return node.type !== 'offline'; }
 function physicsStep(nodes, links, linkMap, dt = 0.016) {
-  const K_REP  = 9;
+  const K_REP_SAME_ACTIVE   = 4;   // tighter clustering for active nodes
+  const K_REP_SAME_INACTIVE = 3;   // tighter still for inactive (they pile up)
+  const K_REP_CROSS         = 14;  // push active away from inactive
   const K_SPR  = 0.045;
   const REST   = 5.5;
   const DAMP   = 0.90;
@@ -155,7 +164,11 @@ function physicsStep(nodes, links, linkMap, dt = 0.016) {
       const b = nodes[j];
       _tmp.subVectors(a.pos, b.pos);
       const d = Math.max(_tmp.length(), 0.5);
-      const f = K_REP / (d * d);
+      const sameState = isActive(a) === isActive(b);
+      const K = sameState
+        ? (isActive(a) ? K_REP_SAME_ACTIVE : K_REP_SAME_INACTIVE)
+        : K_REP_CROSS;
+      const f = K / (d * d);
       _tmp.normalize().multiplyScalar(f);
       a.vel.add(_tmp);
       if (!b.fixed) b.vel.sub(_tmp);
@@ -360,6 +373,38 @@ export default function LiminalDashboard({
         transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false,
       });
       scene.add(new THREE.Points(geo, mat));
+    }
+
+    // ── Internal/External separator plane ─────────────────────────
+    // A subtle translucent disc that visually separates internal services
+    // (left/centre) from external endpoints (right). Tilted to feel spatial.
+    {
+      const planeGeo = new THREE.CircleGeometry(13, 64);
+      const planeMat = new THREE.MeshBasicMaterial({
+        color: 0x5b8cff,
+        transparent: true,
+        opacity: 0.035,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.rotation.y = Math.PI / 2;       // stand it up on the YZ axis
+      plane.rotation.z = Math.PI / 10;      // slight tilt
+      plane.position.set(2.5, -1, 0);       // slightly offset toward external side
+      scene.add(plane);
+
+      // Edge ring to make the boundary visible
+      const ringGeo = new THREE.RingGeometry(12.6, 13, 64);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x5b8cff,
+        transparent: true,
+        opacity: 0.12,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      scene.add(new THREE.Mesh(ringGeo, ringMat));
     }
 
     // ── Nodes + Sprites ───────────────────────────────────────────
@@ -598,7 +643,7 @@ export default function LiminalDashboard({
       {/* Three.js mount */}
       <div ref={mountRef} className="liminal-canvas-mount" />
 
-      {/* ── Legend — upper right ── */}
+      {/* ── Legend + hint — upper right ── */}
       <div className="liminal-legend">
         {Object.entries(TYPE_CFG).filter(([k]) => k !== 'offline').map(([type, cfg]) => (
           <div key={type} className="liminal-legend-row">
@@ -606,6 +651,7 @@ export default function LiminalDashboard({
             <span>{cfg.label}</span>
           </div>
         ))}
+        <div className="liminal-hint liminal-hint--inline">drag · scroll · click</div>
       </div>
 
       {/* ── Floating CTA — only when nothing selected ── */}
@@ -696,8 +742,7 @@ export default function LiminalDashboard({
         </div>
       )}
 
-      {/* ── Hint — lower right ── */}
-      <div className="liminal-hint">drag · scroll · click</div>
+      {/* Hint now lives inside the legend block above */}
     </div>
   );
 }

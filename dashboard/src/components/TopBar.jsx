@@ -27,67 +27,27 @@ export default function TopBar({
 
   return (
     <div className="topbar">
-      {/* ── Far-left: motor-pool logo / new-session button ── */}
-      <div className="topbar-new-wrap" ref={newSessionMenuRef} style={{ marginRight: '0.25rem' }}>
-        <button className="topbar-new-btn topbar-logo-btn" onClick={() => setShowNewSessionMenu(p => !p)} title="New session">
-          <span className="topbar-logo-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <circle cx="12" cy="12" r="3"/>
-              <line x1="12" y1="2" x2="12" y2="5"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
-              <line x1="2" y1="12" x2="5" y2="12"/>
-              <line x1="19" y1="12" x2="22" y2="12"/>
-            </svg>
-          </span>
-          <span className="topbar-logo-label">motor-pool</span>
-          <span className="topbar-logo-caret">▾</span>
-        </button>
-        {showNewSessionMenu && (
-          <div className="topbar-new-panel">
-            <div className="topbar-new-section-label">Experience</div>
-            {Object.entries(EXPERIENCE_META)
-              .filter(([key]) => isServiceUp(key))
-              .filter(([key]) => !demoMode.enabled || key === 'safechat')
-              .map(([key, exp]) => (
-                <div
-                  key={key}
-                  className={`topbar-new-option ${selectedExperience === key ? 'selected' : ''}`}
-                  onClick={() => setSelectedExperience(key)}
-                >
-                  {exp.icon} {exp.name}
-                  {selectedExperience === key && <span className="topbar-check">✓</span>}
-                </div>
-              ))}
-            {selectableEndpointKeys.length > 1 && (
-              <>
-                <div className="topbar-new-section-label">Model</div>
-                {selectableEndpointKeys.map(key => (
-                  <div
-                    key={key}
-                    className={`topbar-new-option ${currentEndpoint === key ? 'selected' : ''}`}
-                    onClick={() => handleEndpointSelection(key)}
-                  >
-                    {allEndpointMeta[key]?.label || key}
-                    {currentEndpoint === key && <span className="topbar-check">✓</span>}
-                  </div>
-                ))}
-              </>
-            )}
-            <button
-              className="btn-primary"
-              style={{ width: '100%', marginTop: '0.5rem' }}
-              onClick={() => { createSession(); setShowNewSessionMenu(false); }}
-            >+ Create Session</button>
-          </div>
-        )}
-      </div>
+      {/* ── Far-left: motor icon → hub ── */}
+      <button
+        className="topbar-motor-btn"
+        title="Go to hub"
+        onClick={() => { setActiveTab('chat'); setWsLayout('single'); }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, marginRight: '0.1rem' }}
+      >
+        {/* Gear/motor icon */}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
 
       <div className="topbar-divider" />
 
-      {/* ── Layout view buttons ── */}
+      {/* ── Layout view buttons — Chat first ── */}
       <div className="topbar-tabs">
-        <button className={`icon-btn ${(activeTab === 'chat' && wsLayout === 'single') ? 'active' : ''}`} onClick={() => { setActiveTab('chat'); setWsLayout('single'); }} title="Chat">💬</button>
+        <button className={`icon-btn ${(activeTab === 'chat' && wsLayout === 'single') ? 'active' : ''}`} onClick={() => { setActiveTab('chat'); setWsLayout('single'); }} title="Chat">
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.02em' }}>Chat</span>
+        </button>
         <button className={`icon-btn ${(activeTab === 'workspace' && wsLayout === 'single') ? 'active' : ''}`} onClick={() => { setActiveTab('workspace'); setWsLayout('single'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }} title="Workspace">🗂️</button>
         <button className={`icon-btn ${wsLayout === 'split-h' ? 'active' : ''}`} onClick={() => { setWsLayout('split-h'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }} title="Split — side by side">
           <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="2" width="6" height="12" rx="1"/><rect x="9" y="2" width="6" height="12" rx="1"/></svg>

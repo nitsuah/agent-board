@@ -75,6 +75,31 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
     res.json({ success: true, endpoint: { key, name: LLM_CONFIG[key].name, url, apiStyle, defaultModel, hasApiKey: !!(apiKey) } });
   });
 
+  // Proxy /v1/models (or /api/tags) for a registered endpoint — used by the UI
+  // to fetch available combos/models from external providers like 9router.
+  router.get('/proxy-models', async (req, res) => {
+    const { endpoint } = req.query;
+    const cfg = endpoint && LLM_CONFIG[endpoint];
+    if (!cfg) return res.status(404).json({ success: false, error: 'Endpoint not found' });
+    const baseUrl = cfg.url.replace(/\/$/, '');
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    try {
+      const target = cfg.apiStyle === 'ollama'
+        ? `${baseUrl}/api/tags`
+        : `${baseUrl}${baseUrl.includes('/v1') ? '' : '/v1'}/models`;
+      const r = await fetch(target, { headers, signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return res.status(502).json({ success: false, error: `Upstream returned ${r.status}` });
+      const data = await r.json();
+      const models = cfg.apiStyle === 'ollama'
+        ? (data?.models?.map(m => m.name) || [])
+        : (data?.data?.map(m => m.id) || []);
+      res.json({ success: true, models });
+    } catch (e) {
+      res.status(502).json({ success: false, error: e.message });
+    }
+  });
+
   router.delete('/config/endpoints/:key', (req, res) => {
     const { key } = req.params;
     if (BUILTIN_KEYS.has(key)) {

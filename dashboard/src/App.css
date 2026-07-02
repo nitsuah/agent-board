@@ -4067,15 +4067,16 @@ code {
 
 /* Orbit hint — lower right */
 .liminal-hint {
-  position: absolute;
-  bottom: 0.6rem;
-  right: 0.75rem;
-  font-size: 0.65rem;
-  color: rgba(255,255,255,0.2);
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.18);
   font-family: var(--font-mono);
-  z-index: 10;
   pointer-events: none;
   line-height: 1.7;
+}
+.liminal-hint--inline {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(255,255,255,0.07);
 }
 
 /* Mobile experience selector */
@@ -4103,34 +4104,25 @@ code {
   .liminal-exp-select-wrap { display: block; }
 }
 
-/* ===== motor-pool logo button ===== */
-.topbar-logo-btn {
+/* ===== motor icon button (hub nav) ===== */
+.topbar-motor-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.22rem 0.65rem 0.22rem 0.5rem;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
   cursor: pointer;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  transition: background 0.12s, box-shadow 0.12s;
+  color: var(--accent);
+  padding: 0;
+  border-radius: 8px;
+  transition: background 0.12s, color 0.12s;
 }
-.topbar-logo-btn:hover {
+.topbar-motor-btn:hover {
   background: var(--accent-soft);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.topbar-logo-icon {
-  display: flex;
-  align-items: center;
-  opacity: 0.9;
-}
-.topbar-logo-label {
-  font-size: 0.78rem;
+  color: var(--accent);
 }
 .topbar-logo-caret {
   font-size: 0.6rem;
