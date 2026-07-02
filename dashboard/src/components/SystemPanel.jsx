@@ -600,13 +600,37 @@ function SystemPanel({
                 }}
               >{discoverBusy ? 'Scanning…' : '⟳ Scan'}</button>
             </div>
-            {discovered && discovered.length > 0 && (
-              <div style={{ marginTop: '0.5rem' }}>
-                {discovered.map(svc => (
-                  <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} onEndpointAdded={onEndpointAdded} />
-                ))}
-              </div>
-            )}
+            {discovered && discovered.length > 0 && (() => {
+              // Group by service family: ollama instances together, then named services, then generic openai-compat
+              const groups = [];
+              const ollamaSvcs = discovered.filter(s => s.apiStyle === 'ollama');
+              const namedSvcs = discovered.filter(s => s.apiStyle !== 'ollama' && s.name && !/^(OpenAI-compatible|Service) on/.test(s.name));
+              const genericSvcs = discovered.filter(s => s.apiStyle !== 'ollama' && (!s.name || /^(OpenAI-compatible|Service) on/.test(s.name)));
+              if (ollamaSvcs.length > 0) groups.push({ label: 'Ollama', svcs: ollamaSvcs });
+              if (namedSvcs.length > 0) {
+                // sub-group named services by first word of name (e.g. "9router", "LM Studio")
+                const subMap = new Map();
+                for (const s of namedSvcs) {
+                  const family = s.name.split(/[\s(]/)[0];
+                  if (!subMap.has(family)) subMap.set(family, []);
+                  subMap.get(family).push(s);
+                }
+                for (const [label, svcs] of subMap) groups.push({ label, svcs });
+              }
+              if (genericSvcs.length > 0) groups.push({ label: 'OpenAI-compatible', svcs: genericSvcs });
+              return (
+                <div style={{ marginTop: '0.5rem' }}>
+                  {groups.map(group => (
+                    <div key={group.label} style={{ marginBottom: '0.4rem' }}>
+                      <div style={{ fontSize: '0.62rem', color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.1rem' }}>{group.label}</div>
+                      {group.svcs.map(svc => (
+                        <DiscoveredServiceRow key={svc.key} svc={svc} addingKey={addingKey} setAddingKey={setAddingKey} toast={toast} fetchByokEndpoints={fetchByokEndpoints} setDiscovered={setDiscovered} onEndpointAdded={onEndpointAdded} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

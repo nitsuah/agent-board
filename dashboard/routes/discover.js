@@ -234,13 +234,15 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
       const name = hint || (apiStyle === 'ollama' ? `Ollama on :${port}` : apiStyle === 'openai' ? `OpenAI-compatible on :${port}` : `Service on :${port}`);
       const key = `local_${port}`;
 
+      // 9router uses model "MAX" as its default combo identifier
+      const defaultModel = port === 20128 ? 'MAX' : (models[0] || '');
       discovered.push({
         key,
         name,
         url,
         apiStyle,
         models,
-        defaultModel: models[0] || '',
+        defaultModel,
         requiresAuth,
         alreadyRegistered: knownUrls.has(url.replace(/\/$/, '')),
       });

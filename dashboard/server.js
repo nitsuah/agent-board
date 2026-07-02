@@ -488,11 +488,26 @@ app.get('/api/tracing/status', (req, res) => {
   res.json({ success: true, tracing: getTracingStatus() });
 });
 
+// Allow BYOK/custom endpoints (backendType === 'custom') in any non-safechat experience.
+// Safety.js only knows about builtin endpoint keys; custom keys are registered at runtime.
+function resolveSessionEndpointWithCustom(experience, requestedEndpoint) {
+  if (LLM_CONFIG[requestedEndpoint]?.backendType === 'custom' && experience !== 'safechat') {
+    return requestedEndpoint;
+  }
+  return resolveSessionEndpoint(experience, requestedEndpoint);
+}
+function isEndpointAllowedWithCustom(experience, endpoint) {
+  if (LLM_CONFIG[endpoint]?.backendType === 'custom' && experience !== 'safechat') {
+    return true;
+  }
+  return isEndpointAllowed(experience, endpoint);
+}
+
 app.use('/api/sessions', createSessionsRouter({
   sessions, sessionCounterRef, eventBus, logStructured,
   LLM_CONFIG, PUBLIC_DEMO_MODE, DEMO_EXPERIENCE, MAX_INPUT_CHARS, MAX_OUTPUT_CHARS,
   DEVICE_PROFILE, resolveRequestedExperience, isKnownExperience, isKnownSafetyMode,
-  resolveSessionEndpoint, resolveConfiguredSafetyMode, isEndpointAllowed,
+  resolveSessionEndpoint: resolveSessionEndpointWithCustom, resolveConfiguredSafetyMode, isEndpointAllowed: isEndpointAllowedWithCustom,
   getExperienceConfig, getAllowedEndpoints, coerceModelForEndpoint,
   resolveEndpointUrl, prepareSessionForLlmCall, ensureRunnableModelForSession,
   getExperienceTools, runPromptHandlers, runAgentLoop,
