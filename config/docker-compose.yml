@@ -327,9 +327,11 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_ENDPOINT=${OTEL_ENDPOINT:-http://jaeger:4318}
       - WORKSPACE_ROOT=/workspace
+      - ENDPOINT_STORE_SECRET=${ENDPOINT_STORE_SECRET:-motor-pool-default-secret-change-me}
     volumes:
       - ../:/workspace-root:ro
       - ../:/workspace:rw
+      - agent_endpoint_data:/data
     # Docker socket access is intentionally not mounted by default.
     # Add it only in a trusted dev override/profile when Docker control is explicitly needed.
     # healthcheck is disabled until a stable in-container HTTP client is available
@@ -470,6 +472,7 @@ volumes:
   openllm_data:  # OpenLLM/HuggingFace + BentoML model cache
   nemoclaw_data:
   website_output:  # Persistent storage for generated client sites and pitch materials
+  agent_endpoint_data:  # Encrypted custom endpoint store (survives restarts)
 
 networks:
   agent-network:

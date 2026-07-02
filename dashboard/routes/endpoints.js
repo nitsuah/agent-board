@@ -8,6 +8,7 @@
  * They are lost on server restart (user re-enters via UI).
  */
 import express from 'express';
+import { saveEndpoints } from '../modules/endpoint-store.js';
 
 const BUILTIN_KEYS = new Set(['primary', 'docker_runner', 'glm_flash', 'openllm']);
 const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -19,6 +20,13 @@ function validateUrl(url) {
   if (!['http:', 'https:'].includes(parsed.protocol)) return 'URL must use http or https';
   if (parsed.username || parsed.password) return 'URL must not contain embedded credentials';
   return null;
+}
+
+function persistCustomEndpoints(LLM_CONFIG) {
+  const custom = Object.entries(LLM_CONFIG)
+    .filter(([, cfg]) => cfg.backendType === 'custom')
+    .map(([key, cfg]) => ({ key, url: cfg.url, name: cfg.name, apiStyle: cfg.apiStyle, defaultModel: cfg.defaultModel, apiKey: cfg.apiKey || '' }));
+  saveEndpoints(custom);
 }
 
 export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
@@ -63,6 +71,7 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
       apiKey: apiKey || '',
     };
     logStructured('info', 'byok_endpoint_added', { key, apiStyle });
+    persistCustomEndpoints(LLM_CONFIG);
     res.json({ success: true, endpoint: { key, name: LLM_CONFIG[key].name, url, apiStyle, defaultModel, hasApiKey: !!(apiKey) } });
   });
 
@@ -76,6 +85,7 @@ export function createEndpointsRouter({ LLM_CONFIG, logStructured }) {
     }
     delete LLM_CONFIG[key];
     logStructured('info', 'byok_endpoint_removed', { key });
+    persistCustomEndpoints(LLM_CONFIG);
     res.json({ success: true, removed: key });
   });
 

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { loadEndpoints } from './endpoint-store.js';
 dotenv.config();
 
 export function isTruthyEnv(value) {
@@ -55,7 +56,29 @@ export const LLM_CONFIG = {
 };
 
 // ── Custom endpoint registry ──────────────────────────────────────────────────
+function applyCustomEndpoint(ep) {
+  if (!ep.key || !ep.url) {
+    console.warn('[config] Skipping custom endpoint missing key or url:', ep);
+    return;
+  }
+  LLM_CONFIG[ep.key] = {
+    url: ep.url,
+    name: ep.name || ep.key,
+    backendType: 'custom',
+    type: ep.type || 'custom',
+    apiStyle: ep.apiStyle || 'openai',
+    defaultModel: ep.defaultModel || '',
+    apiKey: ep.apiKey || '',
+  };
+}
+
 (function loadCustomEndpoints() {
+  // 1. Load from persisted store (survives restarts, API keys encrypted on disk)
+  try {
+    for (const ep of loadEndpoints()) applyCustomEndpoint(ep);
+  } catch (e) { console.warn('[config] Could not load persisted endpoints:', e.message); }
+
+  // 2. Load from CUSTOM_LLM_ENDPOINTS env (static config, lower precedence)
   const raw = process.env.CUSTOM_LLM_ENDPOINTS;
   if (!raw) return;
   let entries;
@@ -69,21 +92,7 @@ export const LLM_CONFIG = {
     console.error('[config] CUSTOM_LLM_ENDPOINTS must be a JSON array');
     return;
   }
-  for (const ep of entries) {
-    if (!ep.key || !ep.url) {
-      console.warn('[config] Skipping custom endpoint missing key or url:', ep);
-      continue;
-    }
-    LLM_CONFIG[ep.key] = {
-      url: ep.url,
-      name: ep.name || ep.key,
-      backendType: 'custom',
-      type: ep.type || 'custom',
-      apiStyle: ep.apiStyle || 'openai',
-      defaultModel: ep.defaultModel || '',
-      apiKey: ep.apiKey || '',
-    };
-  }
+  for (const ep of entries) applyCustomEndpoint(ep);
 })();
 
 export const NEMOCLAW_URL = process.env.NEMOCLAW_URL || 'http://localhost:9000';
