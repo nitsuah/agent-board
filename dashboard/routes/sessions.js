@@ -274,6 +274,23 @@ export function createSessionsRouter({
     res.json({ success: true, name: session.name });
   });
 
+  router.patch('/:id/experience', express.json(), (req, res) => {
+    const session = sessions.get(req.params.id);
+    if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
+    const { experience } = req.body || {};
+    if (!experience || !isKnownExperience(experience)) {
+      return res.status(400).json({ success: false, error: 'Invalid experience' });
+    }
+    if (PUBLIC_DEMO_MODE && experience !== 'safechat') {
+      return res.status(403).json({ success: false, error: 'Demo mode locked to safechat' });
+    }
+    session.experience = experience;
+    session.updatedAt = new Date();
+    upsertSessionContext(session, logStructured);
+    logStructured('info', 'session_experience_changed', { session_id: session.id, experience });
+    res.json({ success: true, experience });
+  });
+
   router.put('/:id/model', async (req, res) => {
     const session = sessions.get(req.params.id);
     if (!session) return res.status(404).json({ success: false, error: 'Session not found' });

@@ -67,6 +67,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   const svcs = Object.entries(systemServices?.services || {});
   svcs.forEach(([key, svc], i) => {
     const p = goldenPos(i, svcs.length, 5.5);
+    p.y = (p.y * 0.25) - 0.5;   // flatten services into accretion disk
     nodes.push({
       id: `svc_${key}`, label: svc.label || key,
       type: svc.running ? 'service' : 'offline',
@@ -92,15 +93,21 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     const parentId = isOllamaChild ? 'svc_ollama' : 'hub';
     const parentNode = nodes.find(n => n.id === parentId);
 
-    // Place ollama-child endpoints further from hub by starting offset from parent's position
+    // Place ollama-child endpoints in the accretion disk (low, internal).
+    // External/custom endpoints float in the elevated public layer (high y).
     let p;
     if (isOllamaChild && parentNode) {
       p = goldenPos(i, eps.length, 5.0);
-      // Shift outward from hub in same hemisphere as the parent
       p.addScaledVector(parentNode.pos.clone().normalize(), 5.5);
+      p.y = (p.y * 0.2) - 0.5;   // flatten to disk
+    } else if (ep.backendType === 'custom' || ep.type === 'custom') {
+      // External — place in elevated public layer
+      const angle = (i / Math.max(eps.length, 1)) * Math.PI * 2;
+      const radius = 7 + (i % 3) * 1.5;
+      p = new THREE.Vector3(Math.cos(angle) * radius, 6.5 + (i % 2) * 1.2, Math.sin(angle) * radius);
     } else {
       p = goldenPos(i, eps.length, 8.5);
-      p.x += 3.0;
+      p.y = (p.y * 0.3) - 0.5;   // flatten to disk plane
     }
 
     // Custom/BYOK/scanned endpoints are external; ollama-container is internal
@@ -375,36 +382,71 @@ export default function LiminalDashboard({
       scene.add(new THREE.Points(geo, mat));
     }
 
-    // ── Internal/External separator plane ─────────────────────────
-    // A subtle translucent disc that visually separates internal services
-    // (left/centre) from external endpoints (right). Tilted to feel spatial.
+    // ── Accretion disk + public layer ─────────────────────────────
+    // The hub is the "sun". Internal services orbit in a horizontal accretion
+    // disk at y≈0. External/public endpoints (9router etc.) sit in a second
+    // elevated plane above, visually separating cloud-facing from local infra.
     {
-      const planeGeo = new THREE.CircleGeometry(13, 64);
-      const planeMat = new THREE.MeshBasicMaterial({
+      // Accretion disk — inner orbital band around the hub (internal layer)
+      const diskGeo = new THREE.RingGeometry(3.5, 11, 80);
+      const diskMat = new THREE.MeshBasicMaterial({
         color: 0x5b8cff,
         transparent: true,
-        opacity: 0.035,
+        opacity: 0.04,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      const plane = new THREE.Mesh(planeGeo, planeMat);
-      plane.rotation.y = Math.PI / 2;       // stand it up on the YZ axis
-      plane.rotation.z = Math.PI / 10;      // slight tilt
-      plane.position.set(2.5, -1, 0);       // slightly offset toward external side
-      scene.add(plane);
+      const disk = new THREE.Mesh(diskGeo, diskMat);
+      // Horizontal (XZ plane) with slight tilt for perspective depth
+      disk.rotation.x = Math.PI / 2 - 0.18;
+      disk.position.y = -0.5;
+      scene.add(disk);
 
-      // Edge ring to make the boundary visible
-      const ringGeo = new THREE.RingGeometry(12.6, 13, 64);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x5b8cff,
+      // Accretion disk edge glow
+      const edgeGeo = new THREE.RingGeometry(10.7, 11.1, 80);
+      const edgeMat = new THREE.MeshBasicMaterial({
+        color: 0x89c97f,
         transparent: true,
-        opacity: 0.12,
+        opacity: 0.14,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      scene.add(new THREE.Mesh(ringGeo, ringMat));
+      const edge = new THREE.Mesh(edgeGeo, edgeMat);
+      edge.rotation.x = Math.PI / 2 - 0.18;
+      edge.position.y = -0.5;
+      scene.add(edge);
+
+      // Public/external layer — elevated horizontal plane above the disk
+      const pubGeo = new THREE.CircleGeometry(13, 72);
+      const pubMat = new THREE.MeshBasicMaterial({
+        color: 0xc298e0,
+        transparent: true,
+        opacity: 0.025,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const pub = new THREE.Mesh(pubGeo, pubMat);
+      pub.rotation.x = Math.PI / 2 - 0.12;
+      pub.position.y = 6.5;
+      scene.add(pub);
+
+      // Public layer edge ring
+      const pubEdgeGeo = new THREE.RingGeometry(12.6, 13, 72);
+      const pubEdgeMat = new THREE.MeshBasicMaterial({
+        color: 0xc298e0,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const pubEdge = new THREE.Mesh(pubEdgeGeo, pubEdgeMat);
+      pubEdge.rotation.x = Math.PI / 2 - 0.12;
+      pubEdge.position.y = 6.5;
+      scene.add(pubEdge);
     }
 
     // ── Nodes + Sprites ───────────────────────────────────────────

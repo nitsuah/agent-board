@@ -174,6 +174,30 @@ export default function ChatColumn({
                   ))}
                 </select>
               )}
+              {/* Per-session experience switcher */}
+              {activeSessionData && EXPERIENCE_META && !demoMode.enabled && (
+                <select
+                  className="chat-model-select chat-model-select--header"
+                  value={activeSessionData.experience || selectedExperience}
+                  onChange={async e => {
+                    const exp = e.target.value;
+                    try {
+                      await fetch(`/api/sessions/${activeSession}/experience`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ experience: exp }),
+                      });
+                      if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+                    } catch { /* ignore */ }
+                  }}
+                  title="Switch experience for this session"
+                  style={{ maxWidth: '120px' }}
+                >
+                  {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+                    <option key={key} value={key}>{exp.icon} {exp.name}</option>
+                  ))}
+                </select>
+              )}
               <button
                 className={`btn-secondary btn-sm ${pausedSessions.has(activeSession) ? 'active' : ''}`}
                 title={pausedSessions.has(activeSession) ? 'Responses paused — click to resume' : 'Pause auto-response'}

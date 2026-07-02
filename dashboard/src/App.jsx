@@ -958,16 +958,6 @@ function App() {
               <span className="status-bar-label">{allEndpointMeta[currentEndpoint].label}</span>
             </span>
           )}
-          {activeSessionData && (
-            <span className="status-bar-item status-bar-item-mobile-icon" title={`Session: ${activeSessionData.name}`}>
-              <span className="status-bar-icon">💬</span>
-              <span className="status-bar-label">{activeSessionData.name || 'Session'}</span>
-            </span>
-          )}
-          <span className="status-bar-item status-bar-item-mobile-icon" title={`Experience: ${EXPERIENCE_META[selectedExperience]?.name}`}>
-            <span className="status-bar-icon">{EXPERIENCE_META[selectedExperience]?.icon}</span>
-            <span className="status-bar-label">{EXPERIENCE_META[selectedExperience]?.name}</span>
-          </span>
           {/* Services cog — far right, opens system panel */}
           <button
             className={`status-bar-cog ${showSystemPanel ? 'active' : ''}`}
