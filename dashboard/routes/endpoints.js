@@ -11,7 +11,7 @@ import express from 'express';
 
 const BUILTIN_KEYS = new Set(['primary', 'docker_runner', 'glm_flash', 'openllm']);
 const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const VALID_API_STYLES = new Set(['openai', 'ollama']);
+const VALID_API_STYLES = new Set(['openai', 'ollama', 'anthropic', 'gemini']);
 
 function validateUrl(url) {
   let parsed;
