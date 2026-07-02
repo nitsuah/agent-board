@@ -4241,15 +4241,19 @@ code {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-shrink: 0;
 }
 .chat-input-form {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.5rem;
   padding: 0.75rem 0 0.5rem;
   border-top: 1px solid var(--border);
+}
+.chat-input-form .chat-textarea {
+  flex: 1;
+  min-width: 0;
 }
 .input-counter {
   font-size: 0.63rem;
