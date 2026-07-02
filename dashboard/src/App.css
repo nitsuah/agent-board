@@ -4330,6 +4330,16 @@ code {
   min-width: 0;
 }
 .chat-model-select:disabled { opacity: 0.4; cursor: default; }
+.chat-model-select--header {
+  flex: unset;
+  max-width: 140px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
 .sr-only {
   position: absolute;
   width: 1px;

@@ -122,6 +122,21 @@ export default function ChatColumn({
               )}
             </div>
             <div className="chat-header-actions">
+              <select
+                className="chat-model-select chat-model-select--header"
+                value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
+                onChange={e => handleEndpointSelection(e.target.value)}
+                title="Choose model endpoint"
+                disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
+              >
+                {selectableEndpointKeys.length === 0 ? (
+                  <option value="">No models online</option>
+                ) : (
+                  selectableEndpointKeys.map((key) => (
+                    <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
+                  ))
+                )}
+              </select>
               <button
                 className={`btn-secondary btn-sm ${pausedSessions.has(activeSession) ? 'active' : ''}`}
                 title={pausedSessions.has(activeSession) ? 'Responses paused — click to resume' : 'Pause auto-response'}
@@ -243,30 +258,16 @@ export default function ChatColumn({
             </div>
           </form>
 
-          {/* ── Model selector row ── */}
-          <div className="chat-model-row">
-            <span className="chat-model-row-icon">🤖</span>
-            <select
-              className="chat-model-select"
-              value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
-              onChange={e => handleEndpointSelection(e.target.value)}
-              title="Choose model endpoint"
-              disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
-            >
-              {selectableEndpointKeys.length === 0 ? (
-                <option value="">No models online</option>
-              ) : (
-                selectableEndpointKeys.map((key) => (
-                  <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
-                ))
-              )}
-            </select>
-            <label className="chat-nemo-toggle" title="Enable NemoClaw safety layer">
-              <input type="checkbox" checked={useNemoClaw} onChange={e => setUseNemoClaw(e.target.checked)} className="sr-only" />
-              <span style={{ opacity: useNemoClaw ? 1 : 0.45, fontSize: '0.85rem' }}>🦅</span>
-              <span style={{ fontSize: '0.7rem', color: useNemoClaw ? 'var(--text-muted)' : 'var(--text-faint)' }}>NemoClaw</span>
-            </label>
-          </div>
+          {/* ── NemoClaw toggle (only when service is running) ── */}
+          {systemServices?.services?.nemoclaw?.status === 'up' && (
+            <div className="chat-model-row">
+              <label className="chat-nemo-toggle" title="Enable NemoClaw safety layer">
+                <input type="checkbox" checked={useNemoClaw} onChange={e => setUseNemoClaw(e.target.checked)} className="sr-only" />
+                <span style={{ opacity: useNemoClaw ? 1 : 0.45, fontSize: '0.85rem' }}>🦅</span>
+                <span style={{ fontSize: '0.7rem', color: useNemoClaw ? 'var(--text-muted)' : 'var(--text-faint)' }}>NemoClaw</span>
+              </label>
+            </div>
+          )}
         </>
       ) : (
         <LiminalDashboard
