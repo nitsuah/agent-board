@@ -71,34 +71,49 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       id: `svc_${key}`, label: svc.label || key,
       type: svc.running ? 'service' : 'offline',
       pos: p, vel: new THREE.Vector3(),
+      svcKey: key,
       meta: {
         desc: svc.running ? '● running' : '○ stopped',
         backend: svc.backendType || '',
+        ports: svc.ports || '',
         stats: svc.stats ? `CPU ${svc.stats.cpu}  MEM ${svc.stats.memPerc}` : '',
       },
     });
     links.push({ from: 'hub', to: `svc_${key}` });
   });
 
-  // Endpoints
+  // Endpoints — ollama-container endpoints link to svc_ollama and start further out
   const eps = (selectableEndpointKeys || []);
   eps.forEach((key, i) => {
     const ep = (dockerStatus?.endpoints || {})[key] || {};
     const meta = allEndpointMeta?.[key] || {};
-    const p = goldenPos(i, eps.length, 7);
-    p.x += 3.5;
+    const isOllamaChild = ep.backendType === 'ollama-container' && nodes.some(n => n.id === 'svc_ollama');
+    const parentId = isOllamaChild ? 'svc_ollama' : 'hub';
+    const parentNode = nodes.find(n => n.id === parentId);
+
+    // Place ollama-child endpoints further from hub by starting offset from parent's position
+    let p;
+    if (isOllamaChild && parentNode) {
+      p = goldenPos(i, eps.length, 5.0);
+      // Shift outward from hub in same hemisphere as the parent
+      p.addScaledVector(parentNode.pos.clone().normalize(), 5.5);
+    } else {
+      p = goldenPos(i, eps.length, 8.5);
+      p.x += 3.0;
+    }
+
     nodes.push({
       id: `ep_${key}`, label: meta.label || key,
       type: ep.live ? 'endpoint' : 'offline',
       pos: p, vel: new THREE.Vector3(),
+      epKey: key,
       meta: {
         desc: ep.live ? '● live' : '○ offline',
         model: ep.model || '',
-        type: meta.backendBadge || 'custom',
+        type: meta.backendBadge || meta.backendType || 'custom',
+        url: ep.resolvedUrl || '',
       },
     });
-    const parentId = ep.backendType === 'ollama-container' && nodes.some(n => n.id === 'svc_ollama')
-      ? 'svc_ollama' : 'hub';
     links.push({ from: parentId, to: `ep_${key}` });
   });
 
@@ -163,9 +178,67 @@ function physicsStep(nodes, links, linkMap, dt = 0.016) {
     if (n.fixed) continue;
     n.vel.multiplyScalar(DAMP);
     n.pos.addScaledVector(n.vel, dt);
-    // Gentle containment
     if (n.pos.length() > 18) n.pos.setLength(18);
   }
+}
+
+// ── Service node detail panel content ────────────────────────────────────────
+function ServiceDetail({ node, systemServices, dockerStatus, modelPulls, serviceActionsInFlight, onRunServiceAction, onPullModel, knownModels }) {
+  const svcKey = node.svcKey;
+  const svc = systemServices?.services?.[svcKey];
+  const canControl = !!(systemServices?.dockerControlEnabled && svc?.controllable);
+  const isRunning = svc?.running ?? false;
+
+  const containerEndpoints = svcKey === 'ollama'
+    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === 'ollama-container')
+    : svcKey === 'llm_openllm'
+    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === 'openllm-container')
+    : [];
+
+  return (
+    <div style={{ fontSize: '0.72rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+        <span style={{ color: isRunning ? 'var(--green)' : 'var(--text-faint)' }}>
+          {isRunning ? '● running' : '○ offline'}
+        </span>
+        {canControl && (
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            {isRunning ? (
+              <>
+                <button className="btn-service-icon restart-btn" disabled={serviceActionsInFlight?.[`${svcKey}:restart`]} title="Restart" onClick={() => onRunServiceAction?.(svcKey, 'restart')}>{serviceActionsInFlight?.[`${svcKey}:restart`] ? '…' : '↺'}</button>
+                <button className="btn-service-icon stop-btn" disabled={serviceActionsInFlight?.[`${svcKey}:stop`]} title="Stop" onClick={() => onRunServiceAction?.(svcKey, 'stop')}>{serviceActionsInFlight?.[`${svcKey}:stop`] ? '…' : '■'}</button>
+              </>
+            ) : (
+              <button className="btn-service-icon start-btn" disabled={serviceActionsInFlight?.[`${svcKey}:start`]} title="Start" onClick={() => onRunServiceAction?.(svcKey, 'start')}>{serviceActionsInFlight?.[`${svcKey}:start`] ? '…' : '▶'}</button>
+            )}
+          </div>
+        )}
+      </div>
+      {svc?.ports && <div style={{ color: 'var(--text-faint)', marginBottom: '0.3rem', fontFamily: 'var(--font-mono)', fontSize: '0.67rem' }}>port {svc.ports}</div>}
+      {svc?.stats && isRunning && (
+        <div style={{ color: 'var(--text-faint)', fontSize: '0.63rem', fontFamily: 'var(--font-mono)', marginBottom: '0.3rem', display: 'flex', gap: '0.5rem' }}>
+          <span>CPU {svc.stats.cpu}</span><span>{svc.stats.mem}</span><span>({svc.stats.memPerc})</span>
+        </div>
+      )}
+      {containerEndpoints.map(([epKey, ep]) => {
+        const pullKey = `${epKey}:${ep.model}`;
+        const pull = modelPulls?.[pullKey];
+        const installed = ep.modelInstalled ?? ep.modelLoaded;
+        const pulling = pull?.status === 'pulling';
+        return (
+          <div key={epKey} style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.67rem' }}>{ep.model || '—'}</span>
+            {installed && <span style={{ color: 'var(--green)', fontSize: '0.63rem' }}>✓</span>}
+            {!installed && ep.model && <span style={{ color: 'var(--yellow)', fontSize: '0.63rem' }}>not pulled</span>}
+            {pull?.status === 'pulling' && <span style={{ color: 'var(--accent)', fontSize: '0.63rem' }}>{pull.percent != null ? `${pull.percent}%` : 'pulling…'}</span>}
+            {!installed && ep.model && onPullModel && (
+              <button className="btn-docker-action" style={{ fontSize: '0.63rem', padding: '0.1rem 0.3rem' }} disabled={pulling} onClick={() => onPullModel(epKey, ep.model)}>Pull</button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -173,6 +246,7 @@ export default function LiminalDashboard({
   systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys,
   runningServices, totalServices, wsConnected,
   onSelectSession, onCreateSession, selectedExperience, EXPERIENCE_META,
+  onRunServiceAction, serviceActionsInFlight, modelPulls, onPullModel, knownModels,
 }) {
   const mountRef      = useRef(null);
   const sceneRef      = useRef(null);
@@ -197,7 +271,6 @@ export default function LiminalDashboard({
     [systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys],
   );
 
-  // Keep a ref to the latest graphData so the topology effect can read fresh live status
   graphDataRef.current = graphData;
 
   // Update node materials in-place when only live status changes (no full scene rebuild)
@@ -321,7 +394,6 @@ export default function LiminalDashboard({
       node._mesh = mesh;
       node._mat  = mat;
 
-      // Hub gets an extra wire ring
       if (node.type === 'hub') {
         const ring = new THREE.Mesh(
           new THREE.TorusGeometry(cfg.radius * 1.55, 0.035, 8, 64),
@@ -332,7 +404,6 @@ export default function LiminalDashboard({
         node._ring = ring;
       }
 
-      // Glow sprite
       const spMat = new THREE.SpriteMaterial({
         map: getGlowTex(cfg.glowHex),
         transparent: true,
@@ -430,12 +501,10 @@ export default function LiminalDashboard({
       rafId = requestAnimationFrame(animate);
       frame++;
 
-      // Physics settles after ~500 frames
       if (frame < 500) physicsStep(nodes, links, nodeMap);
 
       const t = frame * 0.016;
 
-      // Sync mesh positions
       for (const n of nodes) {
         n._mesh.position.copy(n.pos);
         if (n._ring) {
@@ -443,13 +512,11 @@ export default function LiminalDashboard({
           n._ring.rotation.z = t * 0.4;
           n._ring.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.15;
         }
-        // Hover scale pop
         const isHov = n.id === _hovId;
         const targetScale = isHov ? 1.3 : 1.0;
         n._mesh.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
       }
 
-      // Sync glow sprites
       for (const { sprite, node, spMat } of spriteList) {
         sprite.position.copy(node.pos);
         const pulse = 0.88 + 0.12 * Math.sin(t * 1.8 + node.pos.x * 0.4);
@@ -458,10 +525,8 @@ export default function LiminalDashboard({
         spMat.opacity = (baseOp + hovBoost) * pulse;
       }
 
-      // Key light pulse
       keyL.intensity = 3.5 + 0.8 * Math.sin(t * 0.6);
 
-      // Sync link lines
       for (const { geo, src, tgt } of linkObjects) {
         const pos = geo.getAttribute('position');
         pos.setXYZ(0, src.pos.x, src.pos.y, src.pos.z);
@@ -533,11 +598,14 @@ export default function LiminalDashboard({
       {/* Three.js mount */}
       <div ref={mountRef} className="liminal-canvas-mount" />
 
-      {/* ── Top stats bar ── */}
-      <div className="liminal-topbar">
-        <span className="liminal-chip">{runningServices ?? 0}/{totalServices ?? 0} services</span>
-        <span className="liminal-chip">{(sessions || []).length} sessions</span>
-        <span className="liminal-chip liminal-chip-dim">{(selectableEndpointKeys || []).length} endpoints</span>
+      {/* ── Legend — upper right ── */}
+      <div className="liminal-legend">
+        {Object.entries(TYPE_CFG).filter(([k]) => k !== 'offline').map(([type, cfg]) => (
+          <div key={type} className="liminal-legend-row">
+            <span className="liminal-legend-dot" style={{ background: `#${cfg.hex.toString(16).padStart(6,'0')}` }} />
+            <span>{cfg.label}</span>
+          </div>
+        ))}
       </div>
 
       {/* ── Floating CTA — only when nothing selected ── */}
@@ -551,20 +619,35 @@ export default function LiminalDashboard({
         </div>
       )}
 
-      {/* ── Experience quick-pick ── */}
+      {/* ── Experience quick-pick — desktop strip / mobile dropdown ── */}
       {!selected && Object.keys(exp).length > 0 && (
-        <div className="liminal-exp-strip">
-          {Object.entries(exp).map(([key, e]) => (
-            <button
-              key={key}
-              className={`liminal-exp-chip ${selectedExperience === key ? 'liminal-exp-chip-active' : ''}`}
-              onClick={() => onCreateSession?.(key)}
-              title={e.description}
+        <>
+          {/* Desktop: pill strip */}
+          <div className="liminal-exp-strip">
+            {Object.entries(exp).map(([key, e]) => (
+              <button
+                key={key}
+                className={`liminal-exp-chip ${selectedExperience === key ? 'liminal-exp-chip-active' : ''}`}
+                onClick={() => onCreateSession?.(key)}
+                title={e.description}
+              >
+                {e.icon} {e.name}
+              </button>
+            ))}
+          </div>
+          {/* Mobile: dropdown */}
+          <div className="liminal-exp-select-wrap">
+            <select
+              className="liminal-exp-select"
+              value={selectedExperience || ''}
+              onChange={e => onCreateSession?.(e.target.value)}
             >
-              {e.icon} {e.name}
-            </button>
-          ))}
-        </div>
+              {Object.entries(exp).map(([key, e]) => (
+                <option key={key} value={key}>{e.icon} {e.name}</option>
+              ))}
+            </select>
+          </div>
+        </>
       )}
 
       {/* ── Node detail panel ── */}
@@ -575,16 +658,35 @@ export default function LiminalDashboard({
             <button className="liminal-panel-close" onClick={() => { setSelected(null); sceneRef.current?.controls && (sceneRef.current.controls.autoRotate = true); }}>✕</button>
           </div>
           <div className="liminal-panel-name">{selected.label}</div>
-          <div className="liminal-panel-meta">
-            {Object.entries(selected.meta ?? {}).map(([k, v]) =>
-              v ? (
-                <div key={k} className="liminal-panel-row">
-                  <span className="liminal-panel-key">{k}</span>
-                  <span className="liminal-panel-val">{String(v)}</span>
-                </div>
-              ) : null
-            )}
-          </div>
+
+          {/* Service node: show controls */}
+          {(selected.type === 'service' || (selected.type === 'offline' && selected.svcKey)) && (
+            <ServiceDetail
+              node={selected}
+              systemServices={systemServices}
+              dockerStatus={dockerStatus}
+              modelPulls={modelPulls}
+              serviceActionsInFlight={serviceActionsInFlight}
+              onRunServiceAction={onRunServiceAction}
+              onPullModel={onPullModel}
+              knownModels={knownModels}
+            />
+          )}
+
+          {/* Endpoint / session: show meta rows */}
+          {(selected.type !== 'service' && !(selected.type === 'offline' && selected.svcKey)) && (
+            <div className="liminal-panel-meta">
+              {Object.entries(selected.meta ?? {}).map(([k, v]) =>
+                v ? (
+                  <div key={k} className="liminal-panel-row">
+                    <span className="liminal-panel-key">{k}</span>
+                    <span className="liminal-panel-val">{String(v)}</span>
+                  </div>
+                ) : null
+              )}
+            </div>
+          )}
+
           {selected.type === 'session' && (
             <button className="liminal-panel-action" onClick={handleOpenSession}>Open Session →</button>
           )}
@@ -594,17 +696,7 @@ export default function LiminalDashboard({
         </div>
       )}
 
-      {/* ── Legend ── */}
-      <div className="liminal-legend">
-        {Object.entries(TYPE_CFG).filter(([k]) => k !== 'offline').map(([type, cfg]) => (
-          <div key={type} className="liminal-legend-row">
-            <span className="liminal-legend-dot" style={{ background: `#${cfg.hex.toString(16).padStart(6,'0')}` }} />
-            <span>{cfg.label}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Hint ── */}
+      {/* ── Hint — lower right ── */}
       <div className="liminal-hint">drag · scroll · click</div>
     </div>
   );

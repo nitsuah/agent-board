@@ -137,12 +137,6 @@ export default function TopBar({
         ))}
       </div>
 
-      {/* ── Right: live status indicator ── */}
-      <div className="topbar-right">
-        <span className={`live-dot-wrap ${wsConnected ? 'live' : 'offline'}`} title={wsConnected ? 'Live' : 'Offline'}>
-          <span className="live-dot" />
-        </span>
-      </div>
     </div>
   );
 }

@@ -887,6 +887,11 @@ function App() {
               browseWorkspace={wsOps.browseWorkspace}
               refreshWorkspaceGit={wsOps.refreshWorkspaceGit}
               fetchContentClients={fetchContentClients}
+              modelPulls={modelPulls}
+              onPullModel={pullModel}
+              knownModels={knownModels}
+              serviceActionErrors={serviceActionErrors}
+              servicesStarting={servicesStarting}
             />
           )}
         </div>

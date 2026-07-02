@@ -507,25 +507,10 @@ function SystemPanel({
         </div>
       </div>
 
-      {/* ── Services: Models ── */}
+      {/* ── External models (BYOK) + Add + Discover ── */}
       <div className="docker-status">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3>Models</h3>
-          <button
-            className="btn-docker-action"
-            style={{ fontSize: '0.72rem' }}
-            title="Pull all configured models"
-            onClick={async () => {
-              try { await fetch('/api/models/pull-all', { method: 'POST' }); }
-              catch (err) { toast.error(`Pull all failed: ${err.message}`); }
-            }}
-          >Pull All</button>
-        </div>
-        {[...modelSvcs, ...otherSvcs].map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
-
-        {/* External endpoints (BYOK) in models section */}
         {byokEndpoints.length > 0 && (
-          <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.4rem' }}>
+          <div style={{ marginBottom: '0.5rem' }}>
             <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-faint)', marginBottom: '0.3rem' }}>External</div>
             {byokEndpoints.map(ep => (
               <div key={ep.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.3rem', fontSize: '0.72rem' }}>
@@ -552,7 +537,7 @@ function SystemPanel({
         )}
 
         {/* Add external endpoint */}
-        <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+        <div style={{ borderTop: byokEndpoints.length > 0 ? '1px solid var(--border)' : 'none', paddingTop: byokEndpoints.length > 0 ? '0.5rem' : 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: byokOpen ? '0.5rem' : 0 }}>
             <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Add external model</span>
             <button className="btn-docker-action" style={{ fontSize: '0.68rem' }} onClick={() => setByokOpen(p => !p)}>
@@ -668,67 +653,6 @@ function SystemPanel({
         </div>
       </div>
 
-      {/* ── Services: MCPs (hidden if bb-mcp offline) ── */}
-      {bbRunning && (
-        <div className="docker-status">
-          <h3>MCPs</h3>
-          {mcpSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
-
-          {/* Blackboard MCP persona + tool registry */}
-          <div style={{ marginTop: '0.6rem' }}>
-            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Agent persona</div>
-            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
-              {BB_PERSONAS.map(p => (
-                <button
-                  key={p.id}
-                  className="btn-docker-action"
-                  title={p.desc}
-                  style={{
-                    fontSize: '0.68rem', padding: '0.2rem 0.5rem',
-                    background: bbPersona === p.id ? 'var(--accent)' : undefined,
-                    color: bbPersona === p.id ? '#fff' : undefined,
-                    borderColor: bbPersona === p.id ? 'var(--accent)' : undefined,
-                  }}
-                  onClick={() => { setBbPersona(p.id); setBbTools(null); setBbToolsError(null); }}
-                >{p.icon} {p.label}</button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button
-                className="btn-docker-action"
-                style={{ fontSize: '0.68rem' }}
-                disabled={bbToolsBusy}
-                onClick={fetchBbTools}
-              >{bbToolsBusy ? 'Loading…' : '⟳ Load tools'}</button>
-            </div>
-            {bbToolsError && (
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', marginTop: '0.3rem' }}>{bbToolsError}</div>
-            )}
-            {bbTools && bbTools.length > 0 && (
-              <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                {bbTools.filter(t => !t.persona || t.persona === bbPersona).map(t => (
-                  <div key={t.name} style={{
-                    fontSize: '0.68rem', padding: '0.25rem 0.4rem',
-                    background: 'var(--surface-3)', borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                  }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginRight: '0.4rem' }}>{t.name}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>{t.description}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Services: Tools ── */}
-      {toolSvcs.length > 0 && (
-        <div className="docker-status">
-          <h3>Tools</h3>
-          {toolSvcs.map(({ key, info, endpoints }) => renderServiceRow(key, info, endpoints))}
-        </div>
-      )}
 
     </aside>
   );

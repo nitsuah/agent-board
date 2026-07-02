@@ -3865,50 +3865,6 @@ code {
   height: 100%;
 }
 
-/* Top HUD bar */
-.liminal-topbar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 1rem;
-  background: linear-gradient(to bottom, rgba(5,8,18,0.85) 60%, transparent);
-  pointer-events: none;
-  z-index: 10;
-}
-
-.liminal-topbar-title {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.6);
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.liminal-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 99px;
-  font-size: 0.72rem;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.7);
-  pointer-events: auto;
-  cursor: default;
-}
-
-.liminal-chip.green, .liminal-chip-green  { background: rgba(137,201,127,0.15); border-color: rgba(137,201,127,0.35); color: #89c97f; }
-.liminal-chip.red,   .liminal-chip-red    { background: rgba(224, 80, 80,0.15);  border-color: rgba(224,80,80,0.35);   color: #e05050; }
-.liminal-chip.blue,  .liminal-chip-blue   { background: rgba(91,140,255,0.15);  border-color: rgba(91,140,255,0.35);  color: #5b8cff; }
-.liminal-chip-dim { opacity: 0.7; }
 .liminal-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
 
 /* Hero CTA — centred below hub when nothing selected */
@@ -4080,11 +4036,11 @@ code {
 .liminal-panel-action { display: block; width: 100%; margin-top: 0.5rem; padding: 0.4rem; border-radius: 6px; background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 600; border: none; cursor: pointer; transition: filter 0.15s; }
 .liminal-panel-action:hover { filter: brightness(1.15); }
 
-/* Legend (bottom-left) */
+/* Legend — upper right */
 .liminal-legend {
   position: absolute;
-  bottom: 1rem;
-  left: 1rem;
+  top: 0.75rem;
+  right: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -4109,17 +4065,42 @@ code {
   flex-shrink: 0;
 }
 
-/* Orbit hint */
+/* Orbit hint — lower right */
 .liminal-hint {
   position: absolute;
-  top: 3.5rem;
-  left: 1rem;
+  bottom: 0.6rem;
+  right: 0.75rem;
   font-size: 0.65rem;
   color: rgba(255,255,255,0.2);
   font-family: var(--font-mono);
   z-index: 10;
   pointer-events: none;
   line-height: 1.7;
+}
+
+/* Mobile experience selector */
+.liminal-exp-select-wrap {
+  display: none;
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  pointer-events: auto;
+}
+.liminal-exp-select {
+  background: rgba(10,12,26,0.88);
+  border: 1px solid rgba(91,140,255,0.4);
+  color: rgba(255,255,255,0.8);
+  font-size: 0.82rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 160px;
+}
+@media (max-width: 600px) {
+  .liminal-exp-strip { display: none; }
+  .liminal-exp-select-wrap { display: block; }
 }
 
 /* ===== motor-pool logo button ===== */

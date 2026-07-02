@@ -65,6 +65,11 @@ export default function ChatColumn({
   fetchContentClients,
   showMetricsPanel,
   setShowMetricsPanel,
+  modelPulls,
+  onPullModel,
+  knownModels,
+  serviceActionErrors,
+  servicesStarting,
 }) {
   const textareaRef = useAutoResize(messageInput);
   const [editingName, setEditingName] = useState(false);
@@ -277,6 +282,11 @@ export default function ChatColumn({
           onCreateSession={createSession}
           selectedExperience={selectedExperience}
           EXPERIENCE_META={EXPERIENCE_META}
+          onRunServiceAction={runServiceAction}
+          serviceActionsInFlight={serviceActionsInFlight}
+          modelPulls={modelPulls}
+          onPullModel={onPullModel}
+          knownModels={knownModels}
         />
       )}
 

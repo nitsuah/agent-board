@@ -15,7 +15,6 @@ import express from 'express';
 const DEFAULT_PORTS = [
   1234,   // LM Studio
   1337,   // Jan AI
-  3000,   // generic dev server / tools
   3100,   // bb-mcp
   3200,   // tool-content-gen
   3201,   // tool-website
@@ -194,6 +193,15 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
     // Build the set of URLs already registered so we can flag them
     const knownUrls = new Set(Object.values(LLM_CONFIG).map(c => c.url?.replace(/\/$/, '')));
 
+    // Ports that are our own webserver (3000) or already registered as default builtins —
+    // discovering ourselves serves no purpose
+    const selfPorts = new Set([3000]);
+    for (const cfg of Object.values(LLM_CONFIG)) {
+      if (cfg.builtin) {
+        try { selfPorts.add(new URL(cfg.url).port * 1 || 80); } catch { /* skip */ }
+      }
+    }
+
     const probes = [];
     for (const host of hosts) {
       for (const port of ports) {
@@ -213,6 +221,9 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
     for (const r of results) {
       if (r.status !== 'fulfilled' || !r.value) continue;
       const { host, port, url, apiStyle, models, requiresAuth } = r.value;
+
+      // Skip our own webserver port and built-in default ports
+      if (selfPorts.has(port)) continue;
 
       // De-duplicate: same port on both hosts often resolves to same service
       const dedupeKey = `${port}:${apiStyle}`;
