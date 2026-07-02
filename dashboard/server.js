@@ -170,7 +170,13 @@ async function resolveEndpointUrl(endpoint) {
     const resolved = await resolvePrimaryLlmUrl();
     return resolved.url;
   }
-  return LLM_CONFIG[endpoint]?.url || LLM_CONFIG.primary.url;
+  const config = LLM_CONFIG[endpoint];
+  const url = (config?.url || LLM_CONFIG.primary.url).replace(/\/$/, '');
+  // openai-style agents call ${llmUrl}/chat/completions; ensure /v1 is in path
+  if (config?.apiStyle === 'openai' && !url.includes('/v1')) {
+    return url + '/v1';
+  }
+  return url;
 }
 
 function getServiceRegistry() {
