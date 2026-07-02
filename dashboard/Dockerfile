@@ -26,6 +26,7 @@ FROM base AS test
 COPY server.js persistence.js tracing.js safety.js task-runner.js ./
 COPY modules ./modules
 COPY routes ./routes
+COPY config ./config
 COPY src ./src
 COPY tests ./tests
 ENV AGENT_DASHBOARD_DISABLE_LISTEN=1
@@ -40,6 +41,7 @@ ENV GITHUB_SECRET=$GITHUB_SECRET
 COPY server.js persistence.js tracing.js safety.js task-runner.js ./
 COPY modules ./modules
 COPY routes ./routes
+COPY config ./config
 COPY src ./src
 COPY index.html vite.config.js ./
 COPY tests ./tests
