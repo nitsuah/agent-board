@@ -4320,7 +4320,6 @@ code {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
-.chat-model-row-icon { font-size: 0.85rem; opacity: 0.7; }
 .chat-model-select {
   appearance: none;
   background: transparent;

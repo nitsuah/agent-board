@@ -132,36 +132,6 @@ function SystemPanel({
   const [discoverBusy, setDiscoverBusy] = useState(false);
   const [addingKey, setAddingKey] = useState(null);
 
-  // bb-mcp persona + tool registry
-  const BB_PERSONAS = [
-    { id: 'student',    label: 'Student',    icon: '🎓', desc: 'Course access, assignment submission, grade view' },
-    { id: 'instructor', label: 'Instructor', icon: '📋', desc: 'Grade management, course creation, announcements' },
-    { id: 'admin',      label: 'Admin',      icon: '⚙️',  desc: 'User management, system configuration' },
-    { id: 'parent',     label: 'Parent',     icon: '👨‍👩‍👧', desc: 'Student grade observer, limited read access' },
-  ];
-  const [bbPersona, setBbPersona] = useState('student');
-  const [bbTools, setBbTools] = useState(null);
-  const [bbToolsBusy, setBbToolsBusy] = useState(false);
-  const [bbToolsError, setBbToolsError] = useState(null);
-
-  const fetchBbTools = useCallback(async () => {
-    setBbToolsBusy(true);
-    setBbToolsError(null);
-    try {
-      const res = await fetch('/api/mcp/blackboard-learn/tools');
-      const data = await res.json();
-      if (data.success && Array.isArray(data.tools)) {
-        setBbTools(data.tools);
-      } else {
-        setBbToolsError(data.error || 'Tools unavailable');
-      }
-    } catch (err) {
-      setBbToolsError(err.message);
-    } finally {
-      setBbToolsBusy(false);
-    }
-  }, []);
-
   const fetchByokEndpoints = useCallback(async () => {
     try {
       const res = await fetch('/api/config/endpoints');
@@ -385,18 +355,6 @@ function SystemPanel({
     const pa = SVC_ORDER.indexOf(a.key), pb = SVC_ORDER.indexOf(b.key);
     return (pa < 0 ? 999 : pa) - (pb < 0 ? 999 : pb);
   });
-
-  // ── Service categorization helpers ───────────────────────────────────────
-  const MODEL_SVC_KEYS = new Set(['ollama', 'docker-runner', 'llm_openllm', 'openllm']);
-  const MCP_SVC_KEYS   = new Set(['bb_mcp']);
-  const TOOL_SVC_KEYS  = new Set(['tool_content_gen', 'tool_website', 'nemoclaw']);
-
-  const modelSvcs   = allSvcs.filter(s => MODEL_SVC_KEYS.has(s.key));
-  const mcpSvcs     = allSvcs.filter(s => MCP_SVC_KEYS.has(s.key));
-  const toolSvcs    = allSvcs.filter(s => TOOL_SVC_KEYS.has(s.key));
-  const otherSvcs   = allSvcs.filter(s => !MODEL_SVC_KEYS.has(s.key) && !MCP_SVC_KEYS.has(s.key) && !TOOL_SVC_KEYS.has(s.key));
-
-  const bbRunning = mcpSvcs.find(s => s.key === 'bb_mcp')?.info?.running ?? false;
 
   // Device profile helpers
   const deviceProfile  = dockerStatus?.deviceProfile;

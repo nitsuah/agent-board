@@ -236,15 +236,16 @@ export function createDockerRouter({
         const openllmUp = containers['llm_openllm']?.running ?? false;
         endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
       } else {
-        // 'custom' backendType — cloud or user-registered endpoints. Treat as live when
-        // an apiKey is present (cloud APIs don't have a local health endpoint to probe).
+        // 'custom' backendType — cloud or user-registered endpoints. Always treat as live:
+        // the user explicitly added the endpoint so it should appear in the model selector.
+        // Cloud APIs need an API key to work; local endpoints (Ollama) do not.
         const hasKey = !!(config.apiKey);
         endpoints[key] = {
           name: config.name,
           model: config.defaultModel,
           backendType: config.backendType,
           type: config.type || 'custom',
-          live: hasKey,
+          live: true,
           hasApiKey: hasKey,
           fallback: !hasKey,
         };

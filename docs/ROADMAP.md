@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-06-25
+Last Updated: 2026-07-02
 
 ## 2026 Q2 - Persistence and Agent Control
 
@@ -45,7 +45,7 @@ Last Updated: 2026-06-25
 - [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with distinct worktrees, contexts, and output streams.
 - [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
 - [x] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
-- [x] **3D LiminalDashboard home screen**: Three.js force-directed motor-pool mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts.
+- [x] **3D LiminalDashboard home screen**: Three.js force-directed motor-pool mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts. Hub v2 (2026-07-02): legend/hint repositioned, stats chips removed, mobile dropdown, Llama3.2 distance fix, ServiceDetail node panel (start/stop/restart/model-pull), BYOK endpoints appear in hub + model selector, settings panel slimmed to Stack/Memory/Uptime/LLM/AddExternal/Scan.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
 - [ ] **Agent skills system**: Loadable first-class skill modules registered and invoked within the agent runtime (similar to Odysseus); skills layer on top of tools/ MCP servers for task-specific capabilities. Lowest priority — after plugin architecture and BYOK.
 - [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
