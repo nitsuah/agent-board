@@ -29,6 +29,8 @@ function App() {
   const [useNemoClaw, setUseNemoClaw] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(new Set());
   const [streamingBySession, setStreamingBySession] = useState({});
+  const [sessionPendingReply, setSessionPendingReply] = useState(new Set());
+  const [sessionErrors, setSessionErrors] = useState(new Set());
   const streamAbortControllersRef = useRef(new Map());
   const fetchTasksRef = useRef(null);
   const [dockerStatus, setDockerStatus] = useState(null);
@@ -541,6 +543,8 @@ function App() {
     if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, optimisticMsg]);
     setLoadingSessions(prev => new Set([...prev, sessionId]));
     setStreamingBySession(prev => ({ ...prev, [sessionId]: '' }));
+    setSessionPendingReply(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
+    setSessionErrors(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
     const controller = new AbortController();
     streamAbortControllersRef.current.set(sessionId, controller);
     try {
@@ -575,7 +579,12 @@ function App() {
               const toolMsg = { role: 'tool_call', tool: event.tool, args: event.args, result: event.result, timestamp: new Date() };
               if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, toolMsg]);
             } else if (event.type === 'done' || event.type === 'error') {
-              if (event.type === 'error') toast.error(event.message || 'LLM stream error');
+              if (event.type === 'error') {
+                toast.error(event.message || 'LLM stream error');
+                setSessionErrors(prev => new Set([...prev, sessionId]));
+              } else {
+                setSessionPendingReply(prev => new Set([...prev, sessionId]));
+              }
               setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
               fetchSessionDetails(sessionId);
@@ -585,6 +594,7 @@ function App() {
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
+        setSessionErrors(prev => new Set([...prev, sessionId]));
         try {
           const res = await fetch(`/api/sessions/${sessionId}/message`, {
             method: 'POST',
@@ -784,6 +794,9 @@ function App() {
         wsConnected={wsConnected}
         createSession={createSession}
         systemServices={systemServices}
+        loadingSessions={loadingSessions}
+        sessionPendingReply={sessionPendingReply}
+        sessionErrors={sessionErrors}
       />
 
       {/* session tabs are now inline in TopBar */}

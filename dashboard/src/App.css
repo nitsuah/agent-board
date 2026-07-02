@@ -4105,6 +4105,14 @@ code {
 }
 
 /* ===== motor icon button (hub nav) ===== */
+@keyframes motor-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes motor-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
 .topbar-motor-btn {
   display: flex;
   align-items: center;
@@ -4120,10 +4128,53 @@ code {
   border-radius: 8px;
   transition: background 0.12s, color 0.12s;
 }
-.topbar-motor-btn:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
+.topbar-motor-btn:hover { background: var(--accent-soft); }
+.topbar-motor-btn--working svg { animation: motor-spin 1.4s linear infinite; color: #4caf50; }
+.topbar-motor-btn--pending svg { animation: motor-pulse 1.2s ease-in-out infinite; color: #f5a623; }
+
+/* ===== Chat dropdown button ===== */
+.topbar-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
 }
+.topbar-chat-btn:hover { background: var(--surface-3, var(--surface-2)); border-color: var(--accent); }
+
+/* ===== Session tab status dots ===== */
+@keyframes dot-bounce {
+  0%, 100% { transform: translateY(0); }
+  40%       { transform: translateY(-3px); }
+}
+.session-tab-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 0.2rem;
+}
+.session-tab-dot--idle    { background: #f5a623; opacity: 0.6; }
+.session-tab-dot--working { background: #4caf50; animation: motor-spin 1.2s linear infinite; border-radius: 1px; width: 6px; height: 6px; opacity: 0.9; }
+.session-tab-dot--error   { background: #e53935; opacity: 0.9; }
+.session-tab-dot--pending { background: #f5a623; opacity: 1; }
+
+/* Bounce the entire tab when a pending reply is waiting (not active) */
+@keyframes tab-bounce {
+  0%, 100% { transform: translateY(0); }
+  30%       { transform: translateY(-3px); }
+  60%       { transform: translateY(-1px); }
+}
+.session-tab--pending { animation: tab-bounce 1.8s ease-in-out infinite; }
 .topbar-logo-caret {
   font-size: 0.6rem;
   opacity: 0.7;
