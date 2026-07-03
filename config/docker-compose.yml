@@ -289,7 +289,7 @@ services:
       - agent-network
 
   # ===== WEB DASHBOARD =====
-  
+
   agent-dashboard:
     build:
       context: ../dashboard

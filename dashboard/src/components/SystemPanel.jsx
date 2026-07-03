@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from './Toast.jsx';
+import { getFriendlyServiceError } from '../utils/serviceErrors.js';
 
 function DiscoveredServiceRow({ svc, addingKey, setAddingKey, toast, fetchByokEndpoints, setDiscovered, onEndpointAdded }) {
   const needsKey = svc.requiresAuth;
@@ -281,9 +282,7 @@ function SystemPanel({
         {allErrors.length > 0 && (
           <div className="docker-status-error-zone">
             {allErrors.map((err, i) => {
-              const friendly = typeof err === 'string' && (err.includes('ENOENT') || err.includes('docker-compose') || err.includes('spawn'))
-                ? 'compose unavailable in this environment'
-                : err;
+              const friendly = getFriendlyServiceError(err);
               return <div key={i} className="docker-service-error">{friendly}</div>;
             })}
           </div>

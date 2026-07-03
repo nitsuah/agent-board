@@ -28,6 +28,7 @@ COPY modules ./modules
 COPY routes ./routes
 COPY config ./config
 COPY src ./src
+COPY scripts ./scripts
 COPY tests ./tests
 ENV AGENT_DASHBOARD_DISABLE_LISTEN=1
 CMD ["npm", "run", "test:unit"]
@@ -44,6 +45,7 @@ COPY routes ./routes
 COPY config ./config
 COPY src ./src
 COPY index.html vite.config.js ./
+COPY scripts ./scripts
 COPY tests ./tests
 RUN npm run build
 EXPOSE 3000

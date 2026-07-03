@@ -57,7 +57,7 @@ Last Updated: 2026-07-02
 
 - [ ] **MCP container manager**: Spin tool containers (Playwright, Jira/Confluence, Docker Hub MCPs) up and down on demand via UI.
 - [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional, config-driven service in the compose stack or bind it specifically to agent/chat experiences.
-- [x] **Multi-MCP orchestration**: Declarative `config/mcp-registry.json` registry — declare new MCP containers once; `/api/mcp-registry` lists them with live health; `POST /ensure` JIT-starts them on demand. Tested.
+- [x] **Multi-MCP orchestration**: Declarative `config/mcp-registry.json` registry — declare new MCP containers once; `GET /api/mcp-registry` lists them with live health; `POST /api/mcp-registry/:key/ensure` JIT-starts a specific container on demand. Tested.
 
 ## 2027 Q2 - Blackboard & MCP Frontend
 

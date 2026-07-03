@@ -51,11 +51,11 @@ Start-Sleep -Seconds 5
 $healthy = 0
 1..5 | ForEach-Object {
     Write-Output "[INFO] Health check attempt $_/5..."
-    
+
     try {
         $llmHealth = Invoke-WebRequest -Uri "http://localhost:8081/api/tags" -ErrorAction SilentlyContinue
         $dashboardHealth = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -ErrorAction SilentlyContinue
-        
+
         if ($llmHealth.StatusCode -eq 200 -and $dashboardHealth.StatusCode -eq 200) {
             $healthy = 1
         }

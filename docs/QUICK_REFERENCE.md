@@ -228,8 +228,8 @@ docker-compose up -d
 
 ---
 
-**Last Updated:** 2026-03-19  
-**Status:** ✅ Ready to use  
-**Primary Setup:** Docker Hub models  
+**Last Updated:** 2026-03-19
+**Status:** ✅ Ready to use
+**Primary Setup:** Docker Hub models
 **Fallback Setup:** Legacy custom Ollama
 

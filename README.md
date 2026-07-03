@@ -47,7 +47,7 @@ docker compose -f config/docker-compose.yml --project-directory . up -d
 or for GPU:
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\motor-pool 
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml up -d
 ```
 

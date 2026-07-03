@@ -239,6 +239,6 @@ The old setup scripts (`setup-docker-stack.ps1`, `stack-manager.ps1`) still work
 
 ---
 
-**Status:** Ready to setup  
-**Estimated time:** 5-10 minutes  
+**Status:** Ready to setup
+**Estimated time:** 5-10 minutes
 **Difficulty:** Easy ✅

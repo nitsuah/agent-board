@@ -12,7 +12,8 @@ export default function ToolStream({ connectorId = 'blackboard-learn', tool = 'l
   const bottomRef             = useRef(null);
 
   useEffect(() => {
-    if (status !== 'idle') return;
+    setLines([]);
+    setStatus('idle');
 
     const qs = new URLSearchParams({ tool, ...params, ...(demo ? { demo: '1' } : {}) });
     const url = `/api/mcp/${connectorId}/stream?${qs}`;

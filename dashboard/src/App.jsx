@@ -11,6 +11,7 @@ import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import { useWorkspaceOps } from './hooks/useWorkspaceOps.js';
 import { useTaskManagement } from './hooks/useTaskManagement.js';
+import { getFriendlyServiceError } from './utils/serviceErrors.js';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.jsx';
 import {
   getOrCreateUserId, getUserRole, shouldShowOnboarding,
@@ -288,7 +289,7 @@ function App() {
       const data = await res.json();
       if (!data.success) {
         const raw = data.error || 'Action failed';
-        const msg = raw.includes('ENOENT') || raw.includes('spawn') ? 'compose unavailable in this environment' : raw;
+        const msg = getFriendlyServiceError(raw);
         toast.error(`Service ${action} failed: ${msg}`);
         setServiceActionErrors(prev => ({ ...prev, [serviceKey]: msg }));
       } else if (action === 'start') {

@@ -232,7 +232,7 @@ Original files kept in place:
 1. **Review** the new structure:
    - Read `README.md` for overview
    - Check `docs/ARCHITECTURE.md` for design
-   
+
 2. **Test** the setup:
    ```powershell
   docker compose up -d

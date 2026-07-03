@@ -2,8 +2,8 @@
 
 > Local orchestration architecture for motor-pool, Kryptos, and personal automation
 
-**Last updated:** June 2026  
-**Author:** nitsuah  
+**Last updated:** June 2026
+**Author:** nitsuah
 **Status:** Working doc — evolving with motor-pool Q2/Q3 roadmap
 Repos: ![[motor-pool]]
 
@@ -31,7 +31,7 @@ Repos: ![[motor-pool]]
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Do first (no infra overhaul):** embed turbovec in Kryptos, add OpenLLM to compose, point Odysseus at Ollama.  
+**Do first (no infra overhaul):** embed turbovec in Kryptos, add OpenLLM to compose, point Odysseus at Ollama.
 **When cloud rate-limits hit:** Ollama + `qwen2.5-coder` via Claude Code or Odysseus — keep AirLLM off.
 
 ---
@@ -149,7 +149,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### motor-pool (yours)
 
-**Role:** Local orchestrator, ops cockpit, MCP container manager  
+**Role:** Local orchestrator, ops cockpit, MCP container manager
 **Layer:** Control plane
 
 **What it does today:**
@@ -185,7 +185,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### Ollama
 
-**Role:** Commodity local model server  
+**Role:** Commodity local model server
 **Layer:** Inference endpoint (primary)
 
 **What it does:**
@@ -211,7 +211,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### OpenLLM (BentoML)
 
-**Role:** High-throughput OpenAI-compatible model server  
+**Role:** High-throughput OpenAI-compatible model server
 **Layer:** Inference endpoint (custom models)
 
 **What it does:**
@@ -239,7 +239,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### AirLLM
 
-**Role:** Memory-efficient layer-streaming inference  
+**Role:** Memory-efficient layer-streaming inference
 **Layer:** Inference (Python library → FastAPI wrapper in Q2)
 
 **What it does:**
@@ -265,7 +265,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### Thoth
 
-**Role:** AI/ML research pipeline with persistent memory  
+**Role:** AI/ML research pipeline with persistent memory
 **Layer:** Specialized agent + knowledge store (on-demand)
 
 **What it does:**
@@ -293,7 +293,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### Odysseus
 
-**Role:** Self-hosted personal AI workspace  
+**Role:** Self-hosted personal AI workspace
 **Layer:** General-purpose UI / daily driver
 
 **What it does:**
@@ -321,7 +321,7 @@ Layer-streaming is too slow for fluid, real-time interactive coding. Stick to Ol
 
 ### turbovec
 
-**Role:** Compressed vector index for RAG  
+**Role:** Compressed vector index for RAG
 **Layer:** Embedded library (no server, no daemon)
 
 **What it does:**

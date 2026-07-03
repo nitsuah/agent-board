@@ -65,12 +65,10 @@ try {
   assert.equal(doneEvt.data.tool, 'list_courses', 'done event has tool name');
   console.log('  ✅ done event received');
 
-  // Unknown connector → 404
-  const res404 = await fetch(`http://127.0.0.1:${port}/api/mcp/unknown-connector/stream?tool=x&demo=1`);
-  // The 404 comes from the mcp proxy catch-all, not the stream handler
-  // (stream only matches GET; proxy catches the 404 for unknown connectors)
-  assert.ok([404, 200].includes(res404.status), 'unknown connector handled');
-  console.log('  ✅ unknown connector handled gracefully');
+  // Unknown connector without demo flag → 404 from stream handler validation
+  const res404 = await fetch(`http://127.0.0.1:${port}/api/mcp/unknown-connector/stream?tool=x`);
+  assert.equal(res404.status, 404, 'unknown connector returns 404');
+  console.log('  ✅ unknown connector returns 404');
 
   console.log('Connector stream tests passed.');
 } catch (err) {
