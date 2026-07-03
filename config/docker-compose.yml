@@ -479,5 +479,3 @@ networks:
     name: agent-network
     driver: bridge
     external: false
-
-

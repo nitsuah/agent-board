@@ -232,4 +232,3 @@ docker-compose up -d
 **Status:** ✅ Ready to use
 **Primary Setup:** Docker Hub models
 **Fallback Setup:** Legacy custom Ollama
-

@@ -189,4 +189,3 @@ async function shutdown() {
 }
 
 export { initTracing, withSpan, recordEvent, getStatus, shutdown };
-
