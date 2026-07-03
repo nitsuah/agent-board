@@ -94,7 +94,7 @@ function getEndpointModels(key, ep, knownModels) {
   }
   // 9router: use known combos from knownModels prop, default to ['MAX']
   if (is9RouterKey(key)) {
-    const routerModels = (knownModels || [])
+    const routerModels = (Array.isArray(knownModels) ? knownModels : [])
       .filter(m => m.epKey === key || m.endpoint === key)
       .map(m => m.id || m.name || String(m));
     const combos = routerModels.length ? routerModels : ['MAX'];
@@ -522,15 +522,6 @@ export default function LiminalDashboard({
       node._mesh = mesh;
       node._mat  = mat;
 
-      if (node.type === 'hub') {
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(cfg.radius * 1.55, 0.035, 8, 64),
-          new THREE.MeshBasicMaterial({ color: 0x5b8cff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending }),
-        );
-        ring.rotation.x = Math.PI / 2;
-        scene.add(ring);
-        node._ring = ring;
-      }
 
       const spMat = new THREE.SpriteMaterial({
         map: getGlowTex(nodeGlow),
@@ -635,11 +626,6 @@ export default function LiminalDashboard({
 
       for (const n of nodes) {
         n._mesh.position.copy(n.pos);
-        if (n._ring) {
-          n._ring.position.copy(n.pos);
-          n._ring.rotation.z = t * 0.4;
-          n._ring.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.15;
-        }
         const isHov = n.id === _hovId;
         const targetScale = isHov ? 1.3 : 1.0;
         n._mesh.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
