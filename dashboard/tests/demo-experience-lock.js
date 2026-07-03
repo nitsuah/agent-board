@@ -41,10 +41,10 @@ try {
   });
   assert.equal(safe.status, 200, 'safechat switch should succeed in demo mode');
 
-  // Switching to nemoclaw should be blocked
+  // Switching to developer should be blocked
   const nemo = await req(`/api/sessions/${sessionId}/experience`, {
     method: 'PATCH',
-    data: { experience: 'nemoclaw' },
+    data: { experience: 'developer' },
   });
   assert.equal(nemo.status, 403, 'non-safechat should be blocked in demo mode');
 

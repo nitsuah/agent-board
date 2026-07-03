@@ -36,17 +36,17 @@ try {
   assert.equal(details.status, 200);
   const defaultExp = details.data.session?.experience;
 
-  // Change experience to nemoclaw
+  // Change experience to developer
   const patch = await req(`/api/sessions/${sessionId}/experience`, {
     method: 'PATCH',
-    data: { experience: 'nemoclaw' },
+    data: { experience: 'developer' },
   });
   assert.equal(patch.status, 200, 'PATCH should succeed');
-  assert.equal(patch.data.experience, 'nemoclaw');
+  assert.equal(patch.data.experience, 'developer');
 
   // Verify experience persisted on session
   const after = await req(`/api/sessions/${sessionId}`);
-  assert.equal(after.data.session.experience, 'nemoclaw', 'experience should be updated');
+  assert.equal(after.data.session.experience, 'developer', 'experience should be updated');
 
   // Invalid experience should be rejected
   const bad = await req(`/api/sessions/${sessionId}/experience`, {
@@ -65,7 +65,7 @@ try {
   // Non-existent session should 404
   const notFound = await req('/api/sessions/nonexistent_id_999/experience', {
     method: 'PATCH',
-    data: { experience: 'nemoclaw' },
+    data: { experience: 'developer' },
   });
   assert.equal(notFound.status, 404, 'non-existent session should 404');
 
