@@ -53,6 +53,26 @@ function goldenPos(i, total, radius) {
   );
 }
 
+// Orbital ring radii
+const R_SVC      = 3.5;   // services inner ring
+const R_ENDPOINT = 7.0;   // endpoint ring (Ollama ↔ 9router)
+const R_MODEL    = 12.0;  // model ring
+const R_SESSION  = 17.0;  // session outer ring
+
+// Y positions: active nodes float to the orbital plane (y=0),
+// inactive nodes sink below it.
+const Y_ACTIVE   =  0;
+const Y_OFFLINE_EP  = -5;
+const Y_OFFLINE_SVC = -4;
+const Y_OFFLINE_MOD = -3;
+
+function isOllamaKey(key, ep) {
+  return ep.backendType === 'ollama-container' || ep.backendType === 'ollama' || key.includes('ollama');
+}
+function is9RouterKey(key) {
+  return key.includes('9router') || key.includes('local_20128');
+}
+
 function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys }) {
   const nodes = [];
   const links = [];
@@ -60,22 +80,25 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   nodes.push({
     id: 'hub', label: 'motor-pool', type: 'hub', fixed: true, internal: true,
     pos: new THREE.Vector3(0, 0, 0), vel: new THREE.Vector3(),
+    orbitRadius: 0, orbitAngle: 0, orbitSpeed: 0, targetY: 0,
     meta: { desc: 'Central AI orchestration hub', detail: 'All agents, models and sessions radiate from here.' },
   });
 
-  // Services
+  // ── Services (Ring 0 — innermost, r=3.5) ──────────────────────────────────
   const svcs = Object.entries(systemServices?.services || {});
   svcs.forEach(([key, svc], i) => {
-    const p = goldenPos(i, svcs.length, 5.5);
-    p.y = (p.y * 0.25) - 0.5;   // flatten services into accretion disk
+    const angle = (i / Math.max(svcs.length, 1)) * Math.PI * 2;
+    const isRunning = svc.running;
+    const targetY = isRunning ? Y_ACTIVE : Y_OFFLINE_SVC;
     nodes.push({
       id: `svc_${key}`, label: svc.label || key,
-      type: svc.running ? 'service' : 'offline',
-      pos: p, vel: new THREE.Vector3(),
-      internal: true,
-      svcKey: key,
+      type: isRunning ? 'service' : 'offline',
+      pos: new THREE.Vector3(Math.cos(angle) * R_SVC, targetY, Math.sin(angle) * R_SVC),
+      vel: new THREE.Vector3(),
+      orbitRadius: R_SVC, orbitAngle: angle, orbitSpeed: 0.014, targetY,
+      internal: true, svcKey: key,
       meta: {
-        desc: svc.running ? '● running' : '○ stopped',
+        desc: isRunning ? '● running' : '○ stopped',
         backend: svc.backendType || '',
         ports: svc.ports || '',
         stats: svc.stats ? `CPU ${svc.stats.cpu}  MEM ${svc.stats.memPerc}` : '',
@@ -84,121 +107,146 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     links.push({ from: 'hub', to: `svc_${key}` });
   });
 
-  // Endpoints — ollama-container endpoints link to svc_ollama and start further out
+  // ── Endpoints (Ring 1 — r=7) ───────────────────────────────────────────────
+  // Ollama pinned at angle=0, 9router pinned at angle=π, others fill between.
   const eps = (selectableEndpointKeys || []);
-  eps.forEach((key, i) => {
+  const ollamaKeys  = eps.filter(k => isOllamaKey(k, (dockerStatus?.endpoints || {})[k] || {}));
+  const routerKeys  = eps.filter(k => is9RouterKey(k));
+  const otherEpKeys = eps.filter(k => !ollamaKeys.includes(k) && !routerKeys.includes(k));
+
+  const epAngles = {};
+  ollamaKeys.forEach((k, i) => {
+    epAngles[k] = (i / Math.max(ollamaKeys.length, 1)) * 0.6 - 0.3;  // cluster near 0
+  });
+  routerKeys.forEach((k, i) => {
+    epAngles[k] = Math.PI + (i / Math.max(routerKeys.length, 1)) * 0.6 - 0.3;  // cluster near π
+  });
+  // Other endpoints fill the top/bottom quadrants
+  otherEpKeys.forEach((k, i) => {
+    epAngles[k] = (Math.PI / 2) + (i / Math.max(otherEpKeys.length, 1)) * Math.PI;
+  });
+
+  eps.forEach((key) => {
     const ep = (dockerStatus?.endpoints || {})[key] || {};
     const meta = allEndpointMeta?.[key] || {};
+    const isLive = ep.live !== false;
+    const angle = epAngles[key] ?? 0;
+    const isExternal = ep.backendType === 'custom' || ep.type === 'custom' || is9RouterKey(key);
     const isOllamaChild = ep.backendType === 'ollama-container' && nodes.some(n => n.id === 'svc_ollama');
     const parentId = isOllamaChild ? 'svc_ollama' : 'hub';
-    const parentNode = nodes.find(n => n.id === parentId);
+    const targetY = isLive ? Y_ACTIVE : Y_OFFLINE_EP;
 
-    // Place ollama-child endpoints in the accretion disk (low, internal).
-    // External/custom endpoints float in the elevated public layer (high y).
-    let p;
-    if (isOllamaChild && parentNode) {
-      p = goldenPos(i, eps.length, 5.0);
-      p.addScaledVector(parentNode.pos.clone().normalize(), 5.5);
-      p.y = (p.y * 0.2) - 0.5;   // flatten to disk
-    } else if (ep.backendType === 'custom' || ep.type === 'custom') {
-      // External — place in elevated public layer
-      const angle = (i / Math.max(eps.length, 1)) * Math.PI * 2;
-      const radius = 7 + (i % 3) * 1.5;
-      p = new THREE.Vector3(Math.cos(angle) * radius, 6.5 + (i % 2) * 1.2, Math.sin(angle) * radius);
-    } else {
-      p = goldenPos(i, eps.length, 8.5);
-      p.y = (p.y * 0.3) - 0.5;   // flatten to disk plane
-    }
-
-    // Custom/BYOK/scanned endpoints are external; ollama-container is internal
-    const isExternal = ep.backendType === 'custom' || ep.type === 'custom';
     nodes.push({
       id: `ep_${key}`, label: meta.label || key,
-      type: ep.live ? 'endpoint' : 'offline',
-      pos: p, vel: new THREE.Vector3(),
-      internal: !isExternal,
-      epKey: key,
+      type: isLive ? 'endpoint' : 'offline',
+      pos: new THREE.Vector3(Math.cos(angle) * R_ENDPOINT, targetY, Math.sin(angle) * R_ENDPOINT),
+      vel: new THREE.Vector3(),
+      orbitRadius: R_ENDPOINT, orbitAngle: angle, orbitSpeed: 0.007, targetY,
+      internal: !isExternal, epKey: key,
       meta: {
-        desc: ep.live ? '● live' : '○ offline',
+        desc: isLive ? '● live' : '○ offline',
         model: ep.model || '',
         type: meta.backendBadge || meta.backendType || 'custom',
         url: ep.resolvedUrl || '',
       },
     });
     links.push({ from: parentId, to: `ep_${key}` });
+
+    // ── Model nodes (Ring 2 — r=12) ─────────────────────────────────────────
+    // Use ep.models[] array if available (9router reports combos), else single ep.model
+    const modelList = Array.isArray(ep.models) && ep.models.length
+      ? ep.models
+      : (ep.model ? [ep.model] : []);
+
+    modelList.forEach((m, mi) => {
+      const spread = Math.min(0.5, 1.2 / Math.max(modelList.length, 1));
+      const mAngle = angle + (mi - (modelList.length - 1) / 2) * spread;
+      const isActiveModel = m === ep.model || m === ep.defaultModel;
+      const mTargetY = isActiveModel ? Y_ACTIVE : Y_OFFLINE_MOD;
+      const modelId = `model_${key}_${mi}`;
+      const shortLabel = typeof m === 'string' ? m.split(':')[0].split('/').pop() : String(m);
+      nodes.push({
+        id: modelId, label: shortLabel,
+        type: isActiveModel ? 'endpoint' : 'offline',
+        pos: new THREE.Vector3(Math.cos(mAngle) * R_MODEL, mTargetY, Math.sin(mAngle) * R_MODEL),
+        vel: new THREE.Vector3(),
+        orbitRadius: R_MODEL, orbitAngle: mAngle, orbitSpeed: 0.004, targetY: mTargetY,
+        meta: { desc: isActiveModel ? '● active model' : '○ available', model: m },
+      });
+      links.push({ from: `ep_${key}`, to: modelId });
+    });
   });
 
-  // Sessions (latest 10)
+  // ── Sessions (Ring 3 — outermost, r=17) ───────────────────────────────────
   const recent = (sessions || []).slice(0, 10);
   recent.forEach((s, i) => {
     const epId = `ep_${s.endpoint}`;
-    const parentExists = nodes.some(n => n.id === epId);
-    const p = goldenPos(i, recent.length, 9);
-    p.x -= 3.5;
+    const epNode = nodes.find(n => n.id === epId);
+    const baseAngle = epNode ? epNode.orbitAngle : (i / Math.max(recent.length, 1)) * Math.PI * 2;
+    const angle = baseAngle + (i % 3 - 1) * 0.28;
     nodes.push({
       id: `sess_${s.id}`, label: s.name || `Session ${i + 1}`,
       type: 'session', sessionId: s.id,
-      pos: p, vel: new THREE.Vector3(),
+      pos: new THREE.Vector3(Math.cos(angle) * R_SESSION, Y_ACTIVE, Math.sin(angle) * R_SESSION),
+      vel: new THREE.Vector3(),
+      orbitRadius: R_SESSION, orbitAngle: angle, orbitSpeed: 0.002, targetY: Y_ACTIVE,
       meta: {
         desc: `${s.messageCount || 0} messages`,
         experience: s.experience || '',
         date: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '',
       },
     });
-    links.push({ from: parentExists ? epId : 'hub', to: `sess_${s.id}` });
+    links.push({ from: epNode ? epId : 'hub', to: `sess_${s.id}` });
   });
 
   return { nodes, links };
 }
 
-// ── Physics step ──────────────────────────────────────────────────────────────
-// Active nodes attract same-state neighbors; inactive nodes cluster with other
-// inactive nodes. Cross-state pairs use standard repulsion.
+// ── Orbital physics ───────────────────────────────────────────────────────────
+// Nodes orbit their assigned ring radius in the XZ plane (like planets).
+// Active nodes float up toward y=0 (the orbital plane); inactive nodes sink below.
 const _tmp = new THREE.Vector3();
-function isActive(node) { return node.type !== 'offline'; }
 function physicsStep(nodes, links, linkMap, dt = 0.016) {
-  const K_REP_SAME_ACTIVE   = 4;   // tighter clustering for active nodes
-  const K_REP_SAME_INACTIVE = 3;   // tighter still for inactive (they pile up)
-  const K_REP_CROSS         = 14;  // push active away from inactive
-  const K_SPR  = 0.045;
-  const REST   = 5.5;
-  const DAMP   = 0.90;
+  const K_ORBIT = 0.10;  // spring strength toward orbital XZ position
+  const K_GRAV  = 0.18;  // vertical gravity toward targetY
+  const K_REP   = 3.0;   // short-range repulsion to prevent overlap
+  const DAMP    = 0.82;
 
+  for (const n of nodes) {
+    if (n.fixed) continue;
+    // Advance orbital angle (inner rings faster)
+    n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0) * dt * 60;
+
+    // Spring toward target orbital XZ position
+    const tx = Math.cos(n.orbitAngle) * (n.orbitRadius ?? 0);
+    const tz = Math.sin(n.orbitAngle) * (n.orbitRadius ?? 0);
+    n.vel.x += (tx - n.pos.x) * K_ORBIT;
+    n.vel.z += (tz - n.pos.z) * K_ORBIT;
+
+    // Vertical gravity: active → y=0 (orbital plane), inactive → sink below
+    n.vel.y += ((n.targetY ?? 0) - n.pos.y) * K_GRAV;
+  }
+
+  // Short-range repulsion (prevent node pile-ups on same ring)
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
     if (a.fixed) continue;
     for (let j = i + 1; j < nodes.length; j++) {
       const b = nodes[j];
       _tmp.subVectors(a.pos, b.pos);
-      const d = Math.max(_tmp.length(), 0.5);
-      const sameState = isActive(a) === isActive(b);
-      const K = sameState
-        ? (isActive(a) ? K_REP_SAME_ACTIVE : K_REP_SAME_INACTIVE)
-        : K_REP_CROSS;
-      const f = K / (d * d);
+      const d = Math.max(_tmp.length(), 0.4);
+      if (d > 3.5) continue;
+      const f = K_REP / (d * d);
       _tmp.normalize().multiplyScalar(f);
       a.vel.add(_tmp);
       if (!b.fixed) b.vel.sub(_tmp);
     }
   }
 
-  for (const link of links) {
-    const src = linkMap.get(link.from);
-    const tgt = linkMap.get(link.to);
-    if (!src || !tgt) continue;
-    _tmp.subVectors(tgt.pos, src.pos);
-    const d = _tmp.length();
-    const f = (d - REST) * K_SPR;
-    _tmp.normalize().multiplyScalar(f);
-    if (!src.fixed) src.vel.add(_tmp);
-    if (!tgt.fixed) tgt.vel.sub(_tmp);
-  }
-
   for (const n of nodes) {
     if (n.fixed) continue;
     n.vel.multiplyScalar(DAMP);
     n.pos.addScaledVector(n.vel, dt);
-    if (n.pos.length() > 18) n.pos.setLength(18);
   }
 }
 
@@ -330,22 +378,22 @@ export default function LiminalDashboard({
     scene.fog = new THREE.FogExp2(0x08090f, 0.016);
 
     // ── Camera ────────────────────────────────────────────────────
-    const camera = new THREE.PerspectiveCamera(58, W / H, 0.1, 300);
-    camera.position.set(0, 5, 24);
+    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 400);
+    camera.position.set(0, 14, 32);
 
     // ── Controls ──────────────────────────────────────────────────
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping  = true;
     controls.dampingFactor  = 0.055;
     controls.minDistance    = 4;
-    controls.maxDistance    = 70;
+    controls.maxDistance    = 100;
     controls.autoRotate     = true;
     controls.autoRotateSpeed = 0.35;
 
     // ── Lights ────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0x111828, 3));
-    const keyL = new THREE.PointLight(0x5b8cff, 4, 35);
-    keyL.position.set(0, 6, 2);
+    const keyL = new THREE.PointLight(0x5b8cff, 4, 60);
+    keyL.position.set(0, 10, 4);
     scene.add(keyL);
     const fillL = new THREE.PointLight(0xc298e0, 2, 25);
     fillL.position.set(-10, -4, 6);
@@ -382,71 +430,40 @@ export default function LiminalDashboard({
       scene.add(new THREE.Points(geo, mat));
     }
 
-    // ── Accretion disk + public layer ─────────────────────────────
-    // The hub is the "sun". Internal services orbit in a horizontal accretion
-    // disk at y≈0. External/public endpoints (9router etc.) sit in a second
-    // elevated plane above, visually separating cloud-facing from local infra.
+    // ── Solar system orbital plane ─────────────────────────────────
+    // One horizontal plane at y=0. Each ring corresponds to an orbit:
+    //   R_SVC=3.5 (services), R_ENDPOINT=7 (endpoints), R_MODEL=12 (models), R_SESSION=17 (sessions)
+    // Active nodes float ON this plane; inactive nodes sink below it.
     {
-      // Accretion disk — inner orbital band around the hub (internal layer)
-      const diskGeo = new THREE.RingGeometry(3.5, 11, 80);
-      const diskMat = new THREE.MeshBasicMaterial({
-        color: 0x5b8cff,
-        transparent: true,
-        opacity: 0.04,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const disk = new THREE.Mesh(diskGeo, diskMat);
-      // Horizontal (XZ plane) with slight tilt for perspective depth
-      disk.rotation.x = Math.PI / 2 - 0.18;
-      disk.position.y = -0.5;
-      scene.add(disk);
+      const PLANE_Y = 0;
+      const makeRing = (r0, r1, color, opacity) => {
+        const geo = new THREE.RingGeometry(r0, r1, 96);
+        const mat = new THREE.MeshBasicMaterial({
+          color, transparent: true, opacity,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const m = new THREE.Mesh(geo, mat);
+        m.rotation.x = Math.PI / 2;   // perfectly horizontal
+        m.position.y = PLANE_Y;
+        scene.add(m);
+      };
 
-      // Accretion disk edge glow
-      const edgeGeo = new THREE.RingGeometry(10.7, 11.1, 80);
-      const edgeMat = new THREE.MeshBasicMaterial({
-        color: 0x89c97f,
-        transparent: true,
-        opacity: 0.14,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const edge = new THREE.Mesh(edgeGeo, edgeMat);
-      edge.rotation.x = Math.PI / 2 - 0.18;
-      edge.position.y = -0.5;
-      scene.add(edge);
+      // Full orbital disk (faint fill)
+      makeRing(2.5, 19, 0x2a3a5a, 0.03);
 
-      // Public/external layer — elevated horizontal plane above the disk
-      const pubGeo = new THREE.CircleGeometry(13, 72);
-      const pubMat = new THREE.MeshBasicMaterial({
-        color: 0xc298e0,
-        transparent: true,
-        opacity: 0.025,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const pub = new THREE.Mesh(pubGeo, pubMat);
-      pub.rotation.x = Math.PI / 2 - 0.12;
-      pub.position.y = 6.5;
-      scene.add(pub);
+      // Service orbit ring glow
+      makeRing(3.2, 3.9, 0x89c97f, 0.12);
 
-      // Public layer edge ring
-      const pubEdgeGeo = new THREE.RingGeometry(12.6, 13, 72);
-      const pubEdgeMat = new THREE.MeshBasicMaterial({
-        color: 0xc298e0,
-        transparent: true,
-        opacity: 0.1,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const pubEdge = new THREE.Mesh(pubEdgeGeo, pubEdgeMat);
-      pubEdge.rotation.x = Math.PI / 2 - 0.12;
-      pubEdge.position.y = 6.5;
-      scene.add(pubEdge);
+      // Endpoint orbit ring glow (Ollama ↔ 9router)
+      makeRing(6.6, 7.5, 0x5b8cff, 0.10);
+
+      // Model orbit ring glow
+      makeRing(11.4, 12.6, 0xc298e0, 0.08);
+
+      // Session orbit ring glow (outermost)
+      makeRing(16.4, 17.6, 0xe0a073, 0.06);
     }
 
     // ── Nodes + Sprites ───────────────────────────────────────────
@@ -588,7 +605,7 @@ export default function LiminalDashboard({
       rafId = requestAnimationFrame(animate);
       frame++;
 
-      if (frame < 500) physicsStep(nodes, links, nodeMap);
+      physicsStep(nodes, links, nodeMap);
 
       const t = frame * 0.016;
 
