@@ -8,12 +8,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // ── Node type config ──────────────────────────────────────────────────────────
+// endpoint = green (live connected router/container); model = purple (AI models)
 const TYPE_CFG = {
   hub:      { radius: 1.35, hex: 0x5b8cff, glowHex: '#5b8cff', emissive: 0x0c1a60, label: 'Hub' },
   service:  { radius: 0.55, hex: 0x89c97f, glowHex: '#89c97f', emissive: 0x0d2d15, label: 'Service' },
-  endpoint: { radius: 0.50, hex: 0xc298e0, glowHex: '#c298e0', emissive: 0x2a0d44, label: 'Endpoint' },
+  endpoint: { radius: 0.52, hex: 0x6dcc82, glowHex: '#6dcc82', emissive: 0x0a2e14, label: 'Endpoint' },
+  model:    { radius: 0.42, hex: 0xc298e0, glowHex: '#c298e0', emissive: 0x2a0d44, label: 'Model' },
   session:  { radius: 0.38, hex: 0xe0a073, glowHex: '#e0a073', emissive: 0x3d1a00, label: 'Session' },
-  offline:  { radius: 0.45, hex: 0x2e2e42, glowHex: '#2e2e42', emissive: 0x080810, label: 'Offline' },
+  offline:  { radius: 0.42, hex: 0x2e2e42, glowHex: '#2e2e42', emissive: 0x080810, label: 'Offline' },
 };
 
 function hexNumToRgbStr(hex) {
@@ -73,7 +75,27 @@ function is9RouterKey(key) {
   return key.includes('9router') || key.includes('local_20128');
 }
 
-function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys }) {
+// Modular model list resolver — extend this as new endpoint types are added.
+// Returns [{name, isDefault}] for a given endpoint.
+function getEndpointModels(key, ep, knownModels) {
+  // Backend-reported model array (highest priority)
+  if (Array.isArray(ep.models) && ep.models.length) {
+    return ep.models.map(m => ({ name: String(m), isDefault: m === ep.model || m === ep.defaultModel }));
+  }
+  // 9router: use known combos from knownModels prop, default to ['MAX']
+  if (is9RouterKey(key)) {
+    const routerModels = (knownModels || [])
+      .filter(m => m.epKey === key || m.endpoint === key)
+      .map(m => m.id || m.name || String(m));
+    const combos = routerModels.length ? routerModels : ['MAX'];
+    return combos.map(name => ({ name, isDefault: name === (ep.defaultModel || ep.model || 'MAX') }));
+  }
+  // Ollama / other single-model endpoints
+  if (ep.model) return [{ name: ep.model, isDefault: true }];
+  return [];
+}
+
+function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels }) {
   const nodes = [];
   const links = [];
 
@@ -153,36 +175,42 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     links.push({ from: parentId, to: `ep_${key}` });
 
     // ── Model nodes (Ring 2 — r=12) ─────────────────────────────────────────
-    // Use ep.models[] array if available (9router reports combos), else single ep.model
-    const modelList = Array.isArray(ep.models) && ep.models.length
-      ? ep.models
-      : (ep.model ? [ep.model] : []);
+    // getEndpointModels is the modular resolver: extend it for new endpoint types.
+    const modelList = getEndpointModels(key, ep, knownModels);
+    const spread = Math.min(0.55, 1.4 / Math.max(modelList.length, 1));
 
-    modelList.forEach((m, mi) => {
-      const spread = Math.min(0.5, 1.2 / Math.max(modelList.length, 1));
+    modelList.forEach(({ name, isDefault }, mi) => {
       const mAngle = angle + (mi - (modelList.length - 1) / 2) * spread;
-      const isActiveModel = m === ep.model || m === ep.defaultModel;
-      const mTargetY = isActiveModel ? Y_ACTIVE : Y_OFFLINE_MOD;
+      const mTargetY = isDefault ? Y_ACTIVE : Y_OFFLINE_MOD;
+      const shortLabel = name.split(':')[0].split('/').pop();
       const modelId = `model_${key}_${mi}`;
-      const shortLabel = typeof m === 'string' ? m.split(':')[0].split('/').pop() : String(m);
       nodes.push({
         id: modelId, label: shortLabel,
-        type: isActiveModel ? 'endpoint' : 'offline',
+        type: isDefault ? 'model' : 'offline',
         pos: new THREE.Vector3(Math.cos(mAngle) * R_MODEL, mTargetY, Math.sin(mAngle) * R_MODEL),
         vel: new THREE.Vector3(),
         orbitRadius: R_MODEL, orbitAngle: mAngle, orbitSpeed: 0.004, targetY: mTargetY,
-        meta: { desc: isActiveModel ? '● active model' : '○ available', model: m },
+        modelName: name, isDefaultModel: isDefault,
+        meta: { desc: isDefault ? '● active model' : '○ available', model: name },
       });
       links.push({ from: `ep_${key}`, to: modelId });
     });
   });
 
   // ── Sessions (Ring 3 — outermost, r=17) ───────────────────────────────────
+  // Sessions link to their endpoint's default model node when available,
+  // so for 9router sessions they orbit around MAX (or whichever combo was used).
   const recent = (sessions || []).slice(0, 10);
   recent.forEach((s, i) => {
     const epId = `ep_${s.endpoint}`;
     const epNode = nodes.find(n => n.id === epId);
-    const baseAngle = epNode ? epNode.orbitAngle : (i / Math.max(recent.length, 1)) * Math.PI * 2;
+    // Prefer linking to the default model node of this session's endpoint
+    const defaultModelNode = nodes.find(n =>
+      n.id.startsWith(`model_${s.endpoint}_`) && n.isDefaultModel
+    );
+    const parentId = defaultModelNode?.id ?? (epNode ? epId : 'hub');
+    const parentNode = nodes.find(n => n.id === parentId);
+    const baseAngle = parentNode ? parentNode.orbitAngle : (i / Math.max(recent.length, 1)) * Math.PI * 2;
     const angle = baseAngle + (i % 3 - 1) * 0.28;
     nodes.push({
       id: `sess_${s.id}`, label: s.name || `Session ${i + 1}`,
@@ -196,50 +224,58 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
         date: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '',
       },
     });
-    links.push({ from: epNode ? epId : 'hub', to: `sess_${s.id}` });
+    links.push({ from: parentId, to: `sess_${s.id}` });
   });
 
   return { nodes, links };
 }
 
 // ── Orbital physics ───────────────────────────────────────────────────────────
-// Nodes orbit their assigned ring radius in the XZ plane (like planets).
-// Active nodes float up toward y=0 (the orbital plane); inactive nodes sink below.
-const _tmp = new THREE.Vector3();
+// Nodes orbit in the XZ plane (y=0 is the ecliptic).
+// Active nodes are pulled strongly to y=0; inactive nodes sink far below.
+// Repulsion is XZ-only so it never knocks nodes off the orbital plane.
+const _tmp  = new THREE.Vector3();
+const _tmpB = new THREE.Vector3();
 function physicsStep(nodes, links, linkMap, dt = 0.016) {
-  const K_ORBIT = 0.10;  // spring strength toward orbital XZ position
-  const K_GRAV  = 0.18;  // vertical gravity toward targetY
-  const K_REP   = 3.0;   // short-range repulsion to prevent overlap
-  const DAMP    = 0.82;
+  const K_ORBIT      = 0.14;   // XZ spring toward orbital radius
+  const K_GRAV_ACT   = 0.40;   // strong pull back to y=0 for active nodes
+  const K_GRAV_INACT = 0.28;   // pull inactive nodes downward
+  const K_REP        = 5.0;    // XZ-only repulsion (keeps nodes spread on ring)
+  const DAMP         = 0.80;
 
   for (const n of nodes) {
     if (n.fixed) continue;
-    // Advance orbital angle (inner rings faster)
-    n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0) * dt * 60;
 
-    // Spring toward target orbital XZ position
+    // Advance orbital angle slowly (inner rings orbit faster, outer slower)
+    n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0);
+
+    // XZ spring: pull toward current orbital position on the ring
     const tx = Math.cos(n.orbitAngle) * (n.orbitRadius ?? 0);
     const tz = Math.sin(n.orbitAngle) * (n.orbitRadius ?? 0);
     n.vel.x += (tx - n.pos.x) * K_ORBIT;
     n.vel.z += (tz - n.pos.z) * K_ORBIT;
 
-    // Vertical gravity: active → y=0 (orbital plane), inactive → sink below
-    n.vel.y += ((n.targetY ?? 0) - n.pos.y) * K_GRAV;
+    // Y gravity: active → snap to y=0, inactive → fall below (black hole drain)
+    const ty = n.targetY ?? 0;
+    const K_G = ty < 0 ? K_GRAV_INACT : K_GRAV_ACT;
+    n.vel.y += (ty - n.pos.y) * K_G;
   }
 
-  // Short-range repulsion (prevent node pile-ups on same ring)
+  // XZ-only repulsion — never push nodes off the ecliptic plane
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
     if (a.fixed) continue;
     for (let j = i + 1; j < nodes.length; j++) {
       const b = nodes[j];
-      _tmp.subVectors(a.pos, b.pos);
-      const d = Math.max(_tmp.length(), 0.4);
-      if (d > 3.5) continue;
+      // Only repel nodes on the same ring (same orbitRadius)
+      if (Math.abs((a.orbitRadius ?? 0) - (b.orbitRadius ?? 0)) > 1) continue;
+      _tmpB.set(a.pos.x - b.pos.x, 0, a.pos.z - b.pos.z);
+      const d = Math.max(_tmpB.length(), 0.4);
+      if (d > 4) continue;
       const f = K_REP / (d * d);
-      _tmp.normalize().multiplyScalar(f);
-      a.vel.add(_tmp);
-      if (!b.fixed) b.vel.sub(_tmp);
+      _tmpB.normalize().multiplyScalar(f);
+      a.vel.x += _tmpB.x; a.vel.z += _tmpB.z;
+      if (!b.fixed) { b.vel.x -= _tmpB.x; b.vel.z -= _tmpB.z; }
     }
   }
 
@@ -247,6 +283,8 @@ function physicsStep(nodes, links, linkMap, dt = 0.016) {
     if (n.fixed) continue;
     n.vel.multiplyScalar(DAMP);
     n.pos.addScaledVector(n.vel, dt);
+    // Clamp inactive nodes so they don't fall forever
+    if ((n.targetY ?? 0) < 0) n.pos.y = Math.max(n.pos.y, n.targetY - 3);
   }
 }
 
@@ -335,8 +373,8 @@ export default function LiminalDashboard({
   }, [systemServices, selectableEndpointKeys, allEndpointMeta, sessions]);
 
   const graphData = useMemo(
-    () => buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys }),
-    [systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys],
+    () => buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels }),
+    [systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels],
   );
 
   graphDataRef.current = graphData;
@@ -378,8 +416,8 @@ export default function LiminalDashboard({
     scene.fog = new THREE.FogExp2(0x08090f, 0.016);
 
     // ── Camera ────────────────────────────────────────────────────
-    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 400);
-    camera.position.set(0, 14, 32);
+    const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 400);
+    camera.position.set(0, 28, 22);  // ~52° elevation — horizontal disk reads clearly
 
     // ── Controls ──────────────────────────────────────────────────
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -450,20 +488,20 @@ export default function LiminalDashboard({
         scene.add(m);
       };
 
-      // Full orbital disk (faint fill)
-      makeRing(2.5, 19, 0x2a3a5a, 0.03);
+      // Full orbital disk (faint fill — shows the ecliptic plane)
+      makeRing(2.0, 20, 0x1a2a4a, 0.05);
 
-      // Service orbit ring glow
-      makeRing(3.2, 3.9, 0x89c97f, 0.12);
+      // Service orbit ring
+      makeRing(3.0, 4.1, 0x89c97f, 0.18);
 
-      // Endpoint orbit ring glow (Ollama ↔ 9router)
-      makeRing(6.6, 7.5, 0x5b8cff, 0.10);
+      // Endpoint orbit ring (Ollama ↔ 9router)
+      makeRing(6.3, 7.8, 0x5b8cff, 0.16);
 
-      // Model orbit ring glow
-      makeRing(11.4, 12.6, 0xc298e0, 0.08);
+      // Model orbit ring
+      makeRing(11.0, 13.0, 0xc298e0, 0.13);
 
-      // Session orbit ring glow (outermost)
-      makeRing(16.4, 17.6, 0xe0a073, 0.06);
+      // Session orbit ring (outermost)
+      makeRing(16.0, 18.0, 0xe0a073, 0.09);
     }
 
     // ── Nodes + Sprites ───────────────────────────────────────────
