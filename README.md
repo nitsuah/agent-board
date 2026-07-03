@@ -47,8 +47,8 @@ docker compose -f config/docker-compose.yml --project-directory . up -d
 or for GPU:
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\motor-pool
-PS C:\Users\ajhar\code\motor-pool> docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml --project-directory . up
+cd C:\Users\$env:USERNAME\code\motor-pool 
+docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml up -d
 ```
 
 Open [http://localhost:3000](http://localhost:3000) — that's it.
@@ -65,6 +65,9 @@ docker compose -f config/docker-compose.yml --project-directory . --profile bb-m
 
 # MCP tool servers (Content Studio / Website Agent)
 docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d tool-content-gen tool-website
+
+# MCP tool servers (Content Studio / Website Agent)
+docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d nemoclaw
 ```
 
 Default endpoints (minimal stack):
