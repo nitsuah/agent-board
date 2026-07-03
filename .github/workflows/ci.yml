@@ -21,9 +21,23 @@ jobs:
         run: pip install pre-commit
       - name: Run pre-commit
         run: pre-commit run --all-files --config config/.pre-commit-config.yaml
+      - name: Create .env for compose
+        run: touch config/.env
       - name: Docker Compose Build
-        run: docker compose -f config/docker-compose.yml build
+        run: docker compose -f config/docker-compose.yml build agent-dashboard
       - name: Docker Compose Up
-        run: docker compose -f config/docker-compose.yml up -d
+        run: docker compose -f config/docker-compose.yml up -d agent-dashboard
+      - name: Wait for healthy
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -f config/docker-compose.yml ps agent-dashboard | grep -q healthy; then
+              echo "agent-dashboard is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "agent-dashboard did not become healthy in time"
+          docker compose -f config/docker-compose.yml logs agent-dashboard
+          exit 1
       - name: Check Docker Compose Services
         run: docker compose -f config/docker-compose.yml ps
