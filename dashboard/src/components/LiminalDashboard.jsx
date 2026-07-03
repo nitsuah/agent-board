@@ -67,10 +67,10 @@ function goldenPos(i, total, radius) {
 }
 
 // Orbital ring radii
-const R_SVC      = 3.5;   // services inner ring
-const R_ENDPOINT = 7.0;   // endpoint ring (Ollama ↔ 9router)
-const R_MODEL    = 12.0;  // model ring
-const R_SESSION  = 17.0;  // session outer ring
+const R_SVC      = 3.5;   // services orbit hub
+const R_ENDPOINT = 7.0;   // endpoints orbit hub (Ollama ↔ 9router)
+const R_CHILD    = 4.0;   // models orbit their parent endpoint
+const R_SESSION  = 12.0;  // sessions orbit their parent model
 
 // Y positions: active nodes cluster near y=0, inactive drain below (black-hole gravity).
 const Y_ACTIVE       =  0;
@@ -128,7 +128,8 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       type: isRunning ? 'service' : 'offline',
       pos: new THREE.Vector3(Math.cos(angle) * R_SVC, targetY, Math.sin(angle) * R_SVC),
       vel: new THREE.Vector3(),
-      orbitRadius: R_SVC, orbitAngle: angle, orbitSpeed: 0.014, targetY,
+      orbitRadius: R_SVC, orbitAngle: angle, orbitSpeed: 0.002, targetY,
+      orbitParent: 'hub',
       internal: true, svcKey: key,
       meta: {
         desc: isRunning ? '● running' : '○ stopped',
@@ -159,14 +160,25 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     epAngles[k] = (Math.PI / 2) + (i / Math.max(otherEpKeys.length, 1)) * Math.PI;
   });
 
-  eps.forEach((key) => {
+  // Separate ollama-container endpoints (these ARE the model, not a separate endpoint)
+  // from real endpoints like Ollama service and 9router. ollama-container models
+  // should only appear as model nodes, not as duplicate green endpoint nodes.
+  const realEps = eps.filter(key => {
+    const ep = (dockerStatus?.endpoints || {})[key] || {};
+    return ep.backendType !== 'ollama-container';
+  });
+  const ollamaContainerEps = eps.filter(key => {
+    const ep = (dockerStatus?.endpoints || {})[key] || {};
+    return ep.backendType === 'ollama-container';
+  });
+
+  realEps.forEach((key) => {
     const ep = (dockerStatus?.endpoints || {})[key] || {};
     const meta = allEndpointMeta?.[key] || {};
     const isLive = ep.live !== false;
     const angle = epAngles[key] ?? 0;
     const isExternal = ep.backendType === 'custom' || ep.type === 'custom' || is9RouterKey(key);
-    const isOllamaChild = ep.backendType === 'ollama-container' && nodes.some(n => n.id === 'svc_ollama');
-    const parentId = isOllamaChild ? 'svc_ollama' : 'hub';
+    const parentId = 'hub';
     const targetY = isLive ? Y_ACTIVE : Y_OFFLINE_EP;
 
     nodes.push({
@@ -174,7 +186,8 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       type: isLive ? 'endpoint' : 'offline',
       pos: new THREE.Vector3(Math.cos(angle) * R_ENDPOINT, targetY, Math.sin(angle) * R_ENDPOINT),
       vel: new THREE.Vector3(),
-      orbitRadius: R_ENDPOINT, orbitAngle: angle, orbitSpeed: 0.007, targetY,
+      orbitRadius: R_ENDPOINT, orbitAngle: angle, orbitSpeed: 0.0008, targetY,
+      orbitParent: parentId,
       internal: !isExternal, epKey: key,
       meta: {
         desc: isLive ? '● live' : '○ offline',
@@ -185,27 +198,51 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     });
     links.push({ from: parentId, to: `ep_${key}` });
 
-    // ── Model nodes (Ring 2 — r=12) ─────────────────────────────────────────
-    // getEndpointModels is the modular resolver: extend it for new endpoint types.
+    // ── Model nodes — children orbit their parent endpoint ──────────────────
     const modelList = getEndpointModels(key, ep, knownModels);
     const spread = Math.min(0.55, 1.4 / Math.max(modelList.length, 1));
 
     modelList.forEach(({ name, isDefault }, mi) => {
-      const mAngle = angle + (mi - (modelList.length - 1) / 2) * spread;
+      const mAngle = (mi / Math.max(modelList.length, 1)) * Math.PI * 2;
       const mTargetY = isDefault ? Y_ACTIVE : Y_OFFLINE_MOD;
       const shortLabel = name.split(':')[0].split('/').pop();
       const modelId = `model_${key}_${mi}`;
       nodes.push({
         id: modelId, label: shortLabel,
         type: isDefault ? 'model' : 'offline',
-        pos: new THREE.Vector3(Math.cos(mAngle) * R_MODEL, mTargetY, Math.sin(mAngle) * R_MODEL),
+        pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(angle) * R_ENDPOINT, mTargetY, Math.sin(mAngle) * R_CHILD + Math.sin(angle) * R_ENDPOINT),
         vel: new THREE.Vector3(),
-        orbitRadius: R_MODEL, orbitAngle: mAngle, orbitSpeed: 0.004, targetY: mTargetY,
+        orbitRadius: R_CHILD, orbitAngle: mAngle, orbitSpeed: 0.0012, targetY: mTargetY,
+        orbitParent: `ep_${key}`,
         modelName: name, isDefaultModel: isDefault,
         meta: { desc: isDefault ? '● active model' : '○ available', model: name },
       });
       links.push({ from: `ep_${key}`, to: modelId });
     });
+  });
+
+  // Ollama-container endpoints → model nodes only (no duplicate green endpoint)
+  ollamaContainerEps.forEach((key, i) => {
+    const ep = (dockerStatus?.endpoints || {})[key] || {};
+    const meta = allEndpointMeta?.[key] || {};
+    const ollamaEpNode = nodes.find(n => n.id.startsWith('ep_') && isOllamaKey(n.epKey || '', {}));
+    const parentId = ollamaEpNode?.id ?? 'hub';
+    const parentAngle = ollamaEpNode?.orbitAngle ?? 0;
+    const isLive = ep.live !== false;
+    const modelName = ep.model || meta.label || key;
+    const shortLabel = modelName.split(':')[0].split('/').pop();
+    const mAngle = (i / Math.max(ollamaContainerEps.length, 1)) * Math.PI * 2;
+    nodes.push({
+      id: `model_${key}_0`, label: shortLabel,
+      type: isLive ? 'model' : 'offline',
+      pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(parentAngle) * R_ENDPOINT, isLive ? Y_ACTIVE : Y_OFFLINE_MOD, Math.sin(mAngle) * R_CHILD + Math.sin(parentAngle) * R_ENDPOINT),
+      vel: new THREE.Vector3(),
+      orbitRadius: R_CHILD, orbitAngle: mAngle, orbitSpeed: 0.0012, targetY: isLive ? Y_ACTIVE : Y_OFFLINE_MOD,
+      orbitParent: parentId,
+      modelName, isDefaultModel: true,
+      meta: { desc: isLive ? '● active model' : '○ available', model: modelName },
+    });
+    links.push({ from: parentId, to: `model_${key}_0` });
   });
 
   // ── Sessions (Ring 3 — outermost, r=17) ───────────────────────────────────
@@ -221,17 +258,17 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     );
     const parentId = defaultModelNode?.id ?? (epNode ? epId : 'hub');
     const parentNode = nodes.find(n => n.id === parentId);
-    const baseAngle = parentNode ? parentNode.orbitAngle : (i / Math.max(recent.length, 1)) * Math.PI * 2;
-    const angle = baseAngle + (i % 3 - 1) * 0.28;
+    const sAngle = (i / Math.max(recent.length, 1)) * Math.PI * 2;
+    const parentPos = parentNode?.pos ?? new THREE.Vector3(0, 0, 0);
     const expColor = EXPERIENCE_NODE_COLOR[s.experience] ?? EXPERIENCE_NODE_COLOR.default;
-    // Slight Y spread per session so they have volumetric depth, not a flat ring
     const sessionY = (i % 3 - 1) * 1.8;
     nodes.push({
       id: `sess_${s.id}`, label: s.name || `Session ${i + 1}`,
       type: 'session', sessionId: s.id,
-      pos: new THREE.Vector3(Math.cos(angle) * R_SESSION, sessionY, Math.sin(angle) * R_SESSION),
+      pos: new THREE.Vector3(Math.cos(sAngle) * 3.0 + parentPos.x, sessionY, Math.sin(sAngle) * 3.0 + parentPos.z),
       vel: new THREE.Vector3(),
-      orbitRadius: R_SESSION, orbitAngle: angle, orbitSpeed: 0.002, targetY: sessionY,
+      orbitRadius: 3.0, orbitAngle: sAngle, orbitSpeed: 0.0015, targetY: sessionY,
+      orbitParent: parentId,
       customHex: expColor.hex, customGlow: expColor.glow, customEmissive: expColor.emissive,
       meta: {
         desc: `${s.messageCount || 0} messages`,
@@ -246,47 +283,49 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
 }
 
 // ── Orbital physics ───────────────────────────────────────────────────────────
-// Nodes orbit in the XZ plane (y=0 is the ecliptic).
-// Active nodes are pulled strongly to y=0; inactive nodes sink far below.
-// Repulsion is XZ-only so it never knocks nodes off the orbital plane.
+// Each node orbits its parent (orbitParent) at orbitRadius, not the origin.
+// Active nodes float near y=0; inactive nodes sink below.
 const _tmp  = new THREE.Vector3();
 const _tmpB = new THREE.Vector3();
 function physicsStep(nodes, links, linkMap, dt = 0.016) {
-  const K_ORBIT      = 0.14;   // XZ spring toward orbital radius
-  const K_GRAV_ACT   = 0.40;   // strong pull back to y=0 for active nodes
-  const K_GRAV_INACT = 0.28;   // pull inactive nodes downward
-  const K_REP        = 5.0;    // XZ-only repulsion (keeps nodes spread on ring)
-  const DAMP         = 0.80;
+  const K_ORBIT      = 0.12;
+  const K_GRAV_ACT   = 0.35;
+  const K_GRAV_INACT = 0.20;
+  const K_REP        = 4.0;
+  const DAMP         = 0.82;
 
   for (const n of nodes) {
     if (n.fixed) continue;
 
-    // Advance orbital angle slowly (inner rings orbit faster, outer slower)
+    // Advance orbital angle (very slow)
     n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0);
 
-    // XZ spring: pull toward current orbital position on the ring
-    const tx = Math.cos(n.orbitAngle) * (n.orbitRadius ?? 0);
-    const tz = Math.sin(n.orbitAngle) * (n.orbitRadius ?? 0);
+    // Find parent position — orbit around parent, not origin
+    const parent = n.orbitParent ? linkMap.get(n.orbitParent) : null;
+    const px = parent ? parent.pos.x : 0;
+    const pz = parent ? parent.pos.z : 0;
+
+    // Target XZ position = parent position + orbital offset
+    const tx = px + Math.cos(n.orbitAngle) * (n.orbitRadius ?? 0);
+    const tz = pz + Math.sin(n.orbitAngle) * (n.orbitRadius ?? 0);
     n.vel.x += (tx - n.pos.x) * K_ORBIT;
     n.vel.z += (tz - n.pos.z) * K_ORBIT;
 
-    // Y gravity: active → snap to y=0, inactive → fall below (black hole drain)
+    // Y gravity
     const ty = n.targetY ?? 0;
     const K_G = ty < 0 ? K_GRAV_INACT : K_GRAV_ACT;
     n.vel.y += (ty - n.pos.y) * K_G;
   }
 
-  // XZ-only repulsion — never push nodes off the ecliptic plane
+  // Short-range XZ repulsion between nearby nodes
   for (let i = 0; i < nodes.length; i++) {
     const a = nodes[i];
     if (a.fixed) continue;
     for (let j = i + 1; j < nodes.length; j++) {
       const b = nodes[j];
-      // Only repel nodes on the same ring (same orbitRadius)
-      if (Math.abs((a.orbitRadius ?? 0) - (b.orbitRadius ?? 0)) > 1) continue;
       _tmpB.set(a.pos.x - b.pos.x, 0, a.pos.z - b.pos.z);
       const d = Math.max(_tmpB.length(), 0.4);
-      if (d > 4) continue;
+      if (d > 3.5) continue;
       const f = K_REP / (d * d);
       _tmpB.normalize().multiplyScalar(f);
       a.vel.x += _tmpB.x; a.vel.z += _tmpB.z;
@@ -298,8 +337,7 @@ function physicsStep(nodes, links, linkMap, dt = 0.016) {
     if (n.fixed) continue;
     n.vel.multiplyScalar(DAMP);
     n.pos.addScaledVector(n.vel, dt);
-    // Clamp inactive nodes so they don't fall forever
-    if ((n.targetY ?? 0) < 0) n.pos.y = Math.max(n.pos.y, n.targetY - 3);
+    if ((n.targetY ?? 0) < 0) n.pos.y = Math.max(n.pos.y, (n.targetY ?? 0) - 3);
   }
 }
 
