@@ -7,6 +7,17 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+// ── Experience → session color map ───────────────────────────────────────────
+const EXPERIENCE_NODE_COLOR = {
+  safechat:   { hex: 0x00e5ff, glow: '#00e5ff', emissive: 0x003344 },
+  nemoclaw:   { hex: 0xff4d6d, glow: '#ff4d6d', emissive: 0x440011 },
+  creative:   { hex: 0xf472b6, glow: '#f472b6', emissive: 0x440030 },
+  research:   { hex: 0x60a5fa, glow: '#60a5fa', emissive: 0x001144 },
+  assistant:  { hex: 0xa78bfa, glow: '#a78bfa', emissive: 0x1a0044 },
+  code:       { hex: 0x34d399, glow: '#34d399', emissive: 0x003322 },
+  default:    { hex: 0xe0a073, glow: '#e0a073', emissive: 0x3d1a00 },
+};
+
 // ── Node type config ──────────────────────────────────────────────────────────
 // endpoint = green (live connected router/container); model = purple (AI models)
 const TYPE_CFG = {
@@ -61,12 +72,11 @@ const R_ENDPOINT = 7.0;   // endpoint ring (Ollama ↔ 9router)
 const R_MODEL    = 12.0;  // model ring
 const R_SESSION  = 17.0;  // session outer ring
 
-// Y positions: active nodes float to the orbital plane (y=0),
-// inactive nodes sink below it.
-const Y_ACTIVE   =  0;
-const Y_OFFLINE_EP  = -5;
-const Y_OFFLINE_SVC = -4;
-const Y_OFFLINE_MOD = -3;
+// Y positions: active nodes cluster near y=0, inactive drain below (black-hole gravity).
+const Y_ACTIVE       =  0;
+const Y_OFFLINE_EP   = -8;
+const Y_OFFLINE_SVC  = -6;
+const Y_OFFLINE_MOD  = -5;
 
 function isOllamaKey(key, ep) {
   return ep.backendType === 'ollama-container' || ep.backendType === 'ollama' || key.includes('ollama');
@@ -111,7 +121,8 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   svcs.forEach(([key, svc], i) => {
     const angle = (i / Math.max(svcs.length, 1)) * Math.PI * 2;
     const isRunning = svc.running;
-    const targetY = isRunning ? Y_ACTIVE : Y_OFFLINE_SVC;
+    const svcYOffset = isRunning ? (i % 2 === 0 ? 0.8 : -0.8) : 0;
+    const targetY = isRunning ? svcYOffset : Y_OFFLINE_SVC;
     nodes.push({
       id: `svc_${key}`, label: svc.label || key,
       type: isRunning ? 'service' : 'offline',
@@ -212,12 +223,16 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     const parentNode = nodes.find(n => n.id === parentId);
     const baseAngle = parentNode ? parentNode.orbitAngle : (i / Math.max(recent.length, 1)) * Math.PI * 2;
     const angle = baseAngle + (i % 3 - 1) * 0.28;
+    const expColor = EXPERIENCE_NODE_COLOR[s.experience] ?? EXPERIENCE_NODE_COLOR.default;
+    // Slight Y spread per session so they have volumetric depth, not a flat ring
+    const sessionY = (i % 3 - 1) * 1.8;
     nodes.push({
       id: `sess_${s.id}`, label: s.name || `Session ${i + 1}`,
       type: 'session', sessionId: s.id,
-      pos: new THREE.Vector3(Math.cos(angle) * R_SESSION, Y_ACTIVE, Math.sin(angle) * R_SESSION),
+      pos: new THREE.Vector3(Math.cos(angle) * R_SESSION, sessionY, Math.sin(angle) * R_SESSION),
       vel: new THREE.Vector3(),
-      orbitRadius: R_SESSION, orbitAngle: angle, orbitSpeed: 0.002, targetY: Y_ACTIVE,
+      orbitRadius: R_SESSION, orbitAngle: angle, orbitSpeed: 0.002, targetY: sessionY,
+      customHex: expColor.hex, customGlow: expColor.glow, customEmissive: expColor.emissive,
       meta: {
         desc: `${s.messageCount || 0} messages`,
         experience: s.experience || '',
@@ -385,15 +400,16 @@ export default function LiminalDashboard({
     if (!sRef?._nodeMap) return;
     const latest = graphDataRef.current;
     if (!latest) return;
-    const latestByType = new Map(latest.nodes.map(n => [n.id, n.type]));
+    const latestById = new Map(latest.nodes.map(n => [n.id, n]));
     for (const [id, node] of sRef._nodeMap) {
-      const newType = latestByType.get(id);
-      if (newType && node.type !== newType && node._mat) {
-        node.type = newType;
-        const cfg = TYPE_CFG[newType] ?? TYPE_CFG.offline;
-        node._mat.color.setHex(cfg.hex);
-        node._mat.emissive.setHex(cfg.emissive);
-        node._mat.opacity = newType === 'offline' ? 0.45 : 0.92;
+      const updated = latestById.get(id);
+      if (!updated || !node._mat) continue;
+      if (node.type !== updated.type) {
+        node.type = updated.type;
+        const cfg = TYPE_CFG[updated.type] ?? TYPE_CFG.offline;
+        node._mat.color.setHex(updated.customHex ?? cfg.hex);
+        node._mat.emissive.setHex(updated.customEmissive ?? cfg.emissive);
+        node._mat.opacity = updated.type === 'offline' ? 0.38 : 0.95;
       }
     }
   }, [graphData]);
@@ -468,41 +484,7 @@ export default function LiminalDashboard({
       scene.add(new THREE.Points(geo, mat));
     }
 
-    // ── Solar system orbital plane ─────────────────────────────────
-    // One horizontal plane at y=0. Each ring corresponds to an orbit:
-    //   R_SVC=3.5 (services), R_ENDPOINT=7 (endpoints), R_MODEL=12 (models), R_SESSION=17 (sessions)
-    // Active nodes float ON this plane; inactive nodes sink below it.
-    {
-      const PLANE_Y = 0;
-      const makeRing = (r0, r1, color, opacity) => {
-        const geo = new THREE.RingGeometry(r0, r1, 96);
-        const mat = new THREE.MeshBasicMaterial({
-          color, transparent: true, opacity,
-          side: THREE.DoubleSide,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        });
-        const m = new THREE.Mesh(geo, mat);
-        m.rotation.x = Math.PI / 2;   // perfectly horizontal
-        m.position.y = PLANE_Y;
-        scene.add(m);
-      };
-
-      // Full orbital disk (faint fill — shows the ecliptic plane)
-      makeRing(2.0, 20, 0x1a2a4a, 0.05);
-
-      // Service orbit ring
-      makeRing(3.0, 4.1, 0x89c97f, 0.18);
-
-      // Endpoint orbit ring (Ollama ↔ 9router)
-      makeRing(6.3, 7.8, 0x5b8cff, 0.16);
-
-      // Model orbit ring
-      makeRing(11.0, 13.0, 0xc298e0, 0.13);
-
-      // Session orbit ring (outermost)
-      makeRing(16.0, 18.0, 0xe0a073, 0.09);
-    }
+    // No flat planes — nodes exist as a volumetric 3D network in deep space.
 
     // ── Nodes + Sprites ───────────────────────────────────────────
     const { nodes, links } = graphData;
@@ -519,14 +501,18 @@ export default function LiminalDashboard({
 
     for (const node of nodes) {
       const cfg = TYPE_CFG[node.type] ?? TYPE_CFG.offline;
+      // Session nodes use their experience color if available
+      const nodeHex      = node.customHex      ?? cfg.hex;
+      const nodeEmissive = node.customEmissive ?? cfg.emissive;
+      const nodeGlow     = node.customGlow     ?? cfg.glowHex;
 
       const mat = new THREE.MeshPhongMaterial({
-        color: cfg.hex,
-        emissive: cfg.emissive,
-        emissiveIntensity: node.type === 'hub' ? 1.0 : 0.55,
-        shininess: 90,
+        color: nodeHex,
+        emissive: nodeEmissive,
+        emissiveIntensity: node.type === 'hub' ? 1.2 : 0.65,
+        shininess: 120,
         transparent: true,
-        opacity: node.type === 'offline' ? 0.45 : 0.92,
+        opacity: node.type === 'offline' ? 0.38 : 0.95,
       });
       const mesh = new THREE.Mesh(getGeo(cfg.radius), mat);
       mesh.position.copy(node.pos);
@@ -547,7 +533,7 @@ export default function LiminalDashboard({
       }
 
       const spMat = new THREE.SpriteMaterial({
-        map: getGlowTex(cfg.glowHex),
+        map: getGlowTex(nodeGlow),
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
