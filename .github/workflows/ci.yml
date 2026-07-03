@@ -22,8 +22,8 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files --config config/.pre-commit-config.yaml
       - name: Docker Compose Build
-        run: docker compose build
+        run: docker compose -f config/docker-compose.yml build
       - name: Docker Compose Up
-        run: docker compose up -d
+        run: docker compose -f config/docker-compose.yml up -d
       - name: Check Docker Compose Services
-        run: docker compose ps
+        run: docker compose -f config/docker-compose.yml ps
