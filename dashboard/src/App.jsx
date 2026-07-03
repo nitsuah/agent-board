@@ -905,6 +905,8 @@ function App() {
               knownModels={knownModels}
               serviceActionErrors={serviceActionErrors}
               servicesStarting={servicesStarting}
+              sessionPendingReply={sessionPendingReply}
+              sessionErrors={sessionErrors}
             />
           )}
         </div>

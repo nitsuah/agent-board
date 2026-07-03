@@ -406,12 +406,22 @@ export default function LiminalDashboard({
   runningServices, totalServices, wsConnected,
   onSelectSession, onCreateSession, selectedExperience, EXPERIENCE_META,
   onRunServiceAction, serviceActionsInFlight, modelPulls, onPullModel, knownModels,
+  activeSessionId, loading, sessionPendingReply, sessionErrors,
 }) {
   const mountRef      = useRef(null);
   const sceneRef      = useRef(null);
   const graphDataRef  = useRef(null);
+  const liveStateRef  = useRef({ activeSessionId: null, loading: false, pendingReply: new Set(), errors: new Set() });
   const [selected, setSelected] = useState(null);
   const [hovered,  setHovered]  = useState(null);
+
+  // Keep live state ref current without triggering scene rebuild
+  liveStateRef.current = {
+    activeSessionId: activeSessionId,
+    loading: loading,
+    pendingReply: sessionPendingReply ?? new Set(),
+    errors: sessionErrors ?? new Set(),
+  };
 
   // Compute topology key: node IDs + link structure — changes only when nodes/links added/removed
   const topologyKey = useMemo(() => {
@@ -594,7 +604,7 @@ export default function LiminalDashboard({
       });
       const line = new THREE.Line(geo, mat);
       scene.add(line);
-      linkObjects.push({ line, geo, src, tgt });
+      linkObjects.push({ line, geo, mat, src, tgt });
     }
 
     // ── Label canvas overlay ──────────────────────────────────────
@@ -662,28 +672,84 @@ export default function LiminalDashboard({
 
       const t = frame * 0.016;
 
+      // Read live state (no re-render needed — just ref reads)
+      const live = liveStateRef.current;
+
+      // Build a set of "active" node IDs — session nodes that are streaming,
+      // pending reply, or have errors. Their ancestor chain also glows.
+      const activeNodeIds = new Set();
+      for (const n of nodes) {
+        if (!n.sessionId) continue;
+        const isStreaming = live.activeSessionId === n.sessionId && live.loading;
+        const isPending  = live.pendingReply.has(n.sessionId);
+        const isError    = live.errors.has(n.sessionId);
+        if (isStreaming || isPending || isError) {
+          activeNodeIds.add(n.id);
+          // Walk the link chain upward to mark ancestors as active too
+          let current = n.id;
+          for (const link of links) {
+            if (link.to === current) { activeNodeIds.add(link.from); current = link.from; }
+          }
+        }
+      }
+
       for (const n of nodes) {
         n._mesh.position.copy(n.pos);
         const isHov = n.id === _hovId;
-        const targetScale = isHov ? 1.3 : 1.0;
+        const isLive = activeNodeIds.has(n.id);
+        const isStreaming = n.sessionId && live.activeSessionId === n.sessionId && live.loading;
+        const isError = n.sessionId && live.errors.has(n.sessionId);
+
+        // Scale: hover=1.3, streaming=1.15 pulse, normal=1.0
+        let targetScale = 1.0;
+        if (isHov) targetScale = 1.3;
+        else if (isStreaming) targetScale = 1.05 + 0.1 * Math.sin(t * 4);
+        else if (isLive) targetScale = 1.08;
         n._mesh.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.12);
+
+        // Emissive boost for active nodes
+        if (n._mat && isLive && !isError) {
+          n._mat.emissiveIntensity = 0.8 + 0.3 * Math.sin(t * 3);
+        } else if (n._mat && isError) {
+          n._mat.emissiveIntensity = 0.5 + 0.5 * Math.sin(t * 6);
+        } else if (n._mat) {
+          n._mat.emissiveIntensity = n.type === 'hub' ? 1.2 : 0.65;
+        }
       }
 
       for (const { sprite, node, spMat } of spriteList) {
         sprite.position.copy(node.pos);
+        const isLive = activeNodeIds.has(node.id);
         const pulse = 0.88 + 0.12 * Math.sin(t * 1.8 + node.pos.x * 0.4);
         const baseOp = node.type === 'hub' ? 0.72 : (node.type === 'offline' ? 0.12 : 0.42);
         const hovBoost = node.id === _hovId ? 0.3 : 0;
-        spMat.opacity = (baseOp + hovBoost) * pulse;
+        const liveBoost = isLive ? 0.25 : 0;
+        spMat.opacity = (baseOp + hovBoost + liveBoost) * pulse;
       }
 
       keyL.intensity = 3.5 + 0.8 * Math.sin(t * 0.6);
 
-      for (const { geo, src, tgt } of linkObjects) {
+      // Link lines: glow bright when data is flowing between the connected nodes
+      for (const { geo, mat: linkMat, src, tgt } of linkObjects) {
         const pos = geo.getAttribute('position');
         pos.setXYZ(0, src.pos.x, src.pos.y, src.pos.z);
         pos.setXYZ(1, tgt.pos.x, tgt.pos.y, tgt.pos.z);
         pos.needsUpdate = true;
+
+        const srcActive = activeNodeIds.has(src.id);
+        const tgtActive = activeNodeIds.has(tgt.id);
+        if (srcActive && tgtActive) {
+          // Data flowing — bright pulsing glow
+          linkMat.opacity = 0.5 + 0.3 * Math.sin(t * 4 + src.pos.x);
+          linkMat.color.setHex(0x00ffaa);
+        } else if (srcActive || tgtActive) {
+          linkMat.opacity = 0.3;
+          linkMat.color.setHex(0x5b8cff);
+        } else {
+          linkMat.opacity = 0.12;
+          const srcCfg = TYPE_CFG[src.type] ?? TYPE_CFG.offline;
+          linkMat.color.setHex(srcCfg.hex);
+        }
       }
 
       controls.update();

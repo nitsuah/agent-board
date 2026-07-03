@@ -70,6 +70,8 @@ export default function ChatColumn({
   knownModels,
   serviceActionErrors,
   servicesStarting,
+  sessionPendingReply,
+  sessionErrors,
 }) {
   const textareaRef = useAutoResize(messageInput);
   const [editingName, setEditingName] = useState(false);
@@ -349,6 +351,10 @@ export default function ChatColumn({
           modelPulls={modelPulls}
           onPullModel={onPullModel}
           knownModels={knownModels}
+          activeSessionId={activeSession}
+          loading={loading}
+          sessionPendingReply={sessionPendingReply}
+          sessionErrors={sessionErrors}
         />
       )}
 
