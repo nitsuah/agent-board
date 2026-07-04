@@ -1,0 +1,42 @@
+{
+  "_comment": "MCP container registry — declare tool containers here to surface them in motor-pool without manually editing docker-compose.yml. Each entry drives a compose profile that can be started on demand.",
+  "providers": [
+    {
+      "key": "content_gen",
+      "name": "Content Gen (AI video)",
+      "description": "Generates AI short videos from a topic. Wraps MoneyPrinterTurbo.",
+      "url": "${TOOL_CONTENT_GEN_URL:-http://tool-content-gen:3200}",
+      "composeService": "tool-content-gen",
+      "composeProfile": "tools",
+      "healthPath": "/health",
+      "port": 3200,
+      "tags": ["video", "content", "ai"],
+      "builtin": true
+    },
+    {
+      "key": "website",
+      "name": "Website Agent (B2B sites)",
+      "description": "Lead discovery, client site generation, and Netlify deploys.",
+      "url": "${TOOL_WEBSITE_URL:-http://tool-website:3201}",
+      "composeService": "tool-website",
+      "composeProfile": "tools",
+      "healthPath": "/health",
+      "port": 3201,
+      "tags": ["website", "b2b", "deploy"],
+      "builtin": true
+    },
+    {
+      "key": "bb_mcp",
+      "name": "Blackboard MCP",
+      "description": "Blackboard Learn integration — course discovery, assignments, grades (opt-in).",
+      "url": "${BB_MCP_URL:-http://bb-mcp:3100}",
+      "composeService": "bb-mcp",
+      "composeProfile": "bb-mcp",
+      "healthPath": "/health",
+      "port": 3100,
+      "tags": ["blackboard", "lms", "education"],
+      "builtin": true,
+      "requiresEnv": ["BB_MCP_ENABLED"]
+    }
+  ]
+}

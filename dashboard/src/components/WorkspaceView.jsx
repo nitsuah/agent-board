@@ -1,5 +1,202 @@
-import React from 'react';
-import { EXPERIENCE_TOOLS } from '../constants/app-config.js';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { EXPERIENCE_TOOLS, EXPERIENCE_META } from '../constants/app-config.js';
+
+function GitLogTab({ workspaceConfigured }) {
+  const [commits, setCommits] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!workspaceConfigured) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/workspace/git/log?limit=30');
+      const data = await res.json();
+      if (data.error) setErr(data.error);
+      else setCommits(data.commits || []);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }, [workspaceConfigured]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!workspaceConfigured) return <div className="ws-files-empty">Workspace not configured.</div>;
+  return (
+    <div className="ws-git-log-tab">
+      <div className="ws-tab-header">
+        <span>GIT LOG</span>
+        <button className="icon-btn" onClick={load} title="Refresh" disabled={busy}>↻</button>
+      </div>
+      {err && <div className="ws-files-empty" style={{ color: 'var(--red)' }}>{err}</div>}
+      {busy && commits.length === 0 && <div className="ws-files-empty">Loading…</div>}
+      {commits.length === 0 && !busy && !err && <div className="ws-files-empty">No commits yet.</div>}
+      <div className="ws-git-log-list">
+        {commits.map(c => (
+          <div key={c.hash} className="ws-git-log-entry" title={c.hash}>
+            <span className="ws-git-log-hash">{c.short}</span>
+            <span className="ws-git-log-subject">{c.subject}</span>
+            <span className="ws-git-log-meta">{c.author} · {c.relative}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const TASK_FILTERS = [
+  { key: 'active', label: 'Active' },
+  { key: 'all', label: 'All' },
+  { key: 'completed', label: 'Done' },
+];
+
+function TasksPanel({
+  tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
+  taskExperience, setTaskExperience, createTask, updateTask, updateTaskStatus,
+  deleteTask, dispatchTask, clearCompletedTasks,
+  setActiveSession, fetchSessionDetails, setActiveTab,
+}) {
+  const [filter, setFilter] = useState('active');
+  const [showDesc, setShowDesc] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPriority, setEditPriority] = useState('medium');
+  const [taskSearch, setTaskSearch] = useState('');
+
+  const filtered = tasks.filter(t => {
+    if (filter === 'active') { if (t.status === 'completed') return false; }
+    else if (filter === 'completed') { if (t.status !== 'completed') return false; }
+    if (taskSearch.trim()) {
+      const q = taskSearch.toLowerCase();
+      return t.title.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q);
+    }
+    return true;
+  }).slice(0, 30);
+
+  return (
+    <div className="ws-tasks-tab">
+      <div className="task-create-row">
+        <input
+          type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)}
+          placeholder="Add a task…" maxLength={140}
+          onKeyDown={e => e.key === 'Enter' && taskTitle.trim() && createTask(taskExperience)}
+        />
+        <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="urgent">urgent</option>
+        </select>
+        <select value={taskExperience} onChange={e => setTaskExperience(e.target.value)} title="Experience for this task">
+          {Object.entries(EXPERIENCE_META).map(([key, exp]) => (
+            <option key={key} value={key}>{exp.icon} {exp.name}</option>
+          ))}
+        </select>
+        <button className="task-desc-toggle" onClick={() => setShowDesc(p => !p)} title="Add description">+</button>
+        <button className="btn-primary" onClick={() => createTask(taskExperience)} disabled={!taskTitle.trim()}>Add</button>
+      </div>
+      {showDesc && (
+        <textarea
+          className="task-desc-input"
+          value={taskDescription}
+          onChange={e => setTaskDescription(e.target.value)}
+          placeholder="Optional description…"
+          maxLength={2000}
+          rows={2}
+        />
+      )}
+      {tasks.length > 3 && (
+        <input
+          className="task-search-input"
+          type="search"
+          placeholder="Search tasks…"
+          value={taskSearch}
+          onChange={e => setTaskSearch(e.target.value)}
+        />
+      )}
+      <div className="task-filter-tabs">
+        {TASK_FILTERS.map(f => (
+          <button
+            key={f.key}
+            className={`task-filter-tab ${filter === f.key ? 'active' : ''}`}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+            {f.key === 'active' && tasks.filter(t => t.status !== 'completed').length > 0 && (
+              <span className="task-filter-count">{tasks.filter(t => t.status !== 'completed').length}</span>
+            )}
+          </button>
+        ))}
+        {tasks.some(t => t.status === 'completed') && (
+          <button
+            className="task-filter-tab"
+            style={{ marginLeft: 'auto', opacity: 0.7 }}
+            onClick={clearCompletedTasks}
+            title="Delete all completed tasks"
+          >Clear done</button>
+        )}
+      </div>
+      <div className="task-list">
+        {filtered.map(task => (
+          <div key={task.id} className={`task-item status-${task.status}`}>
+            {editingId === task.id ? (
+              <div className="task-edit-form">
+                <input
+                  className="task-edit-title"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  maxLength={140}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { updateTask(task.id, { title: editTitle, priority: editPriority }); setEditingId(null); }
+                    if (e.key === 'Escape') setEditingId(null);
+                  }}
+                />
+                <select value={editPriority} onChange={e => setEditPriority(e.target.value)}>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                  <option value="urgent">urgent</option>
+                </select>
+                <button onClick={() => { updateTask(task.id, { title: editTitle, priority: editPriority }); setEditingId(null); }}>Save</button>
+                <button onClick={() => setEditingId(null)}>Cancel</button>
+              </div>
+            ) : (
+              <>
+                <div className="task-item-head">
+                  <strong className="task-title-editable" onClick={() => { setEditingId(task.id); setEditTitle(task.title); setEditPriority(task.priority); }} title="Click to edit">{task.title}</strong>
+                  <span className={`task-priority ${task.priority}`}>{task.priority}</span>
+                </div>
+                <div className="task-item-meta">
+                  <span>{task.status.replace('_', ' ')}</span>
+                  {task.sessionId ? (
+                    <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
+                  ) : (
+                    <span style={{ opacity: 0.4 }}>unassigned</span>
+                  )}
+                </div>
+                {task.description && (
+                  <div className="task-item-desc" title={task.description}>{task.description.slice(0, 100)}{task.description.length > 100 ? '…' : ''}</div>
+                )}
+                {task.result && (
+                  <div className="task-item-result" title={task.result}>{task.result.slice(0, 120)}{task.result.length > 120 ? '…' : ''}</div>
+                )}
+                <div className="task-item-actions">
+                  {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
+                  {task.status === 'pending' && <button onClick={() => updateTaskStatus(task.id, 'in_progress')} title="Mark as in progress">▷ Start</button>}
+                  {task.status === 'in_progress' && <button onClick={() => updateTaskStatus(task.id, 'blocked')} title="Mark as blocked">⚠ Block</button>}
+                  {task.status === 'blocked' && <button onClick={() => updateTaskStatus(task.id, 'pending')} title="Unblock — back to pending">↩ Unblock</button>}
+                  {task.status !== 'completed' && <button onClick={() => updateTaskStatus(task.id, 'completed')}>✓ Done</button>}
+                  <button onClick={() => deleteTask(task.id)}>Delete</button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {filtered.length === 0 && <div className="task-empty">{filter === 'completed' ? 'No completed tasks.' : 'No active tasks.'}</div>}
+      </div>
+    </div>
+  );
+}
 
 export default function WorkspaceView({
   dockerStatus,
@@ -10,20 +207,86 @@ export default function WorkspaceView({
   wsShowExplorer, setWsShowExplorer,
   wsSearch, setWsSearch, wsSearchResults, setWsSearchResults, wsSearchBusy,
   wsNewName, setWsNewName, wsCreateMode, setWsCreateMode, wsRenaming, setWsRenaming,
-  wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
+  wsBottomTab, setWsBottomTab, termHistory, setTermHistory, termInput, setTermInput, termBusy, termEndRef,
   wsExplorerWidth, wsBottomHeight,
   browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts, fetchBranches,
-  commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
+  commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
   startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
-  renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
+  moveWorkspaceEntry, renameWorkspaceEntry, searchWorkspace, checkoutBranch, pullBranch, discardFile,
   artifactFiles,
-  tasks, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
-  createTask, updateTaskStatus, dispatchTask, deleteTask,
+  tasks, taskTitle, setTaskTitle, taskDescription, setTaskDescription, taskPriority, setTaskPriority,
+  taskExperience, setTaskExperience,
+  createTask, updateTask, updateTaskStatus, dispatchTask, deleteTask, clearCompletedTasks,
   activeSession, setActiveSession, fetchSessionDetails, setActiveTab,
   selectedExperience,
   contentClients, contentFiles, contentExpanded, setContentExpanded,
   fetchContentClients, fetchContentFiles, downloadContentFile,
 }) {
+  const termInputRef = useRef(null);
+  const [sessionOutputs, setSessionOutputs] = useState([]);
+  const [ctxMenu, setCtxMenu] = useState(null); // { x, y, entry, fullPath }
+  const [showDiff, setShowDiff] = useState(false);
+  const [dragOver, setDragOver] = useState(null); // fullPath being dragged over
+
+  const computeDiff = (original, modified) => {
+    const a = (original || '').split('\n');
+    const b = (modified || '').split('\n');
+    const result = [];
+    const maxLen = Math.max(a.length, b.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (a[i] === b[i]) { result.push({ type: 'same', text: a[i] ?? '' }); }
+      else {
+        if (i < a.length) result.push({ type: 'del', text: a[i] });
+        if (i < b.length) result.push({ type: 'add', text: b[i] });
+      }
+    }
+    return result;
+  };
+
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('contextmenu', close);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('contextmenu', close); };
+  }, [ctxMenu]);
+
+  const openCtxMenu = useCallback((e, entry, fullPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, entry, fullPath });
+  }, []);
+
+  // Ctrl+S / Cmd+S — save the active file
+  useEffect(() => {
+    const handleSave = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && activeFilePath) {
+        e.preventDefault();
+        const file = openFiles?.find(f => f.path === activeFilePath);
+        if (file && !file.saving) saveWorkspaceFile(activeFilePath, file.content);
+      }
+    };
+    window.addEventListener('keydown', handleSave);
+    return () => window.removeEventListener('keydown', handleSave);
+  }, [activeFilePath, openFiles, saveWorkspaceFile]);
+
+  // Re-focus terminal input after command finishes or tab switches to terminal
+  useEffect(() => {
+    if (!termBusy && wsBottomTab === 'terminal') {
+      termInputRef.current?.focus();
+    }
+  }, [termBusy, wsBottomTab]);
+
+  // Fetch session outputs when tab is active and session changes
+  useEffect(() => {
+    if (wsBottomTab !== 'output' || !activeSession) { setSessionOutputs([]); return; }
+    fetch(`/api/sessions/${activeSession}/outputs`)
+      .then(r => r.json())
+      .then(data => setSessionOutputs(Array.isArray(data) ? data : []))
+      .catch(() => setSessionOutputs([]));
+  }, [wsBottomTab, activeSession]);
+
   return (
     <div className="workspace-view">
 
@@ -32,41 +295,50 @@ export default function WorkspaceView({
         <div className="ws-toolbar-left">
           {dockerStatus?.workspace?.configured ? (
             <>
-              <span className="ws-root-label">{dockerStatus.workspace.root}</span>
-              {workspaceBranches.branches.length > 0 ? (
-                <select
-                  className="ws-branch-select-inline"
-                  value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
-                  onChange={e => checkoutBranch(e.target.value)}
-                  disabled={wsGitBusy === 'checkout'}
-                  title="Switch branch"
-                >
-                  {workspaceBranches.branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  {workspaceBranches.remotes.filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, ''))).map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              ) : workspaceGitStatus && (
-                <span className={`ws-branch-badge ${workspaceGitStatus.dirty ? 'dirty' : 'clean'}`}>
-                  ⎇ {workspaceGitStatus.branch}{workspaceGitStatus.dirty ? ' ●' : ''}
-                </span>
-              )}
-              <div className="ws-new-branch-inline">
-                <input
-                  className="ws-new-branch-input"
-                  type="text"
-                  placeholder="new-branch…"
-                  value={wsNewBranch}
-                  onChange={e => setWsNewBranch(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && wsNewBranch && checkoutBranch(wsNewBranch, true)}
-                />
-                {wsNewBranch && (
-                  <button className="ws-new-branch-btn" disabled={wsGitBusy === 'checkout'} onClick={() => checkoutBranch(wsNewBranch, true)} title="Create branch">+</button>
-                )}
-              </div>
+              <span className="ws-root-label" title={dockerStatus.workspace.root}>⎇</span>
+              {workspaceBranches.branches.length > 0 || workspaceGitStatus?.branch ? (
+                wsNewBranch !== null ? (
+                  /* New-branch inline input — shown when user picks "New branch…" */
+                  <div className="ws-new-branch-inline">
+                    <input
+                      className="ws-new-branch-input"
+                      autoFocus
+                      type="text"
+                      placeholder="new-branch-name…"
+                      value={wsNewBranch}
+                      onChange={e => setWsNewBranch(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && wsNewBranch) checkoutBranch(wsNewBranch, true);
+                        if (e.key === 'Escape') setWsNewBranch(null);
+                      }}
+                    />
+                    <button className="ws-git-icon-btn" disabled={!wsNewBranch || wsGitBusy === 'checkout'} onClick={() => checkoutBranch(wsNewBranch, true)} title="Create & checkout branch">
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="3,8 8,13 13,8"/><line x1="8" y1="3" x2="8" y2="13"/></svg>
+                    </button>
+                    <button className="ws-git-icon-btn" onClick={() => setWsNewBranch(null)} title="Cancel">✕</button>
+                  </div>
+                ) : (
+                  <select
+                    className="ws-branch-select-inline"
+                    value={workspaceBranches.current || workspaceGitStatus?.branch || ''}
+                    onChange={e => {
+                      if (e.target.value === '__new__') { setWsNewBranch(''); }
+                      else checkoutBranch(e.target.value);
+                    }}
+                    disabled={wsGitBusy === 'checkout'}
+                    title="Switch branch"
+                  >
+                    {workspaceBranches.branches.map(b => <option key={b} value={b}>{b}</option>)}
+                    {workspaceBranches.remotes
+                      .filter(r => !workspaceBranches.branches.includes(r.replace(/^origin\//, '')))
+                      .map(r => <option key={r} value={r}>{r}</option>)}
+                    <option value="__new__">+ New branch…</option>
+                  </select>
+                )
+              ) : null}
             </>
           ) : (
-            <span className="ws-root-label" style={{ opacity: 0.45 }}>No workspace mounted</span>
+            <span className="ws-root-label" style={{ opacity: 0.45 }}>No workspace</span>
           )}
         </div>
         <div className="ws-toolbar-right">
@@ -110,11 +382,18 @@ export default function WorkspaceView({
                   )}
                 </div>
               )}
-              <button className="btn-docker-action ws-git-btn" disabled={wsGitBusy === 'pull'} onClick={pullBranch} title="Pull">
-                {wsGitBusy === 'pull' ? '…' : '↓ Pull'}
+              <button className="ws-git-icon-btn" disabled={wsGitBusy === 'pull'} onClick={pullBranch} title="Pull">
+                {wsGitBusy === 'pull' ? <span style={{fontSize:'0.75rem'}}>…</span> : (
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="2" x2="8" y2="11"/><polyline points="4,7 8,12 12,7"/><line x1="3" y1="14" x2="13" y2="14"/></svg>
+                )}
               </button>
-              <button className="btn-docker-action ws-git-btn" disabled={workspaceActions.pushing} onClick={pushWorkspace} title="Push">
-                {workspaceActions.pushing ? '…' : '↑ Push'}
+              <button className="ws-git-icon-btn" disabled={workspaceActions.pushing} onClick={pushWorkspace} title="Push">
+                {workspaceActions.pushing ? <span style={{fontSize:'0.75rem'}}>…</span> : (
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="8" y1="14" x2="8" y2="5"/><polyline points="4,9 8,4 12,9"/><line x1="3" y1="2" x2="13" y2="2"/></svg>
+                )}
+              </button>
+              <button className="ws-git-icon-btn" disabled={!!wsGitBusy} onClick={() => { refreshWorkspaceGit(); fetchBranches(); }} title="Sync / Refresh">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c1.8 0 3.4.87 4.4 2.2"/><polyline points="10,1 13,5 9,5"/></svg>
               </button>
               {workspaceActions.error && <span className="ws-git-err-icon" title={workspaceActions.error}>⚠</span>}
               <button className={`icon-btn ${wsShowExplorer ? 'active' : ''}`} onClick={() => setWsShowExplorer(p => !p)} title="Toggle Explorer">≡</button>
@@ -140,13 +419,7 @@ export default function WorkspaceView({
           {/* ── Explorer panel ─────────────────────────────────── */}
           {wsShowExplorer && (
             <div className="ws-panel ws-explorer-panel" style={{ width: wsExplorerWidth, minWidth: wsExplorerWidth, maxWidth: wsExplorerWidth }}>
-              <div className="ws-panel-title">
-                EXPLORER
-                <div className="ws-explorer-actions">
-                  <button className="icon-btn" title="New file" onClick={() => { setWsCreateMode('file'); setWsNewName(''); }}>+F</button>
-                  <button className="icon-btn" title="New folder" onClick={() => { setWsCreateMode('dir'); setWsNewName(''); }}>+D</button>
-                </div>
-              </div>
+              {/* EXPLORER title removed — use right-click context menu instead */}
 
               <div className="ws-search-row">
                 <input
@@ -198,7 +471,7 @@ export default function WorkspaceView({
                 ))}
               </div>
 
-              <div className="workspace-entries">
+              <div className="workspace-entries" onContextMenu={e => openCtxMenu(e, null, null)}>
                 {wsSearchResults !== null ? (
                   wsSearchResults.length === 0
                     ? <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>No matches</div>
@@ -218,7 +491,21 @@ export default function WorkspaceView({
                     return (
                       <div
                         key={e.name}
-                        className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''}`}
+                        className={`workspace-entry ${activeFilePath === fullPath ? 'selected' : ''} ${dragOver === fullPath && e.type === 'dir' ? 'drag-over' : ''}`}
+                        onContextMenu={ev => openCtxMenu(ev, e, fullPath)}
+                        draggable={!isRenaming}
+                        onDragStart={ev => { ev.dataTransfer.setData('text/plain', fullPath); ev.dataTransfer.effectAllowed = 'move'; }}
+                        onDragOver={ev => { if (e.type === 'dir') { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; setDragOver(fullPath); } }}
+                        onDragLeave={() => setDragOver(null)}
+                        onDrop={ev => {
+                          ev.preventDefault();
+                          setDragOver(null);
+                          if (e.type !== 'dir') return;
+                          const src = ev.dataTransfer.getData('text/plain');
+                          if (!src || src === fullPath) return;
+                          const srcName = src.split('/').pop();
+                          moveWorkspaceEntry(src, `${fullPath}/${srcName}`);
+                        }}
                       >
                         {isRenaming ? (
                           <input
@@ -241,20 +528,6 @@ export default function WorkspaceView({
                             {e.size != null && <span className="ws-file-size"> {(e.size / 1024).toFixed(1)}k</span>}
                           </span>
                         )}
-                        {!isRenaming && (
-                          <span className="ws-entry-actions">
-                            <button
-                              className="ws-entry-btn"
-                              title="Rename"
-                              onClick={ev => { ev.stopPropagation(); setWsRenaming({ name: e.name, newName: e.name }); }}
-                            >✎</button>
-                            <button
-                              className="ws-entry-btn ws-entry-btn-del"
-                              title="Delete"
-                              onClick={ev => { ev.stopPropagation(); deleteWorkspaceEntry(fullPath); }}
-                            >✕</button>
-                          </span>
-                        )}
                       </div>
                     );
                   })
@@ -263,6 +536,44 @@ export default function WorkspaceView({
                   <div style={{ opacity: 0.4, fontSize: '0.78rem', padding: '0.3rem 0.5rem' }}>(empty)</div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ── Right-click context menu ────────────────────────── */}
+          {ctxMenu && (
+            <div
+              className="ws-ctx-menu"
+              style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, zIndex: 1000 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="ws-ctx-item" onClick={() => { setWsCreateMode('file'); setWsNewName(''); setCtxMenu(null); }}>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="1" width="10" height="14" rx="1"/><line x1="6" y1="5" x2="10" y2="5"/><line x1="6" y1="8" x2="10" y2="8"/></svg>
+                New File
+              </div>
+              <div className="ws-ctx-item" onClick={() => { setWsCreateMode('dir'); setWsNewName(''); setCtxMenu(null); }}>
+                <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M1 4h5l2 2h7v8H1z"/></svg>
+                New Folder
+              </div>
+              {ctxMenu.entry && (
+                <>
+                  <div className="ws-ctx-divider" />
+                  <div className="ws-ctx-item" onClick={() => { setWsRenaming({ name: ctxMenu.entry.name, newName: ctxMenu.entry.name }); setCtxMenu(null); }}>
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 2l3 3-9 9H2v-3z"/></svg>
+                    Rename
+                  </div>
+                  {ctxMenu.entry.type === 'file' && (
+                    <div className="ws-ctx-item" onClick={() => { openWorkspaceFile(ctxMenu.fullPath); setCtxMenu(null); }}>
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="1" width="10" height="14" rx="1"/><line x1="6" y1="5" x2="10" y2="5"/></svg>
+                      Open
+                    </div>
+                  )}
+                  <div className="ws-ctx-divider" />
+                  <div className="ws-ctx-item ws-ctx-item-danger" onClick={() => { deleteWorkspaceEntry(ctxMenu.fullPath); setCtxMenu(null); }}>
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="3,4 13,4"/><path d="M5 4V2h6v2"/><path d="M6 7v5M10 7v5"/><path d="M4 4l1 10h6l1-10"/></svg>
+                    Delete
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -304,9 +615,14 @@ export default function WorkspaceView({
                         <button className="ws-btn-save" disabled={workspaceActions.saving} onClick={() => saveWorkspaceFile()}>
                           {workspaceActions.saving ? 'Saving…' : '✓ Save'}
                         </button>
-                        <button className="ws-btn-discard" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: false, editContent: null } : f))}>
+                        <button className="ws-btn-discard" onClick={() => { setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: false, editContent: null } : f)); setShowDiff(false); }}>
                           ✕ Discard
                         </button>
+                        {af.editContent !== null && af.editContent !== af.content && (
+                          <button className={`ws-btn-diff ${showDiff ? 'active' : ''}`} onClick={() => setShowDiff(p => !p)} title="Toggle diff view">
+                            ⊞ Diff
+                          </button>
+                        )}
                       </>
                     ) : (
                       <button className="ws-btn-edit" onClick={() => setOpenFiles(prev => prev.map(f => f.path === activeFilePath ? { ...f, editing: true, editContent: f.content } : f))}>
@@ -315,7 +631,16 @@ export default function WorkspaceView({
                     )}
                   </div>
                   {workspaceActions.error && <div className="ws-editor-error">{workspaceActions.error}</div>}
-                  {af.editing ? (
+                  {af.editing && showDiff && af.editContent !== null && af.editContent !== af.content ? (
+                    <div className="ws-diff-view">
+                      {computeDiff(af.content, af.editContent).map((line, i) => (
+                        <div key={i} className={`ws-diff-line ws-diff-${line.type}`}>
+                          <span className="ws-diff-gutter">{line.type === 'del' ? '−' : line.type === 'add' ? '+' : ' '}</span>
+                          <span className="ws-diff-text">{line.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : af.editing ? (
                     <textarea
                       className="ws-editor-textarea"
                       value={af.editContent ?? af.content}
@@ -341,6 +666,7 @@ export default function WorkspaceView({
           {[
             { key: 'terminal', label: 'TERMINAL' },
             { key: 'tasks', label: 'TASKS' },
+            { key: 'git-log', label: 'GIT LOG' },
             { key: 'artifacts', label: 'ARTIFACTS' },
             { key: 'output', label: 'OUTPUT' },
           ].map(({ key, label }) => (
@@ -351,6 +677,10 @@ export default function WorkspaceView({
               )}
             </button>
           ))}
+          <div className="ws-bottom-tabs-spacer" />
+          {wsBottomTab === 'terminal' && (
+            <button className="ws-bottom-tab-action" onClick={() => setTermHistory([])} title="Clear terminal">⌫ Clear</button>
+          )}
         </div>
         <div className="ws-bottom-tab-content">
 
@@ -375,11 +705,15 @@ export default function WorkspaceView({
               <div className="ws-term-input-row">
                 <span className="ws-term-prompt">$</span>
                 <input
+                  ref={termInputRef}
                   className="ws-term-input"
                   type="text"
                   value={termInput}
                   onChange={e => setTermInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && runTermCommand(termInput)}
+                  onKeyDown={e => {
+                    handleTermKeyDown(e, termInput);
+                    if (e.key === 'Enter') setTimeout(() => termInputRef.current?.focus(), 100);
+                  }}
                   placeholder={termBusy ? 'Running…' : 'Enter command…'}
                   disabled={termBusy}
                   spellCheck={false}
@@ -391,42 +725,21 @@ export default function WorkspaceView({
           )}
 
           {wsBottomTab === 'tasks' && (
-            <div className="ws-tasks-tab">
-              <div className="task-create-row">
-                <input type="text" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Add a task…" maxLength={140} onKeyDown={e => e.key === 'Enter' && createTask()} />
-                <select value={taskPriority} onChange={e => setTaskPriority(e.target.value)}>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                  <option value="urgent">urgent</option>
-                </select>
-                <button className="btn-primary" onClick={createTask}>Add</button>
-              </div>
-              <div className="task-list">
-                {tasks.slice(0, 20).map(task => (
-                  <div key={task.id} className={`task-item status-${task.status}`}>
-                    <div className="task-item-head">
-                      <strong>{task.title}</strong>
-                      <span className={`task-priority ${task.priority}`}>{task.priority}</span>
-                    </div>
-                    <div className="task-item-meta">
-                      <span>{task.status.replace('_', ' ')}</span>
-                      {task.sessionId ? (
-                        <span className="task-session-link" onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }} title="Go to session">{task.assignedSessionName || 'session →'}</span>
-                      ) : (
-                        <span style={{ opacity: 0.4 }}>unassigned</span>
-                      )}
-                    </div>
-                    <div className="task-item-actions">
-                      {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
-                      <button onClick={() => updateTaskStatus(task.id, 'completed')}>Done</button>
-                      <button onClick={() => deleteTask(task.id)}>Delete</button>
-                    </div>
-                  </div>
-                ))}
-                {tasks.length === 0 && <div className="task-empty">No tasks yet.</div>}
-              </div>
-            </div>
+            <TasksPanel
+              tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle}
+              taskDescription={taskDescription} setTaskDescription={setTaskDescription}
+              taskPriority={taskPriority} setTaskPriority={setTaskPriority}
+              taskExperience={taskExperience} setTaskExperience={setTaskExperience}
+              createTask={createTask} updateTask={updateTask} updateTaskStatus={updateTaskStatus}
+              deleteTask={deleteTask} dispatchTask={dispatchTask}
+              clearCompletedTasks={clearCompletedTasks}
+              setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
+              setActiveTab={setActiveTab}
+            />
+          )}
+
+          {wsBottomTab === 'git-log' && (
+            <GitLogTab workspaceConfigured={!!dockerStatus?.workspace?.configured} />
           )}
 
           {wsBottomTab === 'artifacts' && (
@@ -442,7 +755,8 @@ export default function WorkspaceView({
               ) : artifactFiles.map(f => (
                 <div key={f.name} className="ws-file-row">
                   <span>{f.name}</span>
-                  <a href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`} target="_blank" rel="noreferrer" className="ws-file-link">↓ view</a>
+                  <a href={`/api/artifacts/${encodeURIComponent(f.name)}/download`} download className="ws-file-link">↓ download</a>
+                  <a href={`/api/workspace/read?path=${encodeURIComponent('artifacts/' + f.name)}`} target="_blank" rel="noreferrer" className="ws-file-link">↗ view</a>
                 </div>
               ))}
             </div>
@@ -450,6 +764,22 @@ export default function WorkspaceView({
 
           {wsBottomTab === 'output' && (
             <div className="ws-output-tab">
+              {/* Session-level outputs */}
+              {activeSession && sessionOutputs.length > 0 && (
+                <>
+                  <div className="ws-tab-header">
+                    <span>SESSION OUTPUTS</span>
+                    <button className="icon-btn" onClick={() => fetch(`/api/sessions/${activeSession}/outputs`).then(r => r.json()).then(d => setSessionOutputs(Array.isArray(d) ? d : []))} title="Refresh">↻</button>
+                  </div>
+                  {sessionOutputs.map(f => (
+                    <div key={f.filename} className="ws-file-row">
+                      <span>{f.filename}</span>
+                      <a href={`/api/sessions/${activeSession}/outputs/${encodeURIComponent(f.filename)}`} download className="ws-file-link">↓</a>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Tool-backed content client outputs */}
               {EXPERIENCE_TOOLS[selectedExperience] ? (
                 <>
                   <div className="ws-tab-header">
@@ -477,7 +807,7 @@ export default function WorkspaceView({
                     </div>
                   ))}
                 </>
-              ) : (
+              ) : (!activeSession || sessionOutputs.length === 0) && (
                 <div className="ws-files-empty">No output files available.</div>
               )}
             </div>

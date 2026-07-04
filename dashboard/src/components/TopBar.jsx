@@ -1,5 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { EXPERIENCE_META } from '../constants/app-config.js';
+
+function SessionDot({ sessionId, loadingSessions, sessionPendingReply, sessionErrors, wsConnected }) {
+  const isWorking = loadingSessions.has(sessionId);
+  const isPending = sessionPendingReply.has(sessionId);
+  const isError   = sessionErrors.has(sessionId) || !wsConnected;
+
+  if (isWorking) return <span className="session-tab-dot session-tab-dot--working" title="Bot is working…" />;
+  if (isError)   return <span className="session-tab-dot session-tab-dot--error"   title="Error / disconnected" />;
+  if (isPending) return <span className="session-tab-dot session-tab-dot--pending" title="Bot replied — needs your attention" />;
+  return <span className="session-tab-dot session-tab-dot--idle" title="Idle" />;
+}
 
 export default function TopBar({
   activeTab, setActiveTab,
@@ -9,143 +20,160 @@ export default function TopBar({
   showNewSessionMenu, setShowNewSessionMenu, newSessionMenuRef,
   selectedExperience, setSelectedExperience,
   allEndpointMeta, selectableEndpointKeys, currentEndpoint, handleEndpointSelection,
-  sessions, activeSession, setActiveSession, fetchSessionDetails,
+  sessions, activeSession, setActiveSession, fetchSessionDetails, deleteSession,
   wsConnected,
-  showMetricsPanel, setShowMetricsPanel, showSystemPanel, setShowSystemPanel,
-  dockerStatus, fetchContentClients,
-  runningServices, totalServices,
   createSession,
+  systemServices,
+  loadingSessions = new Set(),
+  sessionPendingReply = new Set(),
+  sessionErrors = new Set(),
 }) {
+  const [sessionSearch, setSessionSearch] = useState('');
+  const filteredSessions = sessionSearch.trim()
+    ? sessions.filter(s => s.name.toLowerCase().includes(sessionSearch.toLowerCase()))
+    : sessions;
+
+  const isServiceUp = (key) => {
+    if (key === 'content_gen') return systemServices?.services?.tool_content_gen?.status === 'up';
+    if (key === 'website') return systemServices?.services?.tool_website?.status === 'up';
+    return true;
+  };
+
+  // Any session has a pending reply or is working → motor icon pulses
+  const anyPending = sessions.some(s => sessionPendingReply.has(s.id));
+  const anyWorking = sessions.some(s => loadingSessions.has(s.id));
+
   return (
     <div className="topbar">
-      <div className="topbar-left">
-        <span className="topbar-title">🤖 Agent Board</span>
-        <div className="topbar-tabs">
-          <button
-            className={`icon-btn ${(activeTab === 'chat' && wsLayout === 'single') ? 'active' : ''}`}
-            onClick={() => { setActiveTab('chat'); setWsLayout('single'); }}
-            title="Chat"
-          >💬</button>
-          <button
-            className={`icon-btn ${(activeTab === 'workspace' && wsLayout === 'single') ? 'active' : ''}`}
-            onClick={() => { setActiveTab('workspace'); setWsLayout('single'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }}
-            title="Workspace"
-          >🗂️</button>
-          <button
-            className={`icon-btn ${wsLayout === 'split-h' ? 'active' : ''}`}
-            onClick={() => { setWsLayout('split-h'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
-            title="Split view — side by side"
-          >⊟</button>
-          <button
-            className={`icon-btn ${wsLayout === 'split-v' ? 'active' : ''}`}
-            onClick={() => { setWsLayout('split-v'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }}
-            title="Split view — stacked"
-          >⊠</button>
-        </div>
-        <div className="topbar-divider" />
-      </div>
+      {/* ── Far-left: motor icon → always go to hub ── */}
+      <button
+        className={`topbar-motor-btn${anyWorking ? ' topbar-motor-btn--working' : anyPending ? ' topbar-motor-btn--pending' : ''}`}
+        title="Go to hub"
+        onClick={() => {
+          setActiveSession(null);
+          setActiveTab('chat');
+          setWsLayout('single');
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
 
-      <div className="topbar-center">
-        {demoMode.enabled && <span className="pill pill-demo">Demo</span>}
+      <div className="topbar-divider" />
 
-        <div className="topbar-new-wrap" ref={newSessionMenuRef}>
-          <button
-            className="topbar-new-btn"
-            onClick={() => setShowNewSessionMenu(p => !p)}
-          >+ New ▾</button>
-          {showNewSessionMenu && (
-            <div className="topbar-new-panel">
-              <div className="topbar-new-summary">
-                {EXPERIENCE_META[selectedExperience]?.icon} {EXPERIENCE_META[selectedExperience]?.name}
-                <span className="topbar-new-dot">·</span>
-                {allEndpointMeta[selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || currentEndpoint)]?.label || currentEndpoint}
-              </div>
-              <button
-                className="btn-primary"
-                style={{ width: '100%', fontSize: '0.8rem', marginTop: '0.2rem' }}
-                onClick={() => { createSession(); setShowNewSessionMenu(false); }}
-              >
-                Create Session
-              </button>
-            </div>
-          )}
-        </div>
-
-        <select
-          className="topbar-select"
-          value={selectedExperience}
-          onChange={e => setSelectedExperience(e.target.value)}
-          disabled={demoMode.enabled}
-          title="Switch experience"
+      {/* ── Chat dropdown (new session) ── */}
+      <div className="topbar-new-wrap" ref={newSessionMenuRef} style={{ marginRight: '0.1rem' }}>
+        <button
+          className="topbar-chat-btn"
+          onClick={() => setShowNewSessionMenu(p => !p)}
+          title="New chat session"
         >
-          {Object.entries(EXPERIENCE_META)
-            .filter(([key]) => !demoMode.enabled || key === 'safechat')
-            .map(([key, exp]) => (
-              <option key={key} value={key}>{exp.icon} {exp.name}</option>
-            ))}
-        </select>
-
-        <select
-          className="topbar-select topbar-select-model"
-          value={selectableEndpointKeys.includes(currentEndpoint) ? currentEndpoint : (selectableEndpointKeys[0] || '')}
-          onChange={e => handleEndpointSelection(e.target.value)}
-          disabled={selectableEndpointKeys.length === 0 || demoMode.enabled}
-          title="Switch model"
-        >
-          {selectableEndpointKeys.length === 0 ? (
-            <option value="">No models online</option>
-          ) : selectableEndpointKeys.map(key => (
-            <option key={key} value={key}>{allEndpointMeta[key]?.label || key}</option>
-          ))}
-        </select>
-
-        {sessions.length > 0 && (
-          <select
-            className="topbar-select topbar-select-session"
-            value={activeSession || ''}
-            onChange={e => { if (e.target.value) { setActiveSession(e.target.value); fetchSessionDetails(e.target.value); } }}
-            title="Switch session"
-          >
-            {!activeSession && <option value="">Select session…</option>}
-            {sessions.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          Chat <span className="topbar-logo-caret">▾</span>
+        </button>
+        {showNewSessionMenu && (
+          <div className="topbar-new-panel">
+            <div className="topbar-new-section-label">Experience</div>
+            {Object.entries(EXPERIENCE_META)
+              .filter(([key]) => isServiceUp(key))
+              .filter(([key]) => !demoMode.enabled || key === 'safechat')
+              .map(([key, exp]) => (
+                <div
+                  key={key}
+                  className={`topbar-new-option ${selectedExperience === key ? 'selected' : ''}`}
+                  onClick={() => setSelectedExperience(key)}
+                >
+                  {exp.icon} {exp.name}
+                  {selectedExperience === key && <span className="topbar-check">✓</span>}
+                </div>
+              ))}
+            {selectableEndpointKeys.length > 1 && (
+              <>
+                <div className="topbar-new-section-label">Model</div>
+                {selectableEndpointKeys.map(key => (
+                  <div
+                    key={key}
+                    className={`topbar-new-option ${currentEndpoint === key ? 'selected' : ''}`}
+                    onClick={() => handleEndpointSelection(key)}
+                  >
+                    {allEndpointMeta[key]?.label || key}
+                    {currentEndpoint === key && <span className="topbar-check">✓</span>}
+                  </div>
+                ))}
+              </>
+            )}
+            <button
+              className="btn-primary"
+              style={{ width: '100%', marginTop: '0.5rem' }}
+              onClick={() => { createSession(); setShowNewSessionMenu(false); }}
+            >+ Create Session</button>
+          </div>
         )}
       </div>
 
-      <div className="topbar-right">
-        <span className={`live-dot-wrap ${wsConnected ? 'live' : 'offline'}`} title={wsConnected ? 'Live feed connected' : 'Offline'}>
-          <span className="live-dot" />
-        </span>
+      <div className="topbar-divider" />
 
-        <button
-          className={`icon-btn ${showMetricsPanel ? 'active' : ''}`}
-          onClick={() => {
-            setShowMetricsPanel(p => { if (!p) setShowSystemPanel(false); return !p; });
-          }}
-          title="Metrics"
-        >📊</button>
-
-        <button
-          className={`icon-btn svc-cog-btn ${showSystemPanel ? 'active' : ''}`}
-          onClick={() => {
-            setShowSystemPanel(prev => {
-              const next = !prev;
-              if (next) {
-                setShowMetricsPanel(false);
-                if (dockerStatus?.workspace?.configured) {
-                  browseWorkspace('');
-                  refreshWorkspaceGit();
-                }
-                fetchContentClients();
-              }
-              return next;
-            });
-          }}
-          title={`System — ${runningServices}/${totalServices} services`}
-        >⚙️ <span className="svc-cog-count">{totalServices > 0 ? `${runningServices}/${totalServices}` : '…'}</span></button>
+      {/* ── Layout view buttons ── */}
+      <div className="topbar-tabs">
+        <button className={`icon-btn ${(activeTab === 'workspace' && wsLayout === 'single') ? 'active' : ''}`} onClick={() => { setActiveTab('workspace'); setWsLayout('single'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); fetchArtifacts(); }} title="Workspace">🗂️</button>
+        <button className={`icon-btn ${wsLayout === 'split-h' ? 'active' : ''}`} onClick={() => { setWsLayout('split-h'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }} title="Split — side by side">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="2" width="6" height="12" rx="1"/><rect x="9" y="2" width="6" height="12" rx="1"/></svg>
+        </button>
+        <button className={`icon-btn ${wsLayout === 'split-v' ? 'active' : ''}`} onClick={() => { setWsLayout('split-v'); browseWorkspace(''); refreshWorkspaceGit(); fetchBranches(); }} title="Split — stacked">
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="1" width="14" height="6" rx="1"/><rect x="1" y="9" width="14" height="6" rx="1"/></svg>
+        </button>
       </div>
+
+      <div className="topbar-divider" />
+
+      {/* ── Session tabs inline ── */}
+      <div className="topbar-session-tabs">
+        {demoMode.enabled && <span className="pill pill-demo">Demo</span>}
+        {sessions.length > 4 && (
+          <input
+            className="session-search-input"
+            type="search"
+            placeholder="Filter…"
+            value={sessionSearch}
+            onChange={e => setSessionSearch(e.target.value)}
+            title="Filter sessions by name"
+          />
+        )}
+        {filteredSessions.map(s => {
+          const isPending = sessionPendingReply.has(s.id);
+          return (
+            <div
+              key={s.id}
+              className={`session-tab ${activeSession === s.id ? 'active' : ''} ${isPending && activeSession !== s.id ? 'session-tab--pending' : ''}`}
+              title={`${s.experience || 'session'} · ${s.messageCount} msg${s.messageCount !== 1 ? 's' : ''} · ${s.createdAt ? new Date(s.createdAt).toLocaleString() : ''}`}
+              onClick={() => {
+                setActiveSession(s.id);
+                fetchSessionDetails(s.id);
+                if (activeTab === 'workspace') {
+                  setWsLayout('split-h');
+                  setActiveTab('chat');
+                } else {
+                  setActiveTab('chat');
+                  setWsLayout('single');
+                }
+              }}
+            >
+              <SessionDot
+                sessionId={s.id}
+                loadingSessions={loadingSessions}
+                sessionPendingReply={sessionPendingReply}
+                sessionErrors={sessionErrors}
+                wsConnected={wsConnected}
+              />
+              <span className="session-tab-icon">{EXPERIENCE_META[s.experience]?.icon || '💬'}</span>
+              <span className="session-tab-name">{s.name}</span>
+              <button className="session-tab-close" onClick={e => { e.stopPropagation(); deleteSession(s.id); }} title="Close tab">×</button>
+            </div>
+          );
+        })}
+      </div>
+
     </div>
   );
 }

@@ -142,7 +142,7 @@ To reduce API costs and context usage:
    # Already set up:
   docker pull ollama/ollama:latest
   docker pull nemoclaw:latest
-   
+
   # Other useful images:
   docker pull ghcr.io/modelcontextprotocol/server-docker:latest
    ```

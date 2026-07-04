@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import axios from 'axios';
 
 process.env.AGENT_DASHBOARD_DISABLE_LISTEN = '1';
+delete process.env.AGENT_BOARD_ENABLE_DOCKER_CONTROL;
 
 const { app } = await import('../server.js');
 

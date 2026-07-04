@@ -236,15 +236,16 @@ export function createDockerRouter({
         const openllmUp = containers['llm_openllm']?.running ?? false;
         endpoints[key] = { name: config.name, model: config.defaultModel, backendType: config.backendType, live: openllmUp, fallback: !openllmUp };
       } else {
-        // 'custom' backendType — cloud or user-registered endpoints. Treat as live when
-        // an apiKey is present (cloud APIs don't have a local health endpoint to probe).
+        // 'custom' backendType — cloud or user-registered endpoints. Always treat as live:
+        // the user explicitly added the endpoint so it should appear in the model selector.
+        // Cloud APIs need an API key to work; local endpoints (Ollama) do not.
         const hasKey = !!(config.apiKey);
         endpoints[key] = {
           name: config.name,
           model: config.defaultModel,
           backendType: config.backendType,
           type: config.type || 'custom',
-          live: hasKey,
+          live: true,
           hasApiKey: hasKey,
           fallback: !hasKey,
         };
@@ -345,11 +346,43 @@ export function createDockerRouter({
       );
       const services = Object.fromEntries(serviceEntries);
 
+      // Fetch per-container resource usage from `docker stats`
+      let containerStats = {};
+      try {
+        const { stdout } = await execFileAsync('docker', [
+          'stats', '--no-stream', '--format',
+          '{"name":"{{.Name}}","cpu":"{{.CPUPerc}}","mem":"{{.MemUsage}}","memPerc":"{{.MemPerc}}","net":"{{.NetIO}}","block":"{{.BlockIO}}"}',
+        ], { timeout: 10000 });
+        for (const line of stdout.trim().split('\n').filter(Boolean)) {
+          try {
+            const entry = JSON.parse(line);
+            // Normalize container name → service key (strip leading slash, project prefix)
+            const rawName = entry.name.replace(/^\//, '');
+            containerStats[rawName] = {
+              cpu: entry.cpu,
+              mem: entry.mem,
+              memPerc: entry.memPerc,
+              net: entry.net,
+              block: entry.block,
+            };
+          } catch { /* skip malformed line */ }
+        }
+        // Attach stats to matching service entries by composeService name
+        for (const svc of Object.values(services)) {
+          if (!svc.composeService) continue;
+          const match = Object.entries(containerStats).find(([name]) =>
+            name === svc.composeService || name.includes(svc.composeService)
+          );
+          if (match) svc.stats = match[1];
+        }
+      } catch { /* docker not available or not running — stats remain absent */ }
+
       res.json({
         success: true,
         dockerControlEnabled: DOCKER_CONTROL_ENABLED,
         inDocker: IN_DOCKER,
         services,
+        containerStats,
         primaryLlm: {
           resolvedUrl: primaryResolution.url,
           discovered: primaryResolution.discovered,
@@ -539,6 +572,64 @@ export function createDockerRouter({
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  /**
+   * GET /api/system/config-check
+   * Validates that each registered service has a reachable candidate URL
+   * and that Docker control is enabled (if any service is controllable).
+   * Returns a list of passing/failing checks with diagnostic hints.
+   */
+  router.get('/system/config-check', async (req, res) => {
+    const registry = getServiceRegistry();
+    const checks = await Promise.all(
+      Object.values(registry).map(async (svc) => {
+        const base = {
+          key: svc.key,
+          label: svc.label,
+          backendType: svc.backendType,
+          controllable: svc.controllable,
+          disabled: !!svc.disabledReason,
+          disabledReason: svc.disabledReason || null,
+        };
+
+        if (svc.disabledReason) {
+          return { ...base, reachable: null, hint: `Disabled: ${svc.disabledReason}` };
+        }
+
+        const candidate = svc.candidates?.[0];
+        if (!candidate) return { ...base, reachable: false, hint: 'No candidate URL configured' };
+
+        try {
+          if (svc.checkType === 'tcp') {
+            await checkTcpService(candidate, 2000);
+          } else {
+            const probe = svc.probePath ? `${candidate}${svc.probePath}` : candidate;
+            await checkHttpService(probe, 2000);
+          }
+          return { ...base, reachable: true, hint: null };
+        } catch {
+          const hints = [];
+          if (svc.controllable && !DOCKER_CONTROL_ENABLED) {
+            hints.push('Docker control disabled — rebuild with docker-compose.docker-control.yml overlay to enable start/stop');
+          }
+          if (svc.composeProfile) hints.push(`Requires compose profile: ${svc.composeProfile}`);
+          hints.push(`Expected at: ${candidate}`);
+          return { ...base, reachable: false, hint: hints.join('; ') };
+        }
+      })
+    );
+
+    const passing = checks.filter(c => c.reachable === true).length;
+    const failing = checks.filter(c => c.reachable === false).length;
+    const disabled = checks.filter(c => c.reachable === null).length;
+
+    res.json({
+      success: true,
+      dockerControlEnabled: DOCKER_CONTROL_ENABLED,
+      summary: { total: checks.length, passing, failing, disabled },
+      checks,
+    });
   });
 
   return router;

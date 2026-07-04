@@ -1,5 +1,5 @@
 {
-  "name": "@agent-board/tool-website",
+  "name": "@motor-pool/tool-website",
   "version": "1.0.0",
   "description": "MCP server — B2B website generation, lead discovery, Netlify deployment",
   "type": "module",

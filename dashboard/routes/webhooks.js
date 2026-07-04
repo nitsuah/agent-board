@@ -1,17 +1,36 @@
 import express from 'express';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 const ALLOWED_WEBHOOK_EVENTS = new Set([
   'ci_pass', 'ci_fail', 'deploy', 'deploy_fail',
   'alert', 'review_requested', 'pr_merged', 'custom',
 ]);
 
+function verifySignature(secret, rawBody, sigHeader) {
+  if (!sigHeader) return false;
+  const expected = Buffer.from(`sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`);
+  const actual = Buffer.from(sigHeader);
+  if (expected.length !== actual.length) return false;
+  try { return timingSafeEqual(expected, actual); } catch { return false; }
+}
+
 export function createWebhooksRouter({
   tasks, getNextTaskId, eventBus, logStructured,
+  webhookSecret,
   normalizeTaskPriority, resolveTaskAssignment, buildTaskSummary,
 }) {
   const router = express.Router();
 
   router.post('/webhooks/trigger', (req, res) => {
+    if (webhookSecret) {
+      const sig = req.headers['x-hub-signature-256'];
+      const rawBody = req._rawBodyBuffer || Buffer.alloc(0);
+      if (!sig || !verifySignature(webhookSecret, rawBody, sig)) {
+        logStructured('warn', 'webhook_signature_invalid', { source: req.body?.source });
+        return res.status(401).json({ success: false, error: 'Invalid or missing webhook signature' });
+      }
+    }
+
     const { event: eventName, source = 'external', payload = {}, createTask: taskSpec } = req.body || {};
 
     if (!eventName || typeof eventName !== 'string' || !eventName.trim()) {

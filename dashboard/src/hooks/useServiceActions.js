@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { toast } from '../components/Toast.jsx';
 
 export function useServiceActions({ dockerStatus, systemServices }) {
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
@@ -52,7 +53,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        console.error('Service action failed:', data.error || 'Unknown error');
+        toast.error(data.error || 'Service action failed');
         setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
       } else if (action === 'start') {
         setServicesStarting(prev => ({ ...prev, [serviceKey]: true }));
@@ -64,7 +65,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       }
       await Promise.all([fetchDockerStatus?.(), fetchSystemServices?.()]);
     } catch (error) {
-      console.error('Service action failed:', error);
+      toast.error(`Service action failed: ${error.message}`);
       setServiceActionErrors(prev => ({ ...prev, [serviceKey]: error.message }));
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
@@ -76,7 +77,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       const res = await fetch('/api/models/pull-status');
       const data = await res.json();
       if (data.success) setModelPulls(data.pulls || {});
-    } catch (error) { console.error('Error fetching model pull status:', error); }
+    } catch (error) { toast.error(`Failed to fetch pull status: ${error.message}`); }
   };
 
   const pullModel = async (endpoint, model) => {
@@ -117,8 +118,8 @@ export function useServiceActions({ dockerStatus, systemServices }) {
         body: JSON.stringify({ model }),
       });
       const data = await res.json();
-      if (!data.success) console.error('Unload failed:', data.error);
-    } catch (err) { console.error('Unload error:', err); }
+      if (!data.success) toast.error(data.error || 'Unload failed');
+    } catch (err) { toast.error(`Unload error: ${err.message}`); }
   };
 
   const fetchContentClients = async () => {

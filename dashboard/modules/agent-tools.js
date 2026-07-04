@@ -25,11 +25,11 @@ export const DEVELOPER_TOOLS = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Create or overwrite a file in the workspace.',
+      description: 'Create or overwrite a file in the workspace. For documents, reports, summaries, research notes, and other output artifacts, use the artifacts/ subdirectory (e.g. artifacts/report.md). Source code and configuration go in their natural project locations.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Relative path inside workspace.' },
+          path: { type: 'string', description: 'Relative path inside workspace. Use artifacts/ prefix for output documents and reports.' },
           content: { type: 'string', description: 'Content to write.' },
         },
         required: ['path', 'content'],
@@ -256,10 +256,29 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
     }
   }
 
+  const TOOL_RESULT_MAX_CHARS = 8000;
+  const MAX_CONSECUTIVE_TOOL_ERRORS = 3;
+
+  function capToolResult(result) {
+    if (result.length <= TOOL_RESULT_MAX_CHARS) return result;
+    const truncated = result.slice(0, TOOL_RESULT_MAX_CHARS);
+    try {
+      const parsed = JSON.parse(result);
+      const capped = { ...parsed, _truncated: true, _originalLength: result.length };
+      if (parsed.stdout) capped.stdout = parsed.stdout.slice(0, TOOL_RESULT_MAX_CHARS - 200) + '\n[truncated]';
+      if (parsed.content) capped.content = parsed.content.slice(0, TOOL_RESULT_MAX_CHARS - 200) + '\n[truncated]';
+      const out = JSON.stringify(capped);
+      return out.length <= TOOL_RESULT_MAX_CHARS ? out : out.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]';
+    } catch {
+      return truncated + '\n[truncated]';
+    }
+  }
+
   async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) {
     const MAX_ITERATIONS = 5;
     const toolLog = [];
     const localMsgs = [...msgs];
+    let consecutiveErrors = 0;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const reqBody = { model: session.model, messages: localMsgs, stream: false };
@@ -284,8 +303,23 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
         const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
         const callId = tc.id || randomUUID();
 
-        const result = await callAgentTool(name, args, session);
-        toolLog.push({ name, args, result: JSON.parse(result), callId });
+        const rawResult = await callAgentTool(name, args, session);
+        const result = capToolResult(rawResult);
+
+        let parsed;
+        try { parsed = JSON.parse(result); } catch { parsed = { raw: result }; }
+
+        if (parsed?.error) {
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
+            toolLog.push({ name, args, result: parsed, callId, aborted: true });
+            return { content: `Tool loop aborted after ${consecutiveErrors} consecutive errors. Last error: ${parsed.error}`, toolLog };
+          }
+        } else {
+          consecutiveErrors = 0;
+        }
+
+        toolLog.push({ name, args, result: parsed, callId });
 
         if (apiStyle === 'openai') {
           localMsgs.push({ role: 'tool', tool_call_id: callId, content: result });

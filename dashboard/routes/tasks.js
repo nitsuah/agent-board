@@ -1,32 +1,42 @@
 import express from 'express';
 
-export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment }) {
+export function createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment }) {
   const router = express.Router();
   let taskCounter = 0;
 
   router.get('/tasks', (req, res) => {
-    const { status, sessionId } = req.query;
+    const { status, sessionId, priority, q, limit: limitParam } = req.query;
     const normalizedStatus = status ? normalizeTaskStatus(status) : null;
+    const normalizedPriorityFilter = priority ? normalizeTaskPriority(priority) : null;
+    const searchTerm = q && typeof q === 'string' ? q.trim().toLowerCase() : null;
+    const limit = limitParam ? Math.max(1, Math.min(500, parseInt(limitParam, 10) || 100)) : null;
 
     if (status && !normalizedStatus) {
       return res.status(400).json({ success: false, error: 'Invalid status filter' });
     }
+    if (priority && !normalizedPriorityFilter) {
+      return res.status(400).json({ success: false, error: 'Invalid priority filter' });
+    }
 
-    const items = Array.from(tasks.values())
+    const allItems = Array.from(tasks.values())
       .filter((task) => (normalizedStatus ? task.status === normalizedStatus : true))
+      .filter((task) => (normalizedPriorityFilter ? task.priority === normalizedPriorityFilter : true))
       .filter((task) => (sessionId ? task.sessionId === sessionId : true))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map(buildTaskSummary);
+      .filter((task) => (searchTerm ? task.title.toLowerCase().includes(searchTerm) || task.description.toLowerCase().includes(searchTerm) : true))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const byStatus = { pending: 0, in_progress: 0, blocked: 0, completed: 0 };
-    items.forEach((task) => {
+    allItems.forEach((task) => {
       byStatus[task.status] = (byStatus[task.status] || 0) + 1;
     });
+
+    const items = (limit ? allItems.slice(0, limit) : allItems).map(buildTaskSummary);
 
     res.json({
       success: true,
       tasks: items,
-      summary: { total: items.length, byStatus }
+      total: allItems.length,
+      summary: { total: allItems.length, byStatus }
     });
   });
 
@@ -65,6 +75,8 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
 
     tasks.set(taskId, task);
 
+    logStructured?.('info', 'task_created', { taskId, priority: task.priority, sessionId: task.sessionId });
+
     eventBus.emit('task_created', {
       session_id: task.sessionId,
       user_id: task.assignedUserId || 'anonymous',
@@ -81,6 +93,12 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
       });
     }
 
+    res.json({ success: true, task: buildTaskSummary(task) });
+  });
+
+  router.get('/tasks/:id', (req, res) => {
+    const task = tasks.get(req.params.id);
+    if (!task) return res.status(404).json({ success: false, error: 'Not found' });
     res.json({ success: true, task: buildTaskSummary(task) });
   });
 
@@ -121,6 +139,7 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
       }
 
       if (task.status !== normalizedStatus) {
+        logStructured?.('info', 'task_status_changed', { taskId: task.id, from: task.status, to: normalizedStatus });
         task.status = normalizedStatus;
         eventBus.emit('task_status_changed', {
           session_id: task.sessionId,
@@ -178,6 +197,7 @@ export function createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStat
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
+    logStructured?.('info', 'task_deleted', { taskId: task.id, status: task.status });
     tasks.delete(req.params.id);
     eventBus.emit('task_deleted', {
       session_id: task.sessionId,

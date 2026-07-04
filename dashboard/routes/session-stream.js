@@ -76,7 +76,31 @@ export async function handleSessionStream(req, res, {
       { headers: streamHeaders, responseType: 'stream', timeout: 120000 }
     );
 
+    const STALL_TIMEOUT_MS = 30_000;
+    let stallTimer = null;
+    let streamEnded = false;
+
+    const resetStallTimer = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        if (streamEnded) return;
+        streamEnded = true;
+        streamResponse.data.destroy();
+        if (fullContent) {
+          session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
+          session.updatedAt = new Date();
+          upsertSessionContext(session, logStructured);
+          send({ type: 'done', messageCount: session.messages.length, truncated: true });
+        } else {
+          send({ type: 'error', message: '[Error] LLM stream stalled — no data for 30s' });
+        }
+        res.end();
+      }, STALL_TIMEOUT_MS);
+    };
+    resetStallTimer();
+
     streamResponse.data.on('data', (chunk) => {
+      resetStallTimer();
       const lines = chunk.toString().split('\n').filter(l => l.trim());
       for (const line of lines) {
         const text = line.startsWith('data: ') ? line.slice(6) : line;
@@ -90,6 +114,9 @@ export async function handleSessionStream(req, res, {
     });
 
     streamResponse.data.on('end', () => {
+      if (streamEnded) return;
+      streamEnded = true;
+      clearTimeout(stallTimer);
       if (!fullContent) fullContent = 'No response received';
       session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
       session.updatedAt = new Date();
@@ -99,10 +126,18 @@ export async function handleSessionStream(req, res, {
     });
 
     streamResponse.data.on('error', (err) => {
-      console.error('[Stream] LLM stream error:', err.message);
+      if (streamEnded) return;
+      streamEnded = true;
+      clearTimeout(stallTimer);
+      logStructured('warn', 'stream_data_error', { session_id: session.id, error: err.message });
       const errMsg = `[Error] Stream failed: ${err.message}`;
       if (!fullContent) {
         session.messages.push({ role: 'assistant', content: errMsg, timestamp: new Date() });
+        session.updatedAt = new Date();
+        upsertSessionContext(session, logStructured);
+      } else {
+        // save whatever partial content arrived
+        session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
         session.updatedAt = new Date();
         upsertSessionContext(session, logStructured);
       }
@@ -110,7 +145,17 @@ export async function handleSessionStream(req, res, {
       res.end();
     });
 
-    req.on('close', () => streamResponse.data.destroy());
+    req.on('close', () => {
+      clearTimeout(stallTimer);
+      streamEnded = true;
+      streamResponse.data.destroy();
+      // persist whatever partial content arrived before client disconnected
+      if (fullContent && !session.messages.find(m => m.role === 'assistant' && m.content === fullContent)) {
+        session.messages.push({ role: 'assistant', content: fullContent, timestamp: new Date() });
+        session.updatedAt = new Date();
+        upsertSessionContext(session, logStructured);
+      }
+    });
   } catch (error) {
     console.error('[Stream] Error starting LLM stream:', error.message);
     const backendType = LLM_CONFIG[session.endpoint]?.backendType || '';

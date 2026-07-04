@@ -1,8 +1,8 @@
-# Agent Board - Local AI Ops Cockpit
+# motor-pool - Local AI Ops Cockpit
 
-Agent Board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
+motor-pool is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
 
-## Why Agent Board
+## Why motor-pool
 
 - **Ship safer prompts faster**: built-in input classification, prompt-injection checks, blocked-input handling, and output sanitization.
 - **Run multiple experiences**: switch between Developer Assistant, Research Mode, and Safe Chat with server-enforced routing and safety policies.
@@ -25,23 +25,30 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ### Dashboard Overview
 
-![Agent Board dashboard overview](docs/screenshots/dashboard-overview.png)
+![motor-pool dashboard overview](docs/screenshots/dashboard-overview.png)
 
 ### Metrics View
 
-![Agent Board metrics panel](docs/screenshots/metrics-panel.png)
+![motor-pool metrics panel](docs/screenshots/metrics-panel.png)
 
 ### System Management
 
-![Agent Board system management panel](docs/screenshots/system-panel.png)
+![motor-pool system management panel](docs/screenshots/system-panel.png)
 
 ## Quick Start
 
 Minimal stack (dashboard + Ollama + DB — fits a 16 GB host):
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml --project-directory . up -d
+```
+
+or for GPU:
+
+```powershell
+cd C:\Users\$env:USERNAME\code\motor-pool
+docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml up -d
 ```
 
 Open [http://localhost:3000](http://localhost:3000) — that's it.
@@ -58,6 +65,9 @@ docker compose -f config/docker-compose.yml --project-directory . --profile bb-m
 
 # MCP tool servers (Content Studio / Website Agent)
 docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d tool-content-gen tool-website
+
+# MCP tool servers (Content Studio / Website Agent)
+docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d nemoclaw
 ```
 
 Default endpoints (minimal stack):

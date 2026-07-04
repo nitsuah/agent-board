@@ -7,7 +7,7 @@ Professional indigo/slate color scheme unless the client industry suggests other
 ## Required sections (in order)
 
 ### 1. Cover
-- Big headline: "[COMPANY_NAME] — Your Digital Upgrade"  
+- Big headline: "[COMPANY_NAME] — Your Digital Upgrade"
 - Sub: "A proposal from [YOUR_COMPANY]"
 - Date + your contact info
 

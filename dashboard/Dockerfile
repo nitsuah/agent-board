@@ -23,10 +23,12 @@ RUN npm install
 
 # ---- test stage ----
 FROM base AS test
-COPY server.js persistence.js tracing.js safety.js ./
+COPY server.js persistence.js tracing.js safety.js task-runner.js ./
 COPY modules ./modules
 COPY routes ./routes
+COPY config ./config
 COPY src ./src
+COPY scripts ./scripts
 COPY tests ./tests
 ENV AGENT_DASHBOARD_DISABLE_LISTEN=1
 CMD ["npm", "run", "test:unit"]
@@ -37,11 +39,13 @@ ARG GITHUB_ID
 ARG GITHUB_SECRET
 ENV GITHUB_ID=$GITHUB_ID
 ENV GITHUB_SECRET=$GITHUB_SECRET
-COPY server.js persistence.js tracing.js safety.js ./
+COPY server.js persistence.js tracing.js safety.js task-runner.js ./
 COPY modules ./modules
 COPY routes ./routes
+COPY config ./config
 COPY src ./src
 COPY index.html vite.config.js ./
+COPY scripts ./scripts
 COPY tests ./tests
 RUN npm run build
 EXPOSE 3000

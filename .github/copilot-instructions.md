@@ -4,8 +4,8 @@ This file provides custom instructions to GitHub Copilot when working in this re
 
 ## Project Context
 
-**Project Name:** Agent Board  
-**Description:** A local-first control room for multi-model AI workflows — chat surface, safety rails, and live observability in one place.  
+**Project Name:** motor-pool
+**Description:** A local-first control room for multi-model AI workflows — chat surface, safety rails, and live observability in one place.
 **Tech Stack:** React, Vite, Express, JavaScript (ES modules), Node.js, PostgreSQL, WebSockets, OpenTelemetry, Docker
 
 ## Code Style & Conventions

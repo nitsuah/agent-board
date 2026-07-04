@@ -2,6 +2,7 @@ import {
   classifyInput, buildSystemMessages, sanitizeResponse,
   applyOutputControls, normalizePromptText, resolveEffectiveSafetyMode,
 } from '../safety.js';
+import { ensureToolReady, experienceToolKey } from '../modules/tool-lifecycle.js';
 
 export async function handleSessionMessage(req, res, {
   sessions, eventBus, logStructured,
@@ -9,6 +10,7 @@ export async function handleSessionMessage(req, res, {
   runPromptHandlers, prepareSessionForLlmCall,
   getExperienceTools, runAgentLoop,
   upsertSessionContext, activeDockerRunnerModelRef,
+  TOOL_SERVERS, serviceRegistry, dockerControlEnabled, runComposeAction,
 }) {
   const session = sessions.get(req.params.id);
   if (!session) return res.status(404).json({ success: false, error: 'Session not found' });
@@ -80,7 +82,21 @@ export async function handleSessionMessage(req, res, {
     metadata: { classification: classification.category, messageLength: normalizedMessage.length },
   });
 
+  // JIT tool lifecycle: auto-start MCP tool server if the experience requires one
+  const requiredTool = experienceToolKey(session.experience, TOOL_SERVERS || {});
+  if (requiredTool && TOOL_SERVERS) {
+    const lifecycle = await ensureToolReady(requiredTool, TOOL_SERVERS, serviceRegistry, dockerControlEnabled, runComposeAction, logStructured);
+    if (!lifecycle.ready) {
+      return res.status(503).json({ success: false, error: lifecycle.error || `Tool server for ${session.experience} is unavailable` });
+    }
+    if (lifecycle.started) {
+      eventBus.emit('tool_lifecycle_started', { session_id: session.id, metadata: { toolKey: requiredTool } });
+    }
+  }
+
   const msgStart = Date.now();
+  session.status = 'running';
+  session.lastActivity = new Date();
 
   try {
     const prepared = await prepareSessionForLlmCall(session);
@@ -114,6 +130,8 @@ export async function handleSessionMessage(req, res, {
       filterFlags: sanitizedResponse.flags, blocked: sanitizedResponse.blocked,
       redacted: sanitizedResponse.redacted, toolLog: toolLog?.length ? toolLog : undefined, feedback: null,
     });
+    session.status = 'idle';
+    session.lastActivity = new Date();
     session.updatedAt = new Date();
     upsertSessionContext(session, logStructured);
 
@@ -142,6 +160,9 @@ export async function handleSessionMessage(req, res, {
     logStructured('error', 'llm_call_failed', { sessionId: session.id, endpoint: session.endpoint, model: session.model, error: error.message });
     const errorMsg = `[Error] Could not reach the configured model service for ${session.endpoint}: ${error.message}`;
     session.messages.push({ role: 'assistant', content: errorMsg, timestamp: new Date() });
+    session.status = 'error';
+    session.lastActivity = new Date();
+    session.errorCount = (session.errorCount || 0) + 1;
     session.updatedAt = new Date();
     upsertSessionContext(session, logStructured);
     eventBus.emit('error', {

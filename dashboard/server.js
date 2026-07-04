@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync } from 'fs';
+import { initSessionSnapshot, scheduleSnapshotWrite } from './modules/session-snapshot.js';
 import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
@@ -32,6 +33,12 @@ import { createModelsRouter } from './routes/models.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createToolsRouter } from './routes/tools.js';
 import { createConnectorsRouter } from './routes/connectors.js';
+import { createEndpointsRouter } from './routes/endpoints.js';
+import { createDiscoverRouter } from './routes/discover.js';
+import { createChannelsRouter } from './routes/channels.js';
+import { createMcpRegistryRouter } from './routes/mcp-registry.js';
+import { startTaskRunner } from './task-runner.js';
+import outputsRouter from './routes/outputs.js';
 import {
   isKnownExperience, isKnownSafetyMode, getExperienceConfig, getAllowedEndpoints,
   getPublicExperienceConfigs, isEndpointAllowed, resolveSessionEndpoint,
@@ -64,6 +71,7 @@ const DOCKER_COMPOSE_FILE = process.env.DOCKER_COMPOSE_FILE || join(__dirname, '
 const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..', 'config');
 const DOCKER_ENV_FILE = process.env.DOCKER_ENV_FILE || join(__dirname, '..', 'config', '.env');
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || null;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
 const WEBSITE_OUTPUT_DIR = process.env.WEBSITE_OUTPUT_DIR || join(__dirname, '..', 'tools', 'website', 'output');
 
 function parseUrlListEnv(rawValue, fallback = []) {
@@ -162,7 +170,13 @@ async function resolveEndpointUrl(endpoint) {
     const resolved = await resolvePrimaryLlmUrl();
     return resolved.url;
   }
-  return LLM_CONFIG[endpoint]?.url || LLM_CONFIG.primary.url;
+  const config = LLM_CONFIG[endpoint];
+  const url = (config?.url || LLM_CONFIG.primary.url).replace(/\/$/, '');
+  // openai-style agents call ${llmUrl}/chat/completions; ensure /v1 is in path
+  if (config?.apiStyle === 'openai' && !url.includes('/v1')) {
+    return url + '/v1';
+  }
+  return url;
 }
 
 function getServiceRegistry() {
@@ -207,10 +221,12 @@ function getServiceRegistry() {
 
 async function runComposeAction(action, serviceName, composeProfile = null) {
   const profileFlag = composeProfile ? ['--profile', composeProfile] : [];
+  const envFileFlag = existsSync(DOCKER_ENV_FILE) ? ['--env-file', DOCKER_ENV_FILE] : [];
+  const base = ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, ...envFileFlag];
   const actionArgs = {
-    start:   ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'up', '-d', serviceName],
-    stop:    ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, 'stop', serviceName],
-    restart: ['-f', DOCKER_COMPOSE_FILE, '--project-directory', DOCKER_PROJECT_DIR, '--env-file', DOCKER_ENV_FILE, ...profileFlag, 'restart', serviceName],
+    start:   [...base, ...profileFlag, 'up', '-d', serviceName],
+    stop:    [...base, 'stop', serviceName],
+    restart: [...base, ...profileFlag, 'restart', serviceName],
   };
   const args = actionArgs[action];
   if (!args) throw new Error(`Unsupported action: ${action}`);
@@ -354,6 +370,18 @@ async function fetchOllamaModels(baseUrl, timeoutMs = 4000) {
 
 await initTracing(logStructured);
 await initPersistence(logStructured);
+initSessionSnapshot(sessions, logStructured);
+
+const _baseUpsertSessionContext = upsertSessionContext;
+async function upsertSessionContextWithSnapshot(session, log) {
+  await _baseUpsertSessionContext(session, log);
+  scheduleSnapshotWrite(log);
+}
+const _baseMarkSessionEnded = markSessionEnded;
+async function markSessionEndedWithSnapshot(sessionId, endedAt, log) {
+  await _baseMarkSessionEnded(sessionId, endedAt, log);
+  scheduleSnapshotWrite(log);
+}
 
 const { getExperienceTools, runAgentLoop } = createAgentHelpers({
   WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS,
@@ -395,11 +423,30 @@ async function runPromptHandlers(rawMessage, session, safetyMode) {
 }
 
 // Router instances (initialized after shared state + helpers are declared)
-const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
+const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
 const workspaceRouter = createWorkspaceRouter(WORKSPACE_ROOT);
 
 // Middleware
 app.use(cors());
+// Capture raw body on the webhook trigger path before JSON parsing (needed for HMAC verification)
+// Sets req._rawBodyBuffer for HMAC verification; sets req._body = true so express.json() skips it.
+app.use('/api/webhooks/trigger', (req, _res, next) => {
+  if (req.method !== 'POST') return next();
+  const chunks = [];
+  let size = 0;
+  const MAX_WEBHOOK_BODY = 1024 * 256; // 256 KB
+  req.on('data', c => {
+    size += c.length;
+    if (size > MAX_WEBHOOK_BODY) { req.destroy(); return; }
+    chunks.push(c);
+  });
+  req.on('end', () => {
+    req._rawBodyBuffer = Buffer.concat(chunks);
+    try { req.body = JSON.parse(req._rawBodyBuffer.toString()); } catch { req.body = {}; }
+    req._body = true;
+    next();
+  });
+});
 app.use(express.json());
 app.use((req, res, next) => {
   const start = Date.now();
@@ -427,7 +474,8 @@ app.use('/api', createDockerRouter({
   execFileAsync, pullStatus, eventBus, logStructured, activeDockerRunnerModelRef,
 }));
 
-app.use('/api', createContentRouter({ WEBSITE_OUTPUT_DIR }));
+app.use('/api', createContentRouter({ WEBSITE_OUTPUT_DIR, WORKSPACE_ROOT }));
+app.use('/api', outputsRouter);
 
 app.use('/api', createModelsRouter({
   LLM_CONFIG, resolvePrimaryLlmUrl, PRIMARY_LLM_URL_CANDIDATES,
@@ -452,21 +500,38 @@ app.get('/api/tracing/status', (req, res) => {
   res.json({ success: true, tracing: getTracingStatus() });
 });
 
+// Allow BYOK/custom endpoints (backendType === 'custom') in any non-safechat experience.
+// Safety.js only knows about builtin endpoint keys; custom keys are registered at runtime.
+function resolveSessionEndpointWithCustom(experience, requestedEndpoint) {
+  if (LLM_CONFIG[requestedEndpoint]?.backendType === 'custom' && experience !== 'safechat') {
+    return requestedEndpoint;
+  }
+  return resolveSessionEndpoint(experience, requestedEndpoint);
+}
+function isEndpointAllowedWithCustom(experience, endpoint) {
+  if (LLM_CONFIG[endpoint]?.backendType === 'custom' && experience !== 'safechat') {
+    return true;
+  }
+  return isEndpointAllowed(experience, endpoint);
+}
+
 app.use('/api/sessions', createSessionsRouter({
   sessions, sessionCounterRef, eventBus, logStructured,
   LLM_CONFIG, PUBLIC_DEMO_MODE, DEMO_EXPERIENCE, MAX_INPUT_CHARS, MAX_OUTPUT_CHARS,
   DEVICE_PROFILE, resolveRequestedExperience, isKnownExperience, isKnownSafetyMode,
-  resolveSessionEndpoint, resolveConfiguredSafetyMode, isEndpointAllowed,
+  resolveSessionEndpoint: resolveSessionEndpointWithCustom, resolveConfiguredSafetyMode, isEndpointAllowed: isEndpointAllowedWithCustom,
   getExperienceConfig, getAllowedEndpoints, coerceModelForEndpoint,
   resolveEndpointUrl, prepareSessionForLlmCall, ensureRunnableModelForSession,
   getExperienceTools, runPromptHandlers, runAgentLoop,
-  upsertSessionContext, markSessionEnded, persistEvent, activeDockerRunnerModelRef,
+  upsertSessionContext: upsertSessionContextWithSnapshot, markSessionEnded: markSessionEndedWithSnapshot, persistEvent, activeDockerRunnerModelRef,
+  TOOL_SERVERS, serviceRegistry: getServiceRegistry(), dockerControlEnabled: DOCKER_CONTROL_ENABLED, runComposeAction,
 }));
 
 app.use('/api', tasksRouter);
 
 app.use('/api', createWebhooksRouter({
   tasks, getNextTaskId, eventBus, logStructured,
+  webhookSecret: WEBHOOK_SECRET,
   normalizeTaskPriority, resolveTaskAssignment, buildTaskSummary,
 }));
 
@@ -480,9 +545,14 @@ app.get('/api/experiences', (req, res) => {
   });
 });
 
-app.use('/api', createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }));
+app.use('/api', createToolsRouter({ TOOL_SERVERS, DOCKER_CONTROL_ENABLED, serviceRegistry: getServiceRegistry(), runComposeAction, eventBus, logStructured, TOOL_CALL_TIMEOUT_MS }));
 
 app.use('/api', createConnectorsRouter({ BB_MCP_ENABLED, BB_MCP_URL, logStructured }));
+
+app.use('/api', createEndpointsRouter({ LLM_CONFIG, logStructured }));
+app.use('/api', createDiscoverRouter({ LLM_CONFIG, logStructured }));
+app.use('/api', createChannelsRouter({ eventBus, logStructured }));
+app.use('/api', createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRegistry: getServiceRegistry(), DOCKER_CONTROL_ENABLED, runComposeAction }));
 
 app.get('/api/health', async (req, res) => {
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -495,6 +565,7 @@ app.get('/api/health', async (req, res) => {
     server: { uptime: process.uptime(), memory: process.memoryUsage(), platform: process.platform },
     endpoints: {},
     sessions: { active: sessions.size, totalCreated: sessionCounterRef.current },
+    tasks: { total: tasks.size, pending: Array.from(tasks.values()).filter(t => t.status === 'pending').length, inProgress: Array.from(tasks.values()).filter(t => t.status === 'in_progress').length },
     observability: {
       totalEvents: eventBus.getAll().length,
       recentErrors: recentErrors.length,
@@ -581,6 +652,48 @@ if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
   });
 
   attachEventWebSocketServer(server);
+
+  // Start the background task auto-runner (picks up pending tasks by priority)
+  // dispatchMessage: creates or reuses a session, then runs the agent loop non-streaming
+  const dispatchTaskMessage = async (task) => {
+    const sessionId = `sess_task_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const endpoint = 'primary';
+    const resolvedLlmUrl = await resolveEndpointUrl(endpoint);
+    const experience = task.experience || 'developer';
+    const session = {
+      id: sessionId,
+      name: `[task] ${task.title.slice(0, 40)}`,
+      model: LLM_CONFIG[endpoint]?.defaultModel || 'llama3',
+      endpoint,
+      llmUrl: resolvedLlmUrl,
+      messages: [],
+      createdAt: new Date(), updatedAt: new Date(),
+      userId: task.assignedUserId || 'task-runner',
+      userRole: null, experience, safetyMode: null, useSafeModeEnabled: false,
+    };
+    sessions.set(sessionId, session);
+    upsertSessionContextWithSnapshot(session, logStructured);
+
+    session.messages.push({ role: 'user', content: task.title, timestamp: new Date() });
+    const prepared = await prepareSessionForLlmCall(session);
+    const { llmUrl, apiStyle, apiKey } = prepared;
+    const streamHeaders = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const { buildSystemMessages } = await import('./safety.js');
+    const systemMessages = buildSystemMessages({ ...session, safetyMode: null });
+    const historyMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
+    const msgs = [...systemMessages, ...historyMessages];
+    const tools = getExperienceTools(experience);
+    const result = await runAgentLoop(msgs, apiStyle, llmUrl, streamHeaders, tools, session);
+    session.messages.push({ role: 'assistant', content: result.content, timestamp: new Date(), toolLog: result.toolLog?.length ? result.toolLog : undefined });
+    session.updatedAt = new Date();
+    upsertSessionContextWithSnapshot(session, logStructured);
+    task.sessionId = sessionId;
+    return result;
+  };
+  startTaskRunner(tasks, eventBus, dispatchTaskMessage, {
+    TOOL_SERVERS, serviceRegistry: getServiceRegistry(),
+    dockerControlEnabled: DOCKER_CONTROL_ENABLED, runComposeAction, logStructured,
+  });
 
   process.on('SIGTERM', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });
   process.on('SIGINT', async () => { await shutdownTracing(); server.close(() => process.exit(0)); });

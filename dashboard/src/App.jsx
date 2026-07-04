@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
+import { toast } from './components/Toast.jsx';
 import AgentStatusCard from './components/AgentStatusCard.jsx';
 import ToolWorkbench from './components/ToolWorkbench.jsx';
 import MetricsPanel from './components/MetricsPanel.jsx';
@@ -10,6 +11,8 @@ import TopBar from './components/TopBar.jsx';
 import WorkspaceView from './components/WorkspaceView.jsx';
 import { useWorkspaceOps } from './hooks/useWorkspaceOps.js';
 import { useTaskManagement } from './hooks/useTaskManagement.js';
+import { getFriendlyServiceError } from './utils/serviceErrors.js';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.jsx';
 import {
   getOrCreateUserId, getUserRole, shouldShowOnboarding,
   ENDPOINT_META, EXPERIENCE_ENDPOINTS, EXPERIENCE_TOOLS, EXPERIENCE_META, SAFETY_COLORS,
@@ -27,7 +30,10 @@ function App() {
   const [useNemoClaw, setUseNemoClaw] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(new Set());
   const [streamingBySession, setStreamingBySession] = useState({});
+  const [sessionPendingReply, setSessionPendingReply] = useState(new Set());
+  const [sessionErrors, setSessionErrors] = useState(new Set());
   const streamAbortControllersRef = useRef(new Map());
+  const fetchTasksRef = useRef(null);
   const [dockerStatus, setDockerStatus] = useState(null);
   const [systemServices, setSystemServices] = useState(null);
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
@@ -44,6 +50,7 @@ function App() {
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemPanel, setShowSystemPanel] = useState(false);
   const [showNewSessionMenu, setShowNewSessionMenu] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const newSessionMenuRef = useRef(null);
   const [demoMode, setDemoMode] = useState({ enabled: false, enforcedExperience: null, allowedEndpoints: [] });
   const [liveEvents, setLiveEvents] = useState([]);
@@ -64,6 +71,7 @@ function App() {
     });
   };
   const [selectedExperience, setSelectedExperience] = useState('developer');
+  const [taskExperience, setTaskExperience] = useState('research');
   const [activeTab, setActiveTab] = useState('chat');
   const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding);
   const [metricsSummary, setMetricsSummary] = useState(null);
@@ -75,6 +83,7 @@ function App() {
   const pausedSessionsRef = useRef(new Set());
   const [pausedSessions, setPausedSessions] = useState(new Set());
   const chatBottomRef = useRef(null);
+  const createSessionRef = useRef(null);
 
   // ── Derived endpoint helpers (needed by hooks below) ─────────────────────
   const allEndpointMeta = useMemo(() => {
@@ -96,8 +105,10 @@ function App() {
   const getAvailableEndpoints = useCallback((experienceKey) => {
     if (demoMode.enabled) return ['primary'];
     const base = EXPERIENCE_ENDPOINTS[experienceKey] || EXPERIENCE_ENDPOINTS.developer;
+    // Custom/BYOK endpoints (9router etc.) are excluded from safe chat
+    if (experienceKey === 'safechat') return base;
     const customKeys = Object.entries(dockerStatus?.endpoints || {})
-      .filter(([, ep]) => ep.backendType === 'custom')
+      .filter(([, ep]) => ep.backendType === 'custom' || ep.backendType === 'byok')
       .map(([k]) => k);
     return customKeys.length ? [...new Set([...base, ...customKeys])] : base;
   }, [demoMode.enabled, dockerStatus]);
@@ -135,7 +146,8 @@ function App() {
 
   const {
     tasks, taskSummary, taskTitle, setTaskTitle, taskPriority, setTaskPriority,
-    fetchTasks, createTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask,
+    fetchTasks, createTask, updateTask, updateTaskStatus, routeTaskToSession, dispatchTask, deleteTask, clearCompletedTasks,
+    taskDescription, setTaskDescription,
   } = useTaskManagement({
     activeSession, selectedExperience,
     wsLayout: wsOps.wsLayout, setActiveTab,
@@ -145,6 +157,9 @@ function App() {
     fetchSessionDetails: fetchSessionDetailsStable,
     setActiveSession,
   });
+
+  // keep ref current so the WS handler (which has [] deps) always calls the latest fetchTasks
+  fetchTasksRef.current = fetchTasks;
 
   // ── Data fetch functions ──────────────────────────────────────────────────
   const fetchModels = async () => {
@@ -273,8 +288,10 @@ function App() {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        console.error('Service action failed:', data.error || 'Unknown error');
-        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
+        const raw = data.error || 'Action failed';
+        const msg = getFriendlyServiceError(raw);
+        toast.error(`Service ${action} failed: ${msg}`);
+        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: msg }));
       } else if (action === 'start') {
         setServicesStarting(prev => ({ ...prev, [serviceKey]: true }));
         clearTimeout(startingTimeoutsRef.current[serviceKey]);
@@ -285,7 +302,7 @@ function App() {
       }
       await Promise.all([fetchDockerStatus(), fetchSystemServices()]);
     } catch (error) {
-      console.error('Service action failed:', error);
+      toast.error(`Service ${action} failed: ${error.message}`);
       setServiceActionErrors(prev => ({ ...prev, [serviceKey]: error.message }));
     } finally {
       setServiceActionsInFlight(prev => ({ ...prev, [actionId]: false }));
@@ -355,24 +372,69 @@ function App() {
     }
   }, [demoMode.enabled]);
 
+  const wsRef = useRef(null);
+  const wsReconnectTimerRef = useRef(null);
   useEffect(() => {
-    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
-    socket.onopen = () => setWsConnected(true);
-    socket.onclose = () => setWsConnected(false);
-    socket.onerror = () => setWsConnected(false);
-    socket.onmessage = (msg) => {
-      try {
-        const payload = JSON.parse(msg.data);
-        if (payload.type !== 'event' || !payload.event) return;
-        setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
-        const { event_type: eventType, endpoint, model, metadata } = payload.event;
-        if (eventType?.startsWith('model_pull_') && endpoint && model) {
-          setModelPulls((prev) => ({ ...prev, [`${endpoint}:${model}`]: { endpoint, model, ...metadata } }));
-        }
-      } catch { /* ignore malformed payloads */ }
+    let destroyed = false;
+    const connect = () => {
+      if (destroyed) return;
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
+      wsRef.current = socket;
+      socket.onopen = () => setWsConnected(true);
+      socket.onclose = () => {
+        setWsConnected(false);
+        if (!destroyed) wsReconnectTimerRef.current = setTimeout(connect, 3000);
+      };
+      socket.onerror = () => setWsConnected(false);
+      socket.onmessage = (msg) => {
+        try {
+          const payload = JSON.parse(msg.data);
+          if (payload.type !== 'event' || !payload.event) return;
+          setLiveEvents((prev) => [payload.event, ...prev].slice(0, 30));
+          const { event_type: eventType, endpoint, model, metadata } = payload.event;
+          if (eventType?.startsWith('model_pull_') && endpoint && model) {
+            setModelPulls((prev) => ({ ...prev, [`${endpoint}:${model}`]: { endpoint, model, ...metadata } }));
+          }
+          if (eventType === 'artifact_created') {
+            wsOps.fetchArtifacts?.();
+          }
+          if (eventType === 'task_status_changed') {
+            const { status } = metadata || {};
+            if (status === 'completed') toast.success('Task completed');
+            else if (status === 'failed') toast.error(`Task failed${metadata?.error ? `: ${metadata.error}` : ''}`);
+            fetchTasksRef.current?.();
+          }
+        } catch { /* ignore malformed payloads */ }
+      };
     };
-    return () => socket.close();
+    connect();
+    return () => {
+      destroyed = true;
+      clearTimeout(wsReconnectTimerRef.current);
+      wsRef.current?.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const inInput = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) {
+        if (inInput) return;
+        e.preventDefault();
+        createSessionRef.current?.();
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !inInput) {
+        setShowShortcuts(p => !p);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'm' && !inInput) {
+        e.preventDefault();
+        setShowMetricsPanel(p => !p);
+        setShowSystemPanel(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   useEffect(() => {
@@ -407,8 +469,9 @@ function App() {
         setActiveSession(data.session.id);
         fetchSessions();
       }
-    } catch (error) { console.error('Error creating session:', error); }
+    } catch (error) { toast.error(`Failed to create session: ${error.message}`); }
   };
+  createSessionRef.current = createSession;
 
   const fetchSessionDetails = async (id) => {
     try {
@@ -423,7 +486,7 @@ function App() {
           : s
         ));
       }
-    } catch (error) { console.error('Error fetching session details:', error); }
+    } catch (error) { toast.error(`Failed to load session: ${error.message}`); }
   };
   fetchSessionDetailsRef.current = fetchSessionDetails;
 
@@ -481,6 +544,8 @@ function App() {
     if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, optimisticMsg]);
     setLoadingSessions(prev => new Set([...prev, sessionId]));
     setStreamingBySession(prev => ({ ...prev, [sessionId]: '' }));
+    setSessionPendingReply(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
+    setSessionErrors(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
     const controller = new AbortController();
     streamAbortControllersRef.current.set(sessionId, controller);
     try {
@@ -510,8 +575,17 @@ function App() {
             if (event.type === 'token') {
               accumulated += event.content;
               setStreamingBySession(prev => ({ ...prev, [sessionId]: accumulated }));
+            } else if (event.type === 'tool_call') {
+              // show tool calls inline as they arrive during agentic streaming
+              const toolMsg = { role: 'tool_call', tool: event.tool, args: event.args, result: event.result, timestamp: new Date() };
+              if (sessionId === activeSession) setActiveSessionMessages(prev => [...prev, toolMsg]);
             } else if (event.type === 'done' || event.type === 'error') {
-              if (event.type === 'error') console.error('LLM stream error:', event.message);
+              if (event.type === 'error') {
+                toast.error(event.message || 'LLM stream error');
+                setSessionErrors(prev => new Set([...prev, sessionId]));
+              } else {
+                setSessionPendingReply(prev => new Set([...prev, sessionId]));
+              }
               setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
               fetchSessions();
               fetchSessionDetails(sessionId);
@@ -521,7 +595,7 @@ function App() {
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
-        console.error('Error sending message via stream, falling back:', error);
+        setSessionErrors(prev => new Set([...prev, sessionId]));
         try {
           const res = await fetch(`/api/sessions/${sessionId}/message`, {
             method: 'POST',
@@ -531,9 +605,9 @@ function App() {
           const data = await res.json();
           fetchSessions();
           fetchSessionDetails(sessionId);
-          if (!data.success) console.error('LLM error:', data.response);
+          if (!data.success) toast.error(data.response || 'LLM error');
         } catch (fbErr) {
-          console.error('Fallback also failed:', fbErr);
+          toast.error(`Send failed: ${fbErr.message}`);
           if (sessionId === activeSession) setActiveSessionMessages(prev => prev.filter(m => m !== optimisticMsg));
         }
       }
@@ -560,7 +634,9 @@ function App() {
   };
 
   const handleMessageInputKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (activeSession && messageInput.trim()) sendMessage(e); }
+    const ctrlSend = (e.ctrlKey || e.metaKey) && e.key === 'Enter';
+    const enterSend = e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+    if (ctrlSend || enterSend) { e.preventDefault(); if (activeSession && messageInput.trim()) sendMessage(e); }
   };
 
   const switchEndpoint = async (endpoint, model) => {
@@ -572,11 +648,11 @@ function App() {
         body: JSON.stringify({ endpoint, model }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error switching endpoint:', data.error || data.message || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || data.message || 'Failed to switch model'); return; }
       setCurrentEndpoint(endpoint);
       setCurrentModel(model);
       fetchSessions();
-    } catch (error) { console.error('Error switching endpoint:', error); }
+    } catch (error) { toast.error(`Model switch failed: ${error.message}`); }
   };
 
   const handleEndpointSelection = (endpoint) => {
@@ -586,12 +662,41 @@ function App() {
     switchEndpoint(endpoint, model);
   };
 
+  const renameSession = async (id, name) => {
+    if (!name?.trim()) return;
+    try {
+      const res = await fetch(`/api/sessions/${id}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) { fetchSessions(); toast.success('Session renamed'); }
+      else toast.error(data.error || 'Rename failed');
+    } catch (err) { toast.error(`Rename failed: ${err.message}`); }
+  };
+
   const deleteSession = async (id) => {
     try {
       await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
       if (activeSession === id) setActiveSession(null);
       fetchSessions();
-    } catch (error) { console.error('Error deleting session:', error); }
+    } catch (error) { toast.error(`Delete failed: ${error.message}`); }
+  };
+
+  const forkSession = async (sessionId, messageIndex) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/fork`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atMessageIndex: messageIndex }),
+      });
+      const data = await res.json();
+      if (!data.success) { toast.error(data.error || 'Fork failed'); return; }
+      toast.success?.(`Forked: ${data.session.name} (${data.session.messageCount} messages)`);
+      fetchSessions();
+      setActiveSession(data.session.id);
+    } catch (err) { toast.error(`Fork failed: ${err.message}`); }
   };
 
   const sendFeedback = async (messageIndex, positive) => {
@@ -605,9 +710,9 @@ function App() {
         body: JSON.stringify({ messageIndex, positive }),
       });
       const data = await res.json();
-      if (!data.success) { console.error('Error sending feedback:', data.error || 'Unknown error'); return; }
+      if (!data.success) { toast.error(data.error || 'Failed to send feedback'); return; }
       setActiveSessionMessages((prev) => prev.map((msg, idx) => (idx === messageIndex ? { ...msg, feedback: positive ? 'up' : 'down' } : msg)));
-    } catch (error) { console.error('Error sending feedback:', error); }
+    } catch (error) { toast.error(`Failed to send feedback: ${error.message}`); }
   };
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -686,18 +791,21 @@ function App() {
         currentEndpoint={currentEndpoint} handleEndpointSelection={handleEndpointSelection}
         sessions={sessions} activeSession={activeSession}
         setActiveSession={setActiveSession} fetchSessionDetails={fetchSessionDetails}
+        deleteSession={deleteSession}
         wsConnected={wsConnected}
-        showMetricsPanel={showMetricsPanel} setShowMetricsPanel={setShowMetricsPanel}
-        showSystemPanel={showSystemPanel} setShowSystemPanel={setShowSystemPanel}
-        dockerStatus={dockerStatus} fetchContentClients={fetchContentClients}
-        runningServices={runningServices} totalServices={totalServices}
         createSession={createSession}
+        systemServices={systemServices}
+        loadingSessions={loadingSessions}
+        sessionPendingReply={sessionPendingReply}
+        sessionErrors={sessionErrors}
       />
 
-      {showOnboarding && (
+      {/* session tabs are now inline in TopBar */}
+
+      {showOnboarding && activeSession && (
         <div className="onboarding-strip">
           <div className="onboarding-copy">
-            <strong>Welcome to Agent Board.</strong>
+            <strong>Welcome to motor-pool.</strong>
             <span>
               Choose an experience, pick a model, then click <strong>+ New ▾</strong> to create a session.
               {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}
@@ -712,16 +820,21 @@ function App() {
       )}
 
       <div className="layout">
-        <div className={`content${wsOps.wsLayout !== 'single' ? ` layout-${wsOps.wsLayout}` : ''}`}>
+        <div
+          className={`content${wsOps.wsLayout !== 'single' ? ` layout-${wsOps.wsLayout}` : ''}`}
+          style={wsOps.wsLayout === 'split-h' ? { '--ws-split-pos': `${wsOps.wsSplitPos}%` } : wsOps.wsLayout === 'split-v' ? { '--ws-split-pos': `${wsOps.wsSplitPos}%` } : undefined}
+        >
           {(wsOps.wsLayout !== 'single' || activeTab === 'workspace') && (
             <WorkspaceView
               dockerStatus={dockerStatus}
               {...wsOps}
               tasks={tasks}
               taskTitle={taskTitle} setTaskTitle={setTaskTitle}
+              taskDescription={taskDescription} setTaskDescription={setTaskDescription}
               taskPriority={taskPriority} setTaskPriority={setTaskPriority}
-              createTask={createTask} updateTaskStatus={updateTaskStatus}
-              dispatchTask={dispatchTask} deleteTask={deleteTask}
+              taskExperience={taskExperience} setTaskExperience={setTaskExperience}
+              createTask={createTask} updateTask={updateTask} updateTaskStatus={updateTaskStatus}
+              dispatchTask={dispatchTask} deleteTask={deleteTask} clearCompletedTasks={clearCompletedTasks}
               activeSession={activeSession} setActiveSession={setActiveSession}
               fetchSessionDetails={fetchSessionDetails} setActiveTab={setActiveTab}
               selectedExperience={selectedExperience}
@@ -730,6 +843,12 @@ function App() {
               fetchContentClients={fetchContentClients} fetchContentFiles={fetchContentFiles}
               downloadContentFile={downloadContentFile}
             />
+          )}
+          {wsOps.wsLayout === 'split-h' && (
+            <div className="ws-split-handle ws-split-handle-h" onMouseDown={wsOps.startSplitResize} title="Drag to resize" />
+          )}
+          {wsOps.wsLayout === 'split-v' && (
+            <div className="ws-split-handle ws-split-handle-v" onMouseDown={wsOps.startSplitResizeV} title="Drag to resize" />
           )}
           {(wsOps.wsLayout !== 'single' || activeTab !== 'workspace') && (
             <ChatColumn
@@ -745,8 +864,11 @@ function App() {
               sendMessage={sendMessage}
               handleMessageInputKeyDown={handleMessageInputKeyDown}
               sendFeedback={sendFeedback}
+              forkSession={forkSession}
               togglePause={togglePause}
               deleteSession={deleteSession}
+              renameSession={renameSession}
+              fetchSessionDetails={fetchSessionDetails}
               forceSend={forceSend}
               stopSession={stopSession}
               handleEndpointSelection={handleEndpointSelection}
@@ -766,6 +888,26 @@ function App() {
               setSelectedExperience={setSelectedExperience}
               createSession={createSession}
               dockerStatus={dockerStatus}
+              sessions={sessions}
+              setActiveSession={setActiveSession}
+              systemServices={systemServices}
+              runningServices={runningServices}
+              totalServices={totalServices}
+              wsConnected={wsConnected}
+              showSystemPanel={showSystemPanel}
+              setShowSystemPanel={setShowSystemPanel}
+              showMetricsPanel={showMetricsPanel}
+              setShowMetricsPanel={setShowMetricsPanel}
+              browseWorkspace={wsOps.browseWorkspace}
+              refreshWorkspaceGit={wsOps.refreshWorkspaceGit}
+              fetchContentClients={fetchContentClients}
+              modelPulls={modelPulls}
+              onPullModel={pullModel}
+              knownModels={knownModels}
+              serviceActionErrors={serviceActionErrors}
+              servicesStarting={servicesStarting}
+              sessionPendingReply={sessionPendingReply}
+              sessionErrors={sessionErrors}
             />
           )}
         </div>
@@ -777,6 +919,7 @@ function App() {
             metricsFeedback={metricsFeedback}
             metricsErrors={metricsErrors}
             liveEvents={liveEvents}
+            taskSummary={taskSummary}
             onRefresh={fetchMetrics}
             onClose={() => setShowMetricsPanel(false)}
           />
@@ -799,8 +942,44 @@ function App() {
             runningServices={runningServices}
             totalServices={totalServices}
             knownModels={knownModels}
+            showMetricsPanel={showMetricsPanel}
+            onToggleMetrics={() => setShowMetricsPanel(p => !p)}
+            onEndpointAdded={fetchDockerStatus}
           />
         )}
+        {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      </div>
+
+      {/* ── Status bar ── */}
+      <div className="status-bar">
+        <div className="status-bar-left" />
+        <div className="status-bar-right">
+          <span className={`status-bar-dot ${wsConnected ? 'green' : 'red'}`} title={wsConnected ? 'Connected' : 'Offline'} />
+          {allEndpointMeta[currentEndpoint] && (
+            <span className="status-bar-item status-bar-item-mobile-icon" title={`Model: ${allEndpointMeta[currentEndpoint].label}`}>
+              <span className="status-bar-icon">🤖</span>
+              <span className="status-bar-label">{allEndpointMeta[currentEndpoint].label}</span>
+            </span>
+          )}
+          {/* Services cog — far right, opens system panel */}
+          <button
+            className={`status-bar-cog ${showSystemPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowSystemPanel(prev => {
+                const next = !prev;
+                if (next) {
+                  setShowMetricsPanel(false);
+                  if (dockerStatus?.workspace?.configured) { wsOps.browseWorkspace(''); wsOps.refreshWorkspaceGit(); }
+                  fetchContentClients();
+                }
+                return next;
+              });
+            }}
+            title={`System — ${runningServices}/${totalServices} services`}
+          >
+            ⚙️ <span className="status-bar-label">{totalServices > 0 ? `${runningServices}/${totalServices}` : '…'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

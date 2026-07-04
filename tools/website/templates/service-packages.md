@@ -48,6 +48,6 @@ Everything in Growth, plus:
 
 ## Cold outreach positioning
 - Lead with the problem: "most people search online before visiting"
-- Anchor to value: "$500 is less than one month of lost business"  
+- Anchor to value: "$500 is less than one month of lost business"
 - Reduce friction: "2-week turnaround, you own everything, cancel anytime"
 - Social proof: use the number of local businesses already served (update as you grow)

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ToolField from './ToolField.jsx';
+import ToolStream from './ToolStream.jsx';
+import { toast } from './Toast.jsx';
 
 function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlight }) {
   const [toolServer, setToolServer] = useState(null);
@@ -9,7 +11,9 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
   const [openTool, setOpenTool] = useState(null);
   const [formValues, setFormValues] = useState({});
   const [callState, setCallState] = useState({ running: false, tool: null, result: null, error: null });
+  const [streamingTool, setStreamingTool] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const isBbMcp = toolKey === 'bb_mcp';
 
   const fetchToolServer = useCallback(async () => {
     try {
@@ -20,7 +24,7 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
         setToolServer(data.tools.find(t => t.key === toolKey) || null);
       }
     } catch (error) {
-      console.error('Error fetching tool servers:', error);
+      toast.error(`Failed to fetch tool servers: ${error.message}`);
       setToolServer(null);
     }
   }, [toolKey]);
@@ -161,13 +165,23 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
                       onChange={value => setField(tool.name, field, value)}
                     />
                   ))}
-                  <button
-                    className="btn-primary"
-                    disabled={callState.running}
-                    onClick={() => runTool(tool)}
-                  >
-                    {callState.running && callState.tool === tool.name ? '⟳ Running… (long jobs can take minutes)' : `▶ Run ${tool.name}`}
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    <button
+                      className="btn-primary"
+                      disabled={callState.running}
+                      onClick={() => runTool(tool)}
+                    >
+                      {callState.running && callState.tool === tool.name ? '⟳ Running…' : `▶ Run ${tool.name}`}
+                    </button>
+                    {isBbMcp && (
+                      <button
+                        className="btn-secondary"
+                        disabled={!!streamingTool}
+                        onClick={() => setStreamingTool(tool.name)}
+                        title="Stream live output from bb-mcp"
+                      >⚡ Stream</button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -180,6 +194,22 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
                 <button className="icon-btn" onClick={() => setCallState({ running: false, tool: null, result: null, error: null })} title="Clear result">✕</button>
               </div>
               <pre>{callState.error || callState.result}</pre>
+            </div>
+          )}
+
+          {streamingTool && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <ToolStream
+                connectorId="blackboard-learn"
+                tool={streamingTool}
+                demo={!toolServer?.running}
+                onDone={() => {}}
+              />
+              <button
+                className="btn-secondary btn-sm"
+                style={{ marginTop: '0.4rem' }}
+                onClick={() => setStreamingTool(null)}
+              >✕ Close stream</button>
             </div>
           )}
         </div>

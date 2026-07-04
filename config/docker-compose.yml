@@ -1,4 +1,4 @@
-# Agent Board - Docker Stack
+# motor-pool - Docker Stack
 
 services:
   # ===== PERSISTENCE =====
@@ -139,6 +139,7 @@ services:
     container_name: nemoclaw
     profiles:
       - sandbox
+      - prebuild
     ports:
       - "9000:8080"
     command:
@@ -288,7 +289,7 @@ services:
       - agent-network
 
   # ===== WEB DASHBOARD =====
-  
+
   agent-dashboard:
     build:
       context: ../dashboard
@@ -326,9 +327,11 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_ENDPOINT=${OTEL_ENDPOINT:-http://jaeger:4318}
       - WORKSPACE_ROOT=/workspace
+      - ENDPOINT_STORE_SECRET=${ENDPOINT_STORE_SECRET:-motor-pool-default-secret-change-me}
     volumes:
       - ../:/workspace-root:ro
       - ../:/workspace:rw
+      - agent_endpoint_data:/data
     # Docker socket access is intentionally not mounted by default.
     # Add it only in a trusted dev override/profile when Docker control is explicitly needed.
     # healthcheck is disabled until a stable in-container HTTP client is available
@@ -385,6 +388,7 @@ services:
     restart: unless-stopped
     profiles:
       - tools
+      - prebuild
     ports:
       - "3200:3200"
     env_file:
@@ -393,12 +397,8 @@ services:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
       - MPT_UI_URL=${MPT_UI_URL:-http://host.docker.internal:8501}
-      - MONEYPRINTERTURBO_COMPOSE=${MONEYPRINTERTURBO_COMPOSE:-/workspace-root/content-gen/MoneyPrinterTurbo/docker-compose.yml}
     volumes:
       - ../:/workspace-root:ro
-      # Mount Docker socket so the server can start/stop MoneyPrinterTurbo
-      # Only enabled when AGENT_BOARD_ENABLE_DOCKER_CONTROL=true
-      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -423,6 +423,7 @@ services:
     restart: unless-stopped
     profiles:
       - tools
+      - prebuild
     ports:
       - "3201:3201"
     env_file:
@@ -471,11 +472,10 @@ volumes:
   openllm_data:  # OpenLLM/HuggingFace + BentoML model cache
   nemoclaw_data:
   website_output:  # Persistent storage for generated client sites and pitch materials
+  agent_endpoint_data:  # Encrypted custom endpoint store (survives restarts)
 
 networks:
   agent-network:
     name: agent-network
     driver: bridge
     external: false
-
-

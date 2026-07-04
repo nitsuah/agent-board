@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry tracing module for agent-board dashboard.
+ * OpenTelemetry tracing module for motor-pool dashboard.
  * Instruments critical paths: EventBus, session lifecycle, LLM calls.
  * Gracefully degrades if OTEL backend is not available.
  */
@@ -48,7 +48,7 @@ async function initTracing(logStructured) {
 
     // Resource attributes using the new v2 API (resourceFromAttributes)
     const resource = resourceFromAttributes({
-      'service.name': 'agent-board-dashboard',
+      'service.name': 'motor-pool-dashboard',
       'service.version': '0.1.0',
       'deployment.environment': process.env.NODE_ENV || 'development'
     });
@@ -72,7 +72,7 @@ async function initTracing(logStructured) {
     sdk.start();
 
     // Get tracer instance for manual instrumentation
-    tracer = trace.getTracer('agent-board-dashboard', '0.1.0');
+    tracer = trace.getTracer('motor-pool-dashboard', '0.1.0');
 
     enabled = true;
     initialized = true;
@@ -189,4 +189,3 @@ async function shutdown() {
 }
 
 export { initTracing, withSpan, recordEvent, getStatus, shutdown };
-

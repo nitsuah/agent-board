@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { toast } from '../components/Toast.jsx';
 
 export function useWorkspaceOps() {
   const [workspacePath, setWorkspacePath] = useState('');
@@ -7,7 +8,7 @@ export function useWorkspaceOps() {
   const [activeFilePath, setActiveFilePath] = useState(null);
   const [workspaceGitStatus, setWorkspaceGitStatus] = useState(null);
   const [workspaceBranches, setWorkspaceBranches] = useState({ branches: [], remotes: [], current: '' });
-  const [wsNewBranch, setWsNewBranch] = useState('');
+  const [wsNewBranch, setWsNewBranch] = useState(null); // null=hidden, ''=show input
   const [wsGitBusy, setWsGitBusy] = useState('');
   const [wsGitMsg, setWsGitMsg] = useState('');
   const [wsGitPopover, setWsGitPopover] = useState(false);
@@ -25,10 +26,13 @@ export function useWorkspaceOps() {
   const [termHistory, setTermHistory] = useState([]);
   const [termInput, setTermInput] = useState('');
   const [termBusy, setTermBusy] = useState(false);
+  const termCmdHistoryRef = useRef([]); // past commands (oldest first)
+  const termCmdIndexRef = useRef(-1);   // -1 = not browsing history
   const termEndRef = useRef(null);
   const [wsLayout, setWsLayout] = useState('single');
   const [wsExplorerWidth, setWsExplorerWidth] = useState(220);
   const [wsBottomHeight, setWsBottomHeight] = useState(220);
+  const [wsSplitPos, setWsSplitPos] = useState(50); // percent for horizontal split
   const wsResizingRef = useRef(false);
   const wsGitPopoverRef = useRef(null);
 
@@ -40,7 +44,7 @@ export function useWorkspaceOps() {
         setWorkspacePath(path);
         setWorkspaceLs(data);
       }
-    } catch (err) { console.error('Workspace ls failed:', err); }
+    } catch (err) { toast.error(`Workspace ls failed: ${err.message}`); }
   };
 
   const openWorkspaceFile = async (path) => {
@@ -50,10 +54,10 @@ export function useWorkspaceOps() {
       const res = await fetch(`/api/workspace/read?path=${encodeURIComponent(path)}`);
       const data = await res.json();
       if (!data.error) {
-        setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: null, editing: false }]);
+        setOpenFiles(prev => [...prev, { path: data.path, content: data.content, editContent: data.content, editing: true }]);
         setActiveFilePath(data.path);
       }
-    } catch (err) { console.error('Workspace read failed:', err); }
+    } catch (err) { toast.error(`Workspace read failed: ${err.message}`); }
   };
 
   const closeFile = (path) => {
@@ -72,7 +76,7 @@ export function useWorkspaceOps() {
       const res = await fetch('/api/workspace/git/status');
       const data = await res.json();
       if (!data.error) setWorkspaceGitStatus(data);
-    } catch (err) { console.error('Workspace git status failed:', err); }
+    } catch (err) { toast.error(`Git status failed: ${err.message}`); }
   };
 
   const fetchArtifacts = async () => {
@@ -145,8 +149,36 @@ export function useWorkspaceOps() {
     }
   };
 
+  const handleTermKeyDown = (e, cmd) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const hist = termCmdHistoryRef.current;
+      if (!hist.length) return;
+      const newIdx = termCmdIndexRef.current === -1
+        ? hist.length - 1
+        : Math.max(0, termCmdIndexRef.current - 1);
+      termCmdIndexRef.current = newIdx;
+      setTermInput(hist[newIdx]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const hist = termCmdHistoryRef.current;
+      const newIdx = termCmdIndexRef.current + 1;
+      if (newIdx >= hist.length) {
+        termCmdIndexRef.current = -1;
+        setTermInput('');
+      } else {
+        termCmdIndexRef.current = newIdx;
+        setTermInput(hist[newIdx]);
+      }
+    } else if (e.key === 'Enter') {
+      runTermCommand(cmd);
+    }
+  };
+
   const runTermCommand = async (cmd) => {
     if (!cmd.trim() || termBusy) return;
+    termCmdHistoryRef.current = [...termCmdHistoryRef.current.filter(c => c !== cmd), cmd].slice(-100);
+    termCmdIndexRef.current = -1;
     const entry = { cmd, stdout: '', stderr: '', exitCode: null, ts: Date.now() };
     setTermHistory(h => [...h, entry]);
     setTermInput('');
@@ -180,6 +212,34 @@ export function useWorkspaceOps() {
     window.addEventListener('mouseup', onUp);
   };
 
+  const startSplitResize = (e) => {
+    e.preventDefault();
+    const container = e.currentTarget.parentElement;
+    const startX = e.clientX;
+    const startPos = wsSplitPos;
+    const onMove = (ev) => {
+      const rect = container.getBoundingClientRect();
+      const pct = Math.max(20, Math.min(80, ((ev.clientX - rect.left) / rect.width) * 100));
+      setWsSplitPos(pct);
+    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const startSplitResizeV = (e) => {
+    e.preventDefault();
+    const container = e.currentTarget.parentElement;
+    const onMove = (ev) => {
+      const rect = container.getBoundingClientRect();
+      const pct = Math.max(20, Math.min(80, ((ev.clientY - rect.top) / rect.height) * 100));
+      setWsSplitPos(pct);
+    };
+    const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const startBottomResize = (e) => {
     e.preventDefault();
     const startY = e.clientY;
@@ -190,6 +250,17 @@ export function useWorkspaceOps() {
     window.addEventListener('mouseup', onUp);
   };
 
+  const moveWorkspaceEntry = async (fromPath, toPath) => {
+    try {
+      await fetch('/api/workspace/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromPath, to: toPath }),
+      });
+      browseWorkspace(workspacePath);
+    } catch (err) { toast.error(`Move failed: ${err.message}`); }
+  };
+
   const deleteWorkspaceEntry = async (path) => {
     if (!window.confirm(`Delete ${path}?`)) return;
     try {
@@ -197,7 +268,7 @@ export function useWorkspaceOps() {
       closeFile(path);
       browseWorkspace(workspacePath);
       refreshWorkspaceGit();
-    } catch (err) { console.error('Delete failed:', err); }
+    } catch (err) { toast.error(`Delete failed: ${err.message}`); }
   };
 
   const createWorkspaceEntry = async (type) => {
@@ -311,11 +382,12 @@ export function useWorkspaceOps() {
     artifactFiles, wsShowExplorer, setWsShowExplorer,
     wsSearch, setWsSearch, wsSearchResults, setWsSearchResults, wsSearchBusy,
     wsNewName, setWsNewName, wsCreateMode, setWsCreateMode, wsRenaming, setWsRenaming,
-    wsBottomTab, setWsBottomTab, termHistory, termInput, setTermInput, termBusy, termEndRef,
-    wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsGitPopoverRef,
+    wsBottomTab, setWsBottomTab, termHistory, setTermHistory, termInput, setTermInput, termBusy, termEndRef,
+    wsLayout, setWsLayout, wsExplorerWidth, wsBottomHeight, wsSplitPos, wsGitPopoverRef,
     browseWorkspace, openWorkspaceFile, closeFile, refreshWorkspaceGit, fetchArtifacts,
-    commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand,
-    startExplorerResize, startBottomResize, deleteWorkspaceEntry, createWorkspaceEntry,
+    commitWorkspace, pushWorkspace, saveWorkspaceFile, runTermCommand, handleTermKeyDown,
+    startExplorerResize, startBottomResize, startSplitResize, startSplitResizeV,
+    deleteWorkspaceEntry, createWorkspaceEntry, moveWorkspaceEntry,
     renameWorkspaceEntry, searchWorkspace, fetchBranches, checkoutBranch, pullBranch, discardFile,
   };
 }

@@ -1,10 +1,11 @@
 import express from 'express';
 import { readdir, readFile, writeFile, mkdir, stat, unlink, rm } from 'fs/promises';
 import { resolve as resolvePath, relative as relativePath } from 'path';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
 
@@ -20,7 +21,7 @@ export function createWorkspaceRouter(WORKSPACE_ROOT) {
   }
 
   async function gitInWorkspace(...args) {
-    const { stdout } = await execAsync(['git', ...args].join(' '), { cwd: WORKSPACE_ROOT });
+    const { stdout } = await execFileAsync('git', args, { cwd: WORKSPACE_ROOT });
     return stdout.trim();
   }
 
@@ -280,6 +281,25 @@ export function createWorkspaceRouter(WORKSPACE_ROOT) {
       res.json({ result: (stdout || stderr).trim() });
     } catch (err) {
       res.status(500).json({ error: err.stderr || err.message });
+    }
+  });
+
+  router.get('/workspace/git/log', async (req, res) => {
+    if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
+    const limit = Math.max(1, Math.min(Math.floor(Number(req.query.limit)) || 20, 100));
+    try {
+      const raw = await gitInWorkspace(
+        'log', `--max-count=${limit}`,
+        '--pretty=format:%H\x1f%h\x1f%s\x1f%an\x1f%ar\x1f%ad',
+        '--date=short'
+      );
+      const commits = raw ? raw.split('\n').map(line => {
+        const [hash, short, subject, author, relative, date] = line.split('\x1f');
+        return { hash, short, subject, author, relative, date };
+      }) : [];
+      res.json({ commits });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   });
 

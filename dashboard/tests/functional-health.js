@@ -44,6 +44,11 @@ async function testHealthShape() {
   assert.equal(typeof data.sessions?.active, 'number', 'health.sessions.active should be a number');
   assert.equal(typeof data.sessions?.totalCreated, 'number', 'health.sessions.totalCreated should be a number');
 
+  // Tasks shape
+  assert.equal(typeof data.tasks?.total, 'number', 'health.tasks.total should be a number');
+  assert.equal(typeof data.tasks?.pending, 'number', 'health.tasks.pending should be a number');
+  assert.equal(typeof data.tasks?.inProgress, 'number', 'health.tasks.inProgress should be a number');
+
   // Observability shape
   assert.equal(typeof data.observability?.totalEvents, 'number', 'health.observability.totalEvents should be a number');
   assert.equal(typeof data.observability?.recentErrors, 'number', 'health.observability.recentErrors should be a number');
