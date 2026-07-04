@@ -11,6 +11,7 @@ const _eventSubscribers = new Set();
 const _channelSubscribers = new Map();
 const _channelHistory = new Map(); // Map<channelName, event[]>
 const MAX_CHANNEL_HISTORY = 200;
+const MAX_DISTINCT_CHANNELS = 500;
 
 export const eventBus = {
   emit(type, data = {}) {
@@ -46,8 +47,14 @@ export const eventBus = {
           }
         }
       }
-      // Persist channel history
-      if (!_channelHistory.has(event.channel)) _channelHistory.set(event.channel, []);
+      // Persist channel history (cap distinct channels to prevent unbounded growth)
+      if (!_channelHistory.has(event.channel)) {
+        if (_channelHistory.size >= MAX_DISTINCT_CHANNELS) {
+          const oldest = _channelHistory.keys().next().value;
+          _channelHistory.delete(oldest);
+        }
+        _channelHistory.set(event.channel, []);
+      }
       const hist = _channelHistory.get(event.channel);
       hist.push(event);
       if (hist.length > MAX_CHANNEL_HISTORY) hist.shift();
@@ -137,16 +144,10 @@ export function attachEventWebSocketServer(server) {
             client.send(JSON.stringify({ type: 'subscribed', channel: ch }));
           }
         } else if (msg.type === 'unsubscribe_channel' && msg.channel) {
-          const ch = String(msg.channel);
+          const ch = String(msg.channel).slice(0, 128);
           const unsub = clientChannelUnsubs.get(ch);
           if (unsub) { unsub(); clientChannelUnsubs.delete(ch); }
           client.send(JSON.stringify({ type: 'unsubscribed', channel: ch }));
-        } else if (msg.type === 'publish' && msg.channel && msg.event_type) {
-          // Agents can publish to channels via WebSocket
-          eventBus.publish(String(msg.channel).slice(0, 128), String(msg.event_type), {
-            metadata: msg.metadata || {},
-            session_id: msg.session_id || null,
-          });
         }
       } catch { /* ignore malformed messages */ }
     });

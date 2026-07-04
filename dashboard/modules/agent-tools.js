@@ -267,7 +267,8 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
       const capped = { ...parsed, _truncated: true, _originalLength: result.length };
       if (parsed.stdout) capped.stdout = parsed.stdout.slice(0, TOOL_RESULT_MAX_CHARS - 200) + '\n[truncated]';
       if (parsed.content) capped.content = parsed.content.slice(0, TOOL_RESULT_MAX_CHARS - 200) + '\n[truncated]';
-      return JSON.stringify(capped);
+      const out = JSON.stringify(capped);
+      return out.length <= TOOL_RESULT_MAX_CHARS ? out : out.slice(0, TOOL_RESULT_MAX_CHARS) + '\n[truncated]';
     } catch {
       return truncated + '\n[truncated]';
     }

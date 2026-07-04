@@ -1,5 +1,5 @@
 import express from 'express';
-import { join, resolve as resolvePath } from 'path';
+import { join, sep, resolve as resolvePath } from 'path';
 import { readdir, stat } from 'fs/promises';
 import { existsSync } from 'fs';
 
@@ -75,7 +75,7 @@ export function createContentRouter({ WEBSITE_OUTPUT_DIR, WORKSPACE_ROOT }) {
     if (!WORKSPACE_ROOT) return res.status(503).end();
     const dir = resolvePath(join(WORKSPACE_ROOT, 'artifacts'));
     const safe = resolvePath(join(dir, req.params.name));
-    if (!safe.startsWith(dir)) return res.status(403).end();
+    if (!safe.startsWith(dir + sep) && safe !== dir) return res.status(403).end();
     if (!existsSync(safe)) return res.status(404).end();
     res.download(safe);
   });

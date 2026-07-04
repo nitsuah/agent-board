@@ -21,7 +21,7 @@ export function createChannelsRouter({ eventBus, logStructured }) {
     if (!CHANNEL_NAME_RE.test(name)) {
       return res.status(400).json({ success: false, error: 'Invalid channel name' });
     }
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const limit = Math.max(1, Math.min(Math.floor(Number(req.query.limit)) || 50, 200));
     const events = eventBus.getChannelHistory(name, limit);
     res.json({ success: true, channel: name, events, count: events.length });
   });

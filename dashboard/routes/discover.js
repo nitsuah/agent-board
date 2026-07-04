@@ -188,7 +188,12 @@ export function createDiscoverRouter({ LLM_CONFIG, logStructured }) {
       ? String(req.query.ports).split(',').map(Number).filter(p => p > 0 && p < 65536)
       : [];
     const ports = customPorts.length > 0 ? customPorts : DEFAULT_PORTS;
-    const hosts = req.query.host ? [String(req.query.host)] : HOSTS;
+    const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '::1', 'host.docker.internal']);
+    const requestedHost = req.query.host ? String(req.query.host) : null;
+    if (requestedHost && !ALLOWED_HOSTS.has(requestedHost)) {
+      return res.status(400).json({ success: false, error: 'host must be a local address' });
+    }
+    const hosts = requestedHost ? [requestedHost] : HOSTS;
 
     // Build the set of URLs already registered so we can flag them
     const knownUrls = new Set(Object.values(LLM_CONFIG).map(c => c.url?.replace(/\/$/, '')));

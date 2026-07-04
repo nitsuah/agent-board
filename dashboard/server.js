@@ -373,13 +373,13 @@ await initPersistence(logStructured);
 initSessionSnapshot(sessions, logStructured);
 
 const _baseUpsertSessionContext = upsertSessionContext;
-function upsertSessionContextWithSnapshot(session, log) {
-  _baseUpsertSessionContext(session, log);
+async function upsertSessionContextWithSnapshot(session, log) {
+  await _baseUpsertSessionContext(session, log);
   scheduleSnapshotWrite(log);
 }
 const _baseMarkSessionEnded = markSessionEnded;
-function markSessionEndedWithSnapshot(sessionId, endedAt, log) {
-  _baseMarkSessionEnded(sessionId, endedAt, log);
+async function markSessionEndedWithSnapshot(sessionId, endedAt, log) {
+  await _baseMarkSessionEnded(sessionId, endedAt, log);
   scheduleSnapshotWrite(log);
 }
 
@@ -433,11 +433,17 @@ app.use(cors());
 app.use('/api/webhooks/trigger', (req, _res, next) => {
   if (req.method !== 'POST') return next();
   const chunks = [];
-  req.on('data', c => chunks.push(c));
+  let size = 0;
+  const MAX_WEBHOOK_BODY = 1024 * 256; // 256 KB
+  req.on('data', c => {
+    size += c.length;
+    if (size > MAX_WEBHOOK_BODY) { req.destroy(); return; }
+    chunks.push(c);
+  });
   req.on('end', () => {
     req._rawBodyBuffer = Buffer.concat(chunks);
     try { req.body = JSON.parse(req._rawBodyBuffer.toString()); } catch { req.body = {}; }
-    req._body = true; // prevent express.json() from re-parsing
+    req._body = true;
     next();
   });
 });

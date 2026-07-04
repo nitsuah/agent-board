@@ -90,7 +90,7 @@ export async function handleSessionMessage(req, res, {
       return res.status(503).json({ success: false, error: lifecycle.error || `Tool server for ${session.experience} is unavailable` });
     }
     if (lifecycle.started) {
-      eventBus.emit('tool_lifecycle_started', { toolKey: requiredTool, sessionId: session.id });
+      eventBus.emit('tool_lifecycle_started', { session_id: session.id, metadata: { toolKey: requiredTool } });
     }
   }
 

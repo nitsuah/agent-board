@@ -9,7 +9,7 @@
  * When DATABASE_URL is set, the DB remains the authority for session *metadata*;
  * this file layer covers full message history in all cases.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 
 const SNAPSHOT_DIR = join(process.cwd(), 'data');
@@ -70,7 +70,9 @@ export function scheduleSnapshotWrite(logStructured) {
         savedAt: new Date().toISOString(),
         sessions: Array.from(sessionsRef.values()).filter(s => !s.endedAt),
       };
-      writeFileSync(SNAPSHOT_PATH, JSON.stringify(payload, null, 2), 'utf8');
+      const tmp = SNAPSHOT_PATH + '.tmp';
+      writeFileSync(tmp, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: 0o600 });
+      renameSync(tmp, SNAPSHOT_PATH);
     } catch (err) {
       logStructured?.('warn', 'session_snapshot_write_failed', { error: err.message });
     }

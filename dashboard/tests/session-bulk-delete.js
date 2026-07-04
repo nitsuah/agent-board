@@ -43,8 +43,12 @@ try {
   assert.ok(!remaining.includes(id2), 'id2 should be deleted');
   assert.ok(remaining.includes(id3), 'id3 should still exist');
 
-  // Bulk delete all (no body = delete all)
-  const all = await req('/api/sessions', { method: 'DELETE', data: {} });
+  // Bulk delete without ids or deleteAll should fail
+  const noFlag = await req('/api/sessions', { method: 'DELETE', data: {} });
+  assert.equal(noFlag.status, 400, 'delete without ids or deleteAll should 400');
+
+  // Bulk delete all with deleteAll flag
+  const all = await req('/api/sessions', { method: 'DELETE', data: { deleteAll: true } });
   assert.equal(all.status, 200, 'delete-all should succeed');
   assert.ok(all.data.deleted >= 1, 'should delete at least 1 session');
 

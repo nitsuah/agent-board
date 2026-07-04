@@ -352,7 +352,7 @@ export function createDockerRouter({
         const { stdout } = await execFileAsync('docker', [
           'stats', '--no-stream', '--format',
           '{"name":"{{.Name}}","cpu":"{{.CPUPerc}}","mem":"{{.MemUsage}}","memPerc":"{{.MemPerc}}","net":"{{.NetIO}}","block":"{{.BlockIO}}"}',
-        ]);
+        ], { timeout: 10000 });
         for (const line of stdout.trim().split('\n').filter(Boolean)) {
           try {
             const entry = JSON.parse(line);

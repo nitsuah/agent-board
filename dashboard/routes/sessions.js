@@ -327,7 +327,10 @@ export function createSessionsRouter({
   });
 
   router.delete('/', express.json(), (req, res) => {
-    const { ids } = req.body || {};
+    const { ids, deleteAll } = req.body || {};
+    if (!Array.isArray(ids) && !deleteAll) {
+      return res.status(400).json({ success: false, error: 'Provide an ids array or set deleteAll: true' });
+    }
     const toDelete = Array.isArray(ids) ? ids : Array.from(sessions.keys());
     let deleted = 0;
     for (const id of toDelete) {

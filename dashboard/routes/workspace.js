@@ -286,7 +286,7 @@ export function createWorkspaceRouter(WORKSPACE_ROOT) {
 
   router.get('/workspace/git/log', async (req, res) => {
     if (!WORKSPACE_ROOT) return res.status(503).json({ error: 'Workspace not configured' });
-    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const limit = Math.max(1, Math.min(Math.floor(Number(req.query.limit)) || 20, 100));
     try {
       const raw = await gitInWorkspace(
         'log', `--max-count=${limit}`,

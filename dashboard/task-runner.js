@@ -32,7 +32,11 @@ export function startTaskRunner(tasks, eventBus, dispatchMessage, {
     });
   };
 
+  let tickRunning = false;
   const tick = async () => {
+    if (tickRunning) return;
+    tickRunning = true;
+    try {
     const running = [...tasks.values()].find(t => t.status === 'running');
     if (running) return;
 
@@ -56,7 +60,7 @@ export function startTaskRunner(tasks, eventBus, dispatchMessage, {
           return;
         }
         if (lifecycle.started) {
-          eventBus.emit('tool_lifecycle_started', { toolKey: requiredTool, taskId: task.id });
+          eventBus.emit('tool_lifecycle_started', { session_id: task.sessionId, metadata: { toolKey: requiredTool, taskId: task.id } });
         }
       }
     }
@@ -76,6 +80,7 @@ export function startTaskRunner(tasks, eventBus, dispatchMessage, {
     } catch (err) {
       emitStatus(task, 'failed', { error: err.message });
     }
+    } finally { tickRunning = false; }
   };
 
   runnerInterval = setInterval(tick, intervalMs);
