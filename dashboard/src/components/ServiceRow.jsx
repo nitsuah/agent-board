@@ -28,7 +28,13 @@ export default function ServiceRow({
 
   if (!info.running && !expanded && !isStarting) {
     return (
-      <div className="svc-row-collapsed" onClick={() => setExpanded(true)}>
+      <div
+        className="svc-row-collapsed"
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded(true)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(true); } }}
+      >
         <span className={`status-dot ${isDisabled ? 'disabled' : 'stopped'}`} />
         <span className="svc-name-dim">{info.label}</span>
         <span className="svc-status-dim">{isDisabled ? 'disabled' : info.status || 'offline'}</span>

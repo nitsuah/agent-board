@@ -86,6 +86,7 @@ export default function ByokEndpointForm({ onAdded }) {
             >
               <option value="openai">OpenAI-compatible</option>
               <option value="anthropic">Anthropic</option>
+              <option value="gemini">Gemini</option>
               <option value="ollama">Ollama</option>
             </select>
           </div>

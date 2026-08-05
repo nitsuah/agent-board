@@ -19,6 +19,14 @@ export default function TasksPanel({
   const [editTitle, setEditTitle] = useState('');
   const [editPriority, setEditPriority] = useState('medium');
   const [taskSearch, setTaskSearch] = useState('');
+  const [dispatchingIds, setDispatchingIds] = useState(new Set());
+
+  const handleDispatch = async (task) => {
+    if (dispatchingIds.has(task.id)) return;
+    setDispatchingIds(prev => new Set([...prev, task.id]));
+    try { await dispatchTask(task); }
+    finally { setDispatchingIds(prev => { const n = new Set(prev); n.delete(task.id); return n; }); }
+  };
 
   const filtered = tasks.filter(t => {
     if (filter === 'active') { if (t.status === 'completed') return false; }
@@ -121,21 +129,21 @@ export default function TasksPanel({
             ) : (
               <>
                 <div className="task-item-head">
-                  <strong
+                  <button
                     className="task-title-editable"
                     onClick={() => { setEditingId(task.id); setEditTitle(task.title); setEditPriority(task.priority); }}
                     title="Click to edit"
-                  >{task.title}</strong>
+                  >{task.title}</button>
                   <span className={`task-priority ${task.priority}`}>{task.priority}</span>
                 </div>
                 <div className="task-item-meta">
                   <span>{task.status.replace('_', ' ')}</span>
                   {task.sessionId ? (
-                    <span
+                    <button
                       className="task-session-link"
                       onClick={() => { setActiveSession(task.sessionId); fetchSessionDetails(task.sessionId); setActiveTab('chat'); }}
                       title="Go to session"
-                    >{task.assignedSessionName || 'session →'}</span>
+                    >{task.assignedSessionName || 'session →'}</button>
                   ) : (
                     <span style={{ opacity: 0.4 }}>unassigned</span>
                   )}
@@ -151,7 +159,7 @@ export default function TasksPanel({
                   </div>
                 )}
                 <div className="task-item-actions">
-                  {task.status === 'pending' && <button className="task-dispatch-btn" onClick={() => dispatchTask(task)}>▶ Dispatch</button>}
+                  {task.status === 'pending' && <button className="task-dispatch-btn" disabled={dispatchingIds.has(task.id)} onClick={() => handleDispatch(task)}>{dispatchingIds.has(task.id) ? '…' : '▶ Dispatch'}</button>}
                   {task.status === 'pending' && <button onClick={() => updateTaskStatus(task.id, 'in_progress')} title="Mark as in progress">▷ Start</button>}
                   {task.status === 'in_progress' && <button onClick={() => updateTaskStatus(task.id, 'blocked')} title="Mark as blocked">⚠ Block</button>}
                   {task.status === 'blocked' && <button onClick={() => updateTaskStatus(task.id, 'pending')} title="Unblock — back to pending">↩ Unblock</button>}

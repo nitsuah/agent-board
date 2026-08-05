@@ -10,6 +10,7 @@ export default function GitLogTab({ workspaceConfigured }) {
     setBusy(true); setErr(null);
     try {
       const res = await fetch('/api/workspace/git/log?limit=30');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) setErr(data.error);
       else setCommits(data.commits || []);

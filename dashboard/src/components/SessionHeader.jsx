@@ -36,11 +36,11 @@ export default function SessionHeader({
           maxLength={80}
         />
       ) : (
-        <h2
+        <button
+          className="session-name-btn"
           title="Click to rename"
-          style={{ cursor: 'pointer' }}
           onClick={() => { setNameInput(activeSessionData.name); setEditingName(true); }}
-        >{activeSessionData.name}</h2>
+        >{activeSessionData.name}</button>
       )}
 
       <div className="chat-meta">
@@ -94,13 +94,14 @@ export default function SessionHeader({
             onChange={async e => {
               const exp = e.target.value;
               try {
-                await fetch(`/api/sessions/${activeSession}/experience`, {
+                const res = await fetch(`/api/sessions/${activeSession}/experience`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ experience: exp }),
                 });
+                if (!res.ok) { toast.error(`Failed to switch experience: HTTP ${res.status}`); return; }
                 if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
-              } catch { /* ignore */ }
+              } catch (err) { toast.error(`Failed to switch experience: ${err.message}`); }
             }}
             title="Switch experience for this session"
             style={{ maxWidth: '120px' }}
@@ -143,11 +144,14 @@ export default function SessionHeader({
             title="Clear all messages in this session"
             onClick={async () => {
               if (!confirm('Clear all messages in this session?')) return;
-              const res = await fetch(`/api/sessions/${activeSession}/messages`, { method: 'DELETE' });
-              const data = await res.json().catch(() => ({}));
-              if (data.success && typeof data.cleared === 'number') {
-                if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
-              }
+              try {
+                const res = await fetch(`/api/sessions/${activeSession}/messages`, { method: 'DELETE' });
+                if (!res.ok) { toast.error(`Clear failed: HTTP ${res.status}`); return; }
+                const data = await res.json().catch(() => ({}));
+                if (data.success && typeof data.cleared === 'number') {
+                  if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+                }
+              } catch (err) { toast.error(`Clear failed: ${err.message}`); }
             }}
           >⌫ Clear</button>
         )}
@@ -157,8 +161,11 @@ export default function SessionHeader({
           title="Restart session — clears messages and resets error state"
           onClick={async () => {
             if (!confirm('Restart this session? All messages will be cleared.')) return;
-            await fetch(`/api/sessions/${activeSession}/restart`, { method: 'POST' });
-            if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+            try {
+              const res = await fetch(`/api/sessions/${activeSession}/restart`, { method: 'POST' });
+              if (!res.ok) { toast.error(`Restart failed: HTTP ${res.status}`); return; }
+              if (typeof fetchSessionDetails === 'function') fetchSessionDetails(activeSession);
+            } catch (err) { toast.error(`Restart failed: ${err.message}`); }
           }}
         >↺ Restart</button>
 

@@ -12,6 +12,7 @@ export function useWebSocket({ onEvent }) {
 
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
+  const attemptRef = useRef(0);
 
   useEffect(() => {
     let destroyed = false;
@@ -20,10 +21,15 @@ export function useWebSocket({ onEvent }) {
       const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const socket = new WebSocket(`${scheme}://${window.location.host}/ws/events`);
       wsRef.current = socket;
-      socket.onopen = () => setWsConnected(true);
+      socket.onopen = () => { attemptRef.current = 0; setWsConnected(true); };
       socket.onclose = () => {
         setWsConnected(false);
-        if (!destroyed) reconnectTimerRef.current = setTimeout(connect, 3000);
+        if (!destroyed) {
+          const base = Math.min(30000, 1000 * Math.pow(2, attemptRef.current));
+          const delay = base * (0.8 + 0.4 * Math.random());
+          attemptRef.current += 1;
+          reconnectTimerRef.current = setTimeout(connect, delay);
+        }
       };
       socket.onerror = () => setWsConnected(false);
       socket.onmessage = (msg) => {

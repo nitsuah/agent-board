@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function ReplayPanel({ replayData, replayStep, setReplayStep, onClose }) {
-  if (!replayData) return null;
+  if (!replayData || !replayData.totalSteps) return null;
   return (
     <div style={{
       position: 'absolute', inset: 0, background: 'var(--surface)', zIndex: 100,

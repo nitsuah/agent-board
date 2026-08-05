@@ -77,7 +77,8 @@ export default function ChatColumn({
     || currentEndpoint?.toLowerCase().includes('local_20128');
 
   useEffect(() => {
-    if (!is9Router) return;
+    if (!is9Router) { setNineRouterCombos([]); return; }
+    setNineRouterCombos([]);
     let cancelled = false;
     (async () => {
       try {

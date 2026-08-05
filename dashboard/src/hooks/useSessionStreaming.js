@@ -91,7 +91,8 @@ export function useSessionStreaming({
         body: JSON.stringify({ message: messageText, useSafeMode }),
         signal: controller.signal,
       });
-      if (!res.ok || !res.body) throw new Error(`Stream request failed: ${res.status}`);
+      if (!res.ok) throw Object.assign(new Error(`Stream request failed: ${res.status}`), { isHttpError: true });
+      if (!res.body) throw Object.assign(new Error('No response body'), { isHttpError: true });
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -131,7 +132,12 @@ export function useSessionStreaming({
         }
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        // intentional abort — nothing to do
+      } else if (error.isHttpError) {
+        setSessionErrors(prev => new Set([...prev, sessionId]));
+        toast.error(error.message);
+      } else {
         setSessionErrors(prev => new Set([...prev, sessionId]));
         try {
           const res = await fetch(`/api/sessions/${sessionId}/message`, {
@@ -142,7 +148,11 @@ export function useSessionStreaming({
           const data = await res.json();
           fetchSessionsRef.current?.();
           fetchSessionDetailsRef.current?.(sessionId);
-          if (!data.success) toast.error(data.response || 'LLM error');
+          if (data.success) {
+            setSessionErrors(prev => { const n = new Set(prev); n.delete(sessionId); return n; });
+          } else {
+            toast.error(data.response || 'LLM error');
+          }
         } catch (fbErr) {
           toast.error(`Send failed: ${fbErr.message}`);
           if (sessionId === activeSessionRef.current) {
@@ -176,8 +186,10 @@ export function useSessionStreaming({
       next.delete(sessionId);
       pausedSessionsRef.current = next;
       setPausedSessions(next);
-      const nextMsg = dequeueNext(sessionId);
-      if (nextMsg) sendMessageCore(sessionId, nextMsg);
+      if (!abortControllersRef.current.has(sessionId)) {
+        const nextMsg = dequeueNext(sessionId);
+        if (nextMsg) sendMessageCore(sessionId, nextMsg);
+      }
     } else {
       next.add(sessionId);
       pausedSessionsRef.current = next;

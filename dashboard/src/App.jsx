@@ -315,6 +315,8 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession]);
 
+  const activeSessionData = activeSession ? sessions.find(s => s.id === activeSession) : null;
+
   useEffect(() => {
     const available = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
     const online = available.filter((key) => {
@@ -420,7 +422,7 @@ function App() {
     } catch (error) { toast.error(`Failed to send feedback: ${error.message}`); }
   };
 
-  const switchEndpoint = async (endpoint, model) => {
+  const switchEndpoint = async (endpoint, model, prevEndpoint, prevModel) => {
     if (!activeSession) return;
     try {
       const res = await fetch(`/api/sessions/${activeSession}/model`, {
@@ -429,18 +431,27 @@ function App() {
         body: JSON.stringify({ endpoint, model }),
       });
       const data = await res.json();
-      if (!data.success) { toast.error(data.error || data.message || 'Failed to switch model'); return; }
-      setCurrentEndpoint(endpoint);
-      setCurrentModel(model);
+      if (!data.success) {
+        toast.error(data.error || data.message || 'Failed to switch model');
+        setCurrentEndpoint(prevEndpoint);
+        setCurrentModel(prevModel);
+        return;
+      }
       fetchSessions();
-    } catch (error) { toast.error(`Model switch failed: ${error.message}`); }
+    } catch (error) {
+      toast.error(`Model switch failed: ${error.message}`);
+      setCurrentEndpoint(prevEndpoint);
+      setCurrentModel(prevModel);
+    }
   };
 
   const handleEndpointSelection = (endpoint) => {
     const model = getPreferredModelForEndpoint(endpoint);
+    const prevEndpoint = currentEndpoint;
+    const prevModel = currentModel;
     setCurrentEndpoint(endpoint);
     setCurrentModel(model);
-    switchEndpoint(endpoint, model);
+    switchEndpoint(endpoint, model, prevEndpoint, prevModel);
   };
 
   const sendMessage = (e) => {
@@ -462,7 +473,6 @@ function App() {
   // ── Derived state ─────────────────────────────────────────────────────────
   const loading = loadingSessions.has(activeSession);
   const streamingContent = streamingBySession[activeSession] || '';
-  const activeSessionData = activeSession ? sessions.find(s => s.id === activeSession) : null;
   const visibleEndpointKeys = getAvailableEndpoints(activeSessionData?.experience || selectedExperience);
   const selectableEndpointKeys = visibleEndpointKeys.filter((key) => {
     const ep = dockerStatus?.endpoints?.[key];
@@ -657,15 +667,13 @@ function App() {
         totalServices={totalServices}
         showSystemPanel={showSystemPanel}
         onToggleSystemPanel={() => {
-          setShowSystemPanel(prev => {
-            const next = !prev;
-            if (next) {
-              setShowMetricsPanel(false);
-              if (dockerStatus?.workspace?.configured) { wsOps.browseWorkspace(''); wsOps.refreshWorkspaceGit(); }
-              fetchContentClients();
-            }
-            return next;
-          });
+          const next = !showSystemPanel;
+          setShowSystemPanel(next);
+          if (next) {
+            setShowMetricsPanel(false);
+            if (dockerStatus?.workspace?.configured) { wsOps.browseWorkspace(''); wsOps.refreshWorkspaceGit(); }
+            fetchContentClients();
+          }
         }}
       />
     </div>
