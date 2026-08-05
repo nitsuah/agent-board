@@ -30,6 +30,8 @@ export function useSessionStreaming({
 
   // Abort controllers keyed by sessionId
   const abortControllersRef = useRef(new Map());
+  // Sessions where forceSend owns the next drain (finally block must not drain)
+  const skipDrainRef = useRef(new Set());
 
   // Keep mutable prop values current in refs so stable callbacks below always
   // read the latest value without needing to be recreated.
@@ -168,7 +170,9 @@ export function useSessionStreaming({
       abortControllersRef.current.delete(sessionId);
       setLoadingSessions(prev => { const next = new Set(prev); next.delete(sessionId); return next; });
       setStreamingBySession(prev => { const next = { ...prev }; delete next[sessionId]; return next; });
-      if (!pausedSessionsRef.current.has(sessionId)) {
+      const skipDrain = skipDrainRef.current.has(sessionId);
+      skipDrainRef.current.delete(sessionId);
+      if (!skipDrain && !pausedSessionsRef.current.has(sessionId)) {
         const nextMsg = dequeueNext(sessionId);
         if (nextMsg) setTimeout(() => sendMessageCore(sessionId, nextMsg), 50);
       }
@@ -202,6 +206,7 @@ export function useSessionStreaming({
   }, [dequeueNext, sendMessageCore]);
 
   const forceSend = useCallback((sessionId) => {
+    skipDrainRef.current.add(sessionId);
     stopSession(sessionId);
     const nextMsg = dequeueNext(sessionId);
     if (nextMsg) setTimeout(() => sendMessageCore(sessionId, nextMsg), 50);

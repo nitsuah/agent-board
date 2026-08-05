@@ -446,6 +446,7 @@ function App() {
         if (isLatest) { setCurrentEndpoint(prevEndpoint); setCurrentModel(prevModel); }
         return;
       }
+      if (isLatest) { setCurrentEndpoint(endpoint); setCurrentModel(model); }
       fetchSessions();
     } catch (error) {
       const isLatest = endpointSwitchSerialRef.current[sessionId] === serial && activeSessionRef.current === sessionId;
