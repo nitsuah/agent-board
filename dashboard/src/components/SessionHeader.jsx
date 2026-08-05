@@ -9,7 +9,7 @@ export default function SessionHeader({
   selectableEndpointKeys, currentEndpoint, allEndpointMeta,
   handleEndpointSelection, demoMode, SAFETY_COLORS, EXPERIENCE_META,
   selectedExperience,
-  nineRouterCombos, nineRouterCombo, setNineRouterCombo, is9Router,
+  nineRouterCombos, nineRouterCombo, onComboChange, is9Router,
   onStartReplay, replayBusy,
 }) {
   const [editingName, setEditingName] = useState(false);
@@ -77,7 +77,7 @@ export default function SessionHeader({
           <select
             className="chat-model-select chat-model-select--header"
             value={nineRouterCombo}
-            onChange={e => setNineRouterCombo(e.target.value)}
+            onChange={e => onComboChange(e.target.value)}
             title="9router combo (model group)"
             style={{ maxWidth: '110px' }}
           >

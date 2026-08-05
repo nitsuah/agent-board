@@ -59,6 +59,10 @@ function App() {
   const chatBottomRef = useRef(null);
   const createSessionRef = useRef(null);
   const fetchTasksRef = useRef(null);
+  const activeSessionRef = useRef(activeSession);
+  activeSessionRef.current = activeSession;
+  const endpointSwitchSerialRef = useRef({});
+  const [nineRouterCombo, setNineRouterCombo] = useState('MAX');
 
   // ── Stable data fetchers (passed to hooks — deps are all React state setters) ──
   const fetchDockerStatus = useCallback(async () => {
@@ -92,13 +96,15 @@ function App() {
       const res = await fetch(`/api/sessions/${id}`);
       const data = await res.json();
       if (data.success && data.session) {
-        setActiveSessionMessages(data.session.messages || []);
-        setCurrentEndpoint(data.session.endpoint);
-        setCurrentModel(data.session.model);
         setSessions(prev => prev.map(s => s.id === id
           ? { ...s, messageCount: (data.session.messages || []).length, endpoint: data.session.endpoint, model: data.session.model, experience: data.session.experience, safetyMode: data.session.safetyMode }
           : s
         ));
+        if (id === activeSessionRef.current) {
+          setActiveSessionMessages(data.session.messages || []);
+          setCurrentEndpoint(data.session.endpoint);
+          setCurrentModel(data.session.model);
+        }
       }
     } catch (error) { toast.error(`Failed to load session: ${error.message}`); }
   }, []);
@@ -167,7 +173,7 @@ function App() {
     queueLengths, pausedSessions, sendMessageCore, enqueueMessage,
     togglePause, stopSession, forceSend,
   } = useSessionStreaming({
-    activeSession, setActiveSessionMessages, useNemoClaw, fetchSessions, fetchSessionDetails,
+    activeSession, setActiveSessionMessages, useNemoClaw, fetchSessions, fetchSessionDetails, nineRouterCombo,
   });
 
   const {
@@ -423,25 +429,28 @@ function App() {
   };
 
   const switchEndpoint = async (endpoint, model, prevEndpoint, prevModel) => {
-    if (!activeSession) return;
+    const sessionId = activeSession;
+    if (!sessionId) return;
+    const serial = (endpointSwitchSerialRef.current[sessionId] || 0) + 1;
+    endpointSwitchSerialRef.current[sessionId] = serial;
     try {
-      const res = await fetch(`/api/sessions/${activeSession}/model`, {
+      const res = await fetch(`/api/sessions/${sessionId}/model`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ endpoint, model }),
       });
       const data = await res.json();
+      const isLatest = endpointSwitchSerialRef.current[sessionId] === serial && activeSessionRef.current === sessionId;
       if (!data.success) {
         toast.error(data.error || data.message || 'Failed to switch model');
-        setCurrentEndpoint(prevEndpoint);
-        setCurrentModel(prevModel);
+        if (isLatest) { setCurrentEndpoint(prevEndpoint); setCurrentModel(prevModel); }
         return;
       }
       fetchSessions();
     } catch (error) {
+      const isLatest = endpointSwitchSerialRef.current[sessionId] === serial && activeSessionRef.current === sessionId;
       toast.error(`Model switch failed: ${error.message}`);
-      setCurrentEndpoint(prevEndpoint);
-      setCurrentModel(prevModel);
+      if (isLatest) { setCurrentEndpoint(prevEndpoint); setCurrentModel(prevModel); }
     }
   };
 
@@ -616,6 +625,8 @@ function App() {
               servicesStarting={servicesStarting}
               sessionPendingReply={sessionPendingReply}
               sessionErrors={sessionErrors}
+              nineRouterCombo={nineRouterCombo}
+              onNineRouterComboChange={setNineRouterCombo}
             />
           )}
         </div>

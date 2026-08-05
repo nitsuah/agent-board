@@ -14,6 +14,7 @@ export function useSessionStreaming({
   useNemoClaw,
   fetchSessions,
   fetchSessionDetails,
+  nineRouterCombo,
 }) {
   // ── Streaming state ───────────────────────────────────────────────────────
   const [loadingSessions, setLoadingSessions] = useState(new Set());
@@ -46,6 +47,9 @@ export function useSessionStreaming({
 
   const fetchSessionDetailsRef = useRef(fetchSessionDetails);
   fetchSessionDetailsRef.current = fetchSessionDetails;
+
+  const nineRouterComboRef = useRef(nineRouterCombo);
+  nineRouterComboRef.current = nineRouterCombo;
 
   // ── Queue helpers ─────────────────────────────────────────────────────────
   const enqueueMessage = useCallback((sessionId, message) => {
@@ -88,7 +92,7 @@ export function useSessionStreaming({
       const res = await fetch(`/api/sessions/${sessionId}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, useSafeMode }),
+        body: JSON.stringify({ message: messageText, useSafeMode, combo: nineRouterComboRef.current || undefined }),
         signal: controller.signal,
       });
       if (!res.ok) throw Object.assign(new Error(`Stream request failed: ${res.status}`), { isHttpError: true });

@@ -86,9 +86,10 @@ export function useTaskManagement({ activeSession, selectedExperience, wsLayout,
       await fetchSessionDetails(sessionId);
       setActiveSession(sessionId);
       if (wsLayout === 'single') setActiveTab('chat');
-      // Small delay so React settles setActiveSession state before we start streaming
-      setTimeout(() => sendMessageCore(sessionId, task.title), 150);
-      fetchTasks();
+      await fetchTasks();
+      // Delay so React settles setActiveSession before streaming
+      await new Promise(r => setTimeout(r, 150));
+      sendMessageCore(sessionId, task.title);
     } catch (err) { toast.error(`Dispatch failed: ${err.message}`); }
   };
 

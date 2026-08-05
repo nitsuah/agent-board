@@ -64,14 +64,16 @@ export default function ChatColumn({
   servicesStarting,
   sessionPendingReply,
   sessionErrors,
+  nineRouterCombo,
+  onNineRouterComboChange,
 }) {
   const [replayMode, setReplayMode] = useState(false);
   const [replayData, setReplayData] = useState(null);
   const [replayStep, setReplayStep] = useState(0);
   const [replayBusy, setReplayBusy] = useState(false);
+  const [replaySessionId, setReplaySessionId] = useState(null);
 
   const [nineRouterCombos, setNineRouterCombos] = useState([]);
-  const [nineRouterCombo, setNineRouterCombo] = useState('MAX');
   const is9Router = allEndpointMeta[currentEndpoint]?.label?.toLowerCase().includes('9router')
     || currentEndpoint?.toLowerCase().includes('9router')
     || currentEndpoint?.toLowerCase().includes('local_20128');
@@ -93,14 +95,26 @@ export default function ChatColumn({
     return () => { cancelled = true; };
   }, [is9Router, currentEndpoint]);
 
+  // Clear replay when the user switches away from the session that owns it
+  useEffect(() => {
+    if (replayMode && replaySessionId !== activeSession) {
+      setReplayMode(false);
+      setReplayData(null);
+      setReplaySessionId(null);
+    }
+  }, [activeSession, replayMode, replaySessionId]);
+
   const handleStartReplay = async () => {
+    const sessionId = activeSession;
     setReplayBusy(true);
     try {
-      const res = await fetch(`/api/sessions/${activeSession}/replay`);
+      const res = await fetch(`/api/sessions/${sessionId}/replay`);
       if (!res.ok) { toast.error(`Replay failed: HTTP ${res.status}`); return; }
       const data = await res.json();
       if (!data.success) { toast.error(data.error || 'Replay unavailable'); return; }
+      if (sessionId !== activeSession) return;
       setReplayData(data.replay);
+      setReplaySessionId(sessionId);
       setReplayStep(0);
       setReplayMode(true);
     } catch (err) { toast.error(`Replay error: ${err.message}`); }
@@ -134,7 +148,7 @@ export default function ChatColumn({
             selectedExperience={selectedExperience}
             nineRouterCombos={nineRouterCombos}
             nineRouterCombo={nineRouterCombo}
-            setNineRouterCombo={setNineRouterCombo}
+            onComboChange={onNineRouterComboChange}
             is9Router={is9Router}
             onStartReplay={handleStartReplay}
             replayBusy={replayBusy}
@@ -206,12 +220,12 @@ export default function ChatColumn({
         />
       )}
 
-      {replayMode && replayData && (
+      {replayMode && replayData && replaySessionId === activeSession && (
         <ReplayPanel
           replayData={replayData}
           replayStep={replayStep}
           setReplayStep={setReplayStep}
-          onClose={() => { setReplayMode(false); setReplayData(null); }}
+          onClose={() => { setReplayMode(false); setReplayData(null); setReplaySessionId(null); }}
         />
       )}
     </div>
