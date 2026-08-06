@@ -18,6 +18,14 @@ export function shouldShowOnboarding() {
   return localStorage.getItem('agent_board_onboarding_dismissed') !== '1';
 }
 
+export const BACKEND_TYPES = {
+  OLLAMA: 'ollama-container',
+  OPENLLM: 'openllm',
+  DOCKER_RUNNER: 'docker-runner',
+  MCP: 'mcp',
+  SANDBOX: 'sandbox',
+};
+
 export const ENDPOINT_META = {
   primary:       { model: 'llama3.2:3b',            label: 'Llama 3.2 3B',  desc: 'Ollama container · 2.0 GB',      backendBadge: 'Ollama' },
   docker_runner: { model: 'ai/qwen3-coder:latest',  label: 'Qwen3-Coder',   desc: 'Docker Model Runner · 16.45 GB', backendBadge: 'Docker Runner' },

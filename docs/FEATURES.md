@@ -59,6 +59,6 @@
 - `[planned]` **Modular Plugin Architecture** - Extend board functionality with custom middleware and UI components.
 - `[planned]` **Hot Reloading for Scripts** - Automatically refresh agent logic when source files are modified during development.
 - **Comprehensive Event Logging** - Structured JSON logging for easier debugging and integration with ELK stacks.
-- **Server/Frontend Refactor** - `server.js` route logic extracted into focused route modules; `App.jsx` UI components extracted to `src/components/`; improves maintainability and test isolation.
+- **Server/Frontend Refactor** - `server.js` route logic extracted into focused route modules (`routes/`); `App.jsx` stateful logic extracted into `src/hooks/` (`useWebSocket`, `useSessionStreaming`, `useServiceActions`) and discrete UI components extracted into `src/components/` (11 extracted: `ServiceRow`, `ByokEndpointForm`, `ServiceDiscovery`, `SessionHeader`, `MessageComposer`, `ReplayPanel`, `GitLogTab`, `TasksPanel`, `ServiceDetail`, `StatusBar`, `OnboardingStrip`); improves maintainability and test isolation.
 - **Safe Chat Hardening** - Strengthened input validation and error boundary behavior in Safe Chat sessions; prevents partial renders on blocked/filtered responses.
 - **Tool Result Visibility & Artifacts Tab** - MCP tool call results and generated artifacts surface in a dedicated Artifacts tab; tool output no longer hidden behind raw message history.

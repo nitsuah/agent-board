@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { toast } from '../components/Toast.jsx';
+import { getFriendlyServiceError } from '../utils/serviceErrors.js';
 
-export function useServiceActions({ dockerStatus, systemServices }) {
+export function useServiceActions({ dockerStatus, systemServices, onDockerStatusRefresh, onSystemServicesRefresh }) {
   const [serviceActionsInFlight, setServiceActionsInFlight] = useState({});
   const [serviceActionErrors, setServiceActionErrors] = useState({});
   const [servicesStarting, setServicesStarting] = useState({});
@@ -14,13 +15,19 @@ export function useServiceActions({ dockerStatus, systemServices }) {
   const [contentFiles, setContentFiles] = useState({});
   const [contentExpanded, setContentExpanded] = useState({});
 
+  const onDockerStatusRefreshRef = useRef(onDockerStatusRefresh);
+  onDockerStatusRefreshRef.current = onDockerStatusRefresh;
+
+  const onSystemServicesRefreshRef = useRef(onSystemServicesRefresh);
+  onSystemServicesRefreshRef.current = onSystemServicesRefresh;
+
   // Fast-poll while any service is starting up
   useEffect(() => {
     const anyStarting = Object.values(servicesStarting).some(Boolean);
     if (!anyStarting) return;
     const poll = setInterval(() => {
-      fetch('/api/docker/status').catch(() => {});
-      fetch('/api/system/services').catch(() => {});
+      onDockerStatusRefreshRef.current?.();
+      onSystemServicesRefreshRef.current?.();
     }, 2000);
     return () => clearInterval(poll);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,7 +52,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
     });
   }, [dockerStatus, systemServices]);
 
-  const runServiceAction = async (serviceKey, action, { fetchDockerStatus, fetchSystemServices } = {}) => {
+  const runServiceAction = async (serviceKey, action) => {
     const actionId = `${serviceKey}:${action}`;
     setServiceActionsInFlight(prev => ({ ...prev, [actionId]: true }));
     setServiceActionErrors(prev => ({ ...prev, [serviceKey]: null }));
@@ -53,8 +60,10 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       const res = await fetch(`/api/system/services/${serviceKey}/${action}`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) {
-        toast.error(data.error || 'Service action failed');
-        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: data.error || 'Action failed' }));
+        const raw = data.error || 'Action failed';
+        const msg = getFriendlyServiceError(raw);
+        toast.error(`Service ${action} failed: ${msg}`);
+        setServiceActionErrors(prev => ({ ...prev, [serviceKey]: msg }));
       } else if (action === 'start') {
         setServicesStarting(prev => ({ ...prev, [serviceKey]: true }));
         clearTimeout(startingTimeoutsRef.current[serviceKey]);
@@ -63,7 +72,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
           delete startingTimeoutsRef.current[serviceKey];
         }, 90000);
       }
-      await Promise.all([fetchDockerStatus?.(), fetchSystemServices?.()]);
+      await Promise.all([onDockerStatusRefreshRef.current?.(), onSystemServicesRefreshRef.current?.()]);
     } catch (error) {
       toast.error(`Service action failed: ${error.message}`);
       setServiceActionErrors(prev => ({ ...prev, [serviceKey]: error.message }));
@@ -77,7 +86,7 @@ export function useServiceActions({ dockerStatus, systemServices }) {
       const res = await fetch('/api/models/pull-status');
       const data = await res.json();
       if (data.success) setModelPulls(data.pulls || {});
-    } catch (error) { toast.error(`Failed to fetch pull status: ${error.message}`); }
+    } catch (error) { console.error('Error fetching model pull status:', error); }
   };
 
   const pullModel = async (endpoint, model) => {

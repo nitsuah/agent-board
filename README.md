@@ -103,7 +103,14 @@ Optional endpoints (require profile flags above):
 
 ```bash
 dashboard/                    # Web UI & API server (React + Express)
-  src/                        # React frontend
+  server.js                   # Express entry point — thin; logic in routes/ and modules/
+  routes/                     # Route modules (docker.js, sessions.js, …)
+  src/
+    App.jsx                   # React root — session lifecycle, endpoint routing
+    components/               # Extracted UI components (StatusBar, ChatColumn, SystemPanel, …)
+    hooks/                    # Stateful logic hooks (useWebSocket, useSessionStreaming, useServiceActions, …)
+    constants/                # App-wide config constants (app-config.js)
+    utils/                    # Shared utilities (serviceErrors.js, …)
   tests/                      # Integration tests
   Dockerfile
 config/                       # Stack config and model manifests
@@ -281,13 +288,28 @@ With the overlay applied:
 
 ```bash
 dashboard/
-├── server.js         # Express API entry point (routes extracted to modules)
+├── server.js              # Express entry point — thin; logic in routes/ and modules/
+├── routes/                # Route modules (docker.js, sessions.js, …)
 ├── src/
-│   ├── App.jsx       # React root (UI components extracted to src/components/)
-│   ├── App.css       # Styles
-│   └── main.jsx      # Entry point
+│   ├── App.jsx            # React root — session lifecycle, endpoint state
+│   ├── App.css            # Styles
+│   ├── main.jsx           # Entry point
+│   ├── components/        # Extracted UI components
+│   │   ├── ChatColumn.jsx
+│   │   ├── SystemPanel.jsx, ServiceRow.jsx, ByokEndpointForm.jsx, ServiceDiscovery.jsx
+│   │   ├── SessionHeader.jsx, MessageComposer.jsx, ReplayPanel.jsx
+│   │   ├── StatusBar.jsx, OnboardingStrip.jsx
+│   │   └── … (LiminalDashboard, WorkspaceView, TopBar, …)
+│   ├── hooks/             # Stateful logic hooks
+│   │   ├── useWebSocket.js         # WS connection + auto-reconnect
+│   │   ├── useSessionStreaming.js  # Streaming, message queue, pause/resume
+│   │   ├── useServiceActions.js   # Service control, model pulls, content clients
+│   │   ├── useWorkspaceOps.js
+│   │   └── useTaskManagement.js
+│   ├── constants/         # App-wide config (app-config.js)
+│   └── utils/             # Shared utilities (serviceErrors.js, …)
 ├── tests/
-│   ├── test-chat.js  # Integration test (session → message → delete)
+│   ├── test-chat.js       # Integration test (session → message → delete)
 │   └── e2e-chat.js
 └── Dockerfile
 ```
