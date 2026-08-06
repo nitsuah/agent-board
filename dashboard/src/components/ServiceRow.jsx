@@ -23,7 +23,7 @@ export default function ServiceRow({
   const typeLabel = BACKEND_TYPE_LABEL[info.backendType] || '';
   const isDisabled = !!info.disabledReason;
   const isStarting = !info.running && !!servicesStarting?.[serviceKey];
-  const anyModelUnready = info.running && eps.some(({ ep }) => ep.backendType === 'ollama-container' && !ep.modelInstalled);
+  const anyModelUnready = info.running && eps.some(({ ep }) => ep.backendType === BACKEND_TYPES.OLLAMA && !ep.modelInstalled);
 
   const epErrors = eps
     .map(({ epKey, ep }) => serviceActionErrors[`pull:${epKey}:${ep.model}`])
@@ -69,7 +69,7 @@ export default function ServiceRow({
             )}
           </div>
           {info.ports && <div className="docker-service-port">{info.ports}</div>}
-          {info.backendType === 'mcp' && !isDisabled && (
+          {info.backendType === BACKEND_TYPES.MCP && !isDisabled && (
             <div style={{ fontSize: '0.67rem', marginTop: '0.1rem' }}>
               <span style={{ color: info.running ? 'var(--green)' : 'var(--text-faint)' }}>
                 {info.running ? '✓ health ok' : '✗ unreachable'}
@@ -87,8 +87,8 @@ export default function ServiceRow({
             const pullKey = `${epKey}:${ep.model}`;
             const pull = modelPulls[pullKey];
             const pulling = pull?.status === 'pulling' || serviceActionsInFlight[`pull:${pullKey}`];
-            const installed = ep.backendType === 'ollama-container' ? ep.modelInstalled : ep.modelLoaded;
-            const isActiveRunner = ep.backendType === 'docker-runner' && dockerStatus?.activeDockerRunnerModel?.key === epKey;
+            const installed = ep.backendType === BACKEND_TYPES.OLLAMA ? ep.modelInstalled : ep.modelLoaded;
+            const isActiveRunner = ep.backendType === BACKEND_TYPES.DOCKER_RUNNER && dockerStatus?.activeDockerRunnerModel?.key === epKey;
             const wasKnown = !!knownModels[pullKey];
             const epDisabled = !!ep.disabledReason;
             if (epDisabled) {
