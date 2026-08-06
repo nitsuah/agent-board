@@ -3,6 +3,7 @@ import { toast } from './Toast.jsx';
 import ServiceRow from './ServiceRow.jsx';
 import ByokEndpointForm from './ByokEndpointForm.jsx';
 import ServiceDiscovery from './ServiceDiscovery.jsx';
+import { BACKEND_TYPES } from '../constants/app-config.js';
 
 const SVC_ORDER = ['ollama', 'tool_content_gen', 'tool_website', 'docker-runner', 'nemoclaw', 'llm_openllm', 'bb_mcp'];
 
@@ -39,13 +40,13 @@ function SystemPanel({
   const dockerRunnerEndpoints = [];
   if (dockerStatus?.endpoints) {
     for (const [epKey, ep] of Object.entries(dockerStatus.endpoints)) {
-      if (ep.backendType === 'ollama-container') {
+      if (ep.backendType === BACKEND_TYPES.OLLAMA) {
         if (!containerToEndpoints['ollama']) containerToEndpoints['ollama'] = [];
         containerToEndpoints['ollama'].push({ epKey, ep });
-      } else if (ep.backendType === 'openllm') {
+      } else if (ep.backendType === BACKEND_TYPES.OPENLLM) {
         if (!containerToEndpoints['llm_openllm']) containerToEndpoints['llm_openllm'] = [];
         containerToEndpoints['llm_openllm'].push({ epKey, ep });
-      } else if (ep.backendType === 'docker-runner') {
+      } else if (ep.backendType === BACKEND_TYPES.DOCKER_RUNNER) {
         dockerRunnerEndpoints.push({ epKey, ep });
       }
     }

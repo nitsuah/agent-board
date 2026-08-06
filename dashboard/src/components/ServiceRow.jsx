@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { getFriendlyServiceError } from '../utils/serviceErrors.js';
+import { BACKEND_TYPES } from '../constants/app-config.js';
 
 const BACKEND_TYPE_LABEL = {
-  'ollama-container': 'local', sandbox: 'sandbox', mcp: 'mcp',
-  'docker-runner': 'runner', 'openllm-container': 'custom',
+  [BACKEND_TYPES.OLLAMA]: 'local',
+  [BACKEND_TYPES.SANDBOX]: 'sandbox',
+  [BACKEND_TYPES.MCP]: 'mcp',
+  [BACKEND_TYPES.DOCKER_RUNNER]: 'runner',
+  [BACKEND_TYPES.OPENLLM]: 'custom',
 };
 
 export default function ServiceRow({

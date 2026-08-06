@@ -1,4 +1,5 @@
 import React from 'react';
+import { BACKEND_TYPES } from '../constants/app-config.js';
 
 export default function ServiceDetail({
   node, systemServices, dockerStatus, modelPulls,
@@ -10,9 +11,9 @@ export default function ServiceDetail({
   const isRunning = svc?.running ?? false;
 
   const containerEndpoints = svcKey === 'ollama'
-    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === 'ollama-container')
+    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === BACKEND_TYPES.OLLAMA)
     : svcKey === 'llm_openllm'
-    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === 'openllm-container')
+    ? Object.entries(dockerStatus?.endpoints || {}).filter(([, ep]) => ep.backendType === BACKEND_TYPES.OPENLLM)
     : [];
 
   return (

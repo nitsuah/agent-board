@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { toast } from './Toast.jsx';
 
 const PROVIDER_PRESETS = [
-  { label: 'Anthropic', key: 'anthropic', name: 'Anthropic (Claude)', url: 'https://api.anthropic.com', apiStyle: 'anthropic', defaultModel: 'claude-sonnet-4-6', keyHint: 'sk-ant-...' },
-  { label: 'OpenAI', key: 'openai', name: 'OpenAI', url: 'https://api.openai.com', apiStyle: 'openai', defaultModel: 'gpt-4o', keyHint: 'sk-...' },
-  { label: 'Gemini', key: 'gemini', name: 'Google Gemini', url: 'https://generativelanguage.googleapis.com', apiStyle: 'gemini', defaultModel: 'gemini-2.5-flash', keyHint: 'AIza...' },
-  { label: 'Groq', key: 'groq', name: 'Groq', url: 'https://api.groq.com/openai', apiStyle: 'openai', defaultModel: 'llama-3.3-70b-versatile', keyHint: 'gsk_...' },
-  { label: 'Mistral', key: 'mistral', name: 'Mistral AI', url: 'https://api.mistral.ai', apiStyle: 'openai', defaultModel: 'mistral-large-latest', keyHint: '' },
-  { label: 'Together', key: 'together', name: 'Together AI', url: 'https://api.together.xyz', apiStyle: 'openai', defaultModel: 'meta-llama/Llama-3-70b-chat-hf', keyHint: '' },
-  { label: 'Perplexity', key: 'perplexity', name: 'Perplexity', url: 'https://api.perplexity.ai', apiStyle: 'openai', defaultModel: 'llama-3.1-sonar-large-128k-online', keyHint: 'pplx-...' },
+  { label: 'Anthropic', key: 'anthropic', name: 'Anthropic (Claude)', url: import.meta.env.VITE_BYOK_ANTHROPIC_URL || 'https://api.anthropic.com', apiStyle: 'anthropic', defaultModel: import.meta.env.VITE_BYOK_ANTHROPIC_MODEL || 'claude-sonnet-4-6', keyHint: 'sk-ant-...' },
+  { label: 'OpenAI', key: 'openai', name: 'OpenAI', url: import.meta.env.VITE_BYOK_OPENAI_URL || 'https://api.openai.com', apiStyle: 'openai', defaultModel: import.meta.env.VITE_BYOK_OPENAI_MODEL || 'gpt-4o', keyHint: 'sk-...' },
+  { label: 'Gemini', key: 'gemini', name: 'Google Gemini', url: import.meta.env.VITE_BYOK_GEMINI_URL || 'https://generativelanguage.googleapis.com', apiStyle: 'gemini', defaultModel: import.meta.env.VITE_BYOK_GEMINI_MODEL || 'gemini-2.5-flash', keyHint: 'AIza...' },
+  { label: 'Groq', key: 'groq', name: 'Groq', url: import.meta.env.VITE_BYOK_GROQ_URL || 'https://api.groq.com/openai', apiStyle: 'openai', defaultModel: import.meta.env.VITE_BYOK_GROQ_MODEL || 'llama-3.3-70b-versatile', keyHint: 'gsk_...' },
+  { label: 'Mistral', key: 'mistral', name: 'Mistral AI', url: import.meta.env.VITE_BYOK_MISTRAL_URL || 'https://api.mistral.ai', apiStyle: 'openai', defaultModel: import.meta.env.VITE_BYOK_MISTRAL_MODEL || 'mistral-large-latest', keyHint: '' },
+  { label: 'Together', key: 'together', name: 'Together AI', url: import.meta.env.VITE_BYOK_TOGETHER_URL || 'https://api.together.xyz', apiStyle: 'openai', defaultModel: import.meta.env.VITE_BYOK_TOGETHER_MODEL || 'meta-llama/Llama-3-70b-chat-hf', keyHint: '' },
+  { label: 'Perplexity', key: 'perplexity', name: 'Perplexity', url: import.meta.env.VITE_BYOK_PERPLEXITY_URL || 'https://api.perplexity.ai', apiStyle: 'openai', defaultModel: import.meta.env.VITE_BYOK_PERPLEXITY_MODEL || 'llama-3.1-sonar-large-128k-online', keyHint: 'pplx-...' },
 ];
 
 const EMPTY_FORM = { key: '', name: '', url: '', apiStyle: 'openai', defaultModel: '', apiKey: '' };

@@ -1,7 +1,8 @@
 import React from 'react';
 
 export default function ReplayPanel({ replayData, replayStep, setReplayStep, onClose }) {
-  if (!replayData || !replayData.totalSteps) return null;
+  if (!replayData || !replayData.steps?.length) return null;
+  const totalSteps = replayData.steps.length;
   return (
     <div style={{
       position: 'absolute', inset: 0, background: 'var(--surface)', zIndex: 100,
@@ -11,7 +12,7 @@ export default function ReplayPanel({ replayData, replayStep, setReplayStep, onC
         <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>▶ Replay</span>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{replayData.name}</span>
         <span style={{ fontSize: '0.72rem', color: 'var(--text-faint)', marginLeft: 'auto' }}>
-          Step {replayStep + 1} / {replayData.totalSteps || '—'}
+          Step {replayStep + 1} / {totalSteps}
         </span>
         <button className="btn-secondary btn-sm" onClick={onClose}>✕ Exit</button>
       </div>
@@ -47,9 +48,9 @@ export default function ReplayPanel({ replayData, replayStep, setReplayStep, onC
 
       <div style={{ display: 'flex', gap: '0.5rem', padding: '0.6rem 1rem', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', alignItems: 'center' }}>
         <button className="btn-secondary btn-sm" disabled={replayStep === 0} onClick={() => setReplayStep(s => Math.max(0, s - 1))}>← Prev</button>
-        <button className="btn-secondary btn-sm" disabled={replayStep >= (replayData.totalSteps - 1)} onClick={() => setReplayStep(s => Math.min(replayData.totalSteps - 1, s + 1))}>Next →</button>
+        <button className="btn-secondary btn-sm" disabled={replayStep >= (totalSteps - 1)} onClick={() => setReplayStep(s => Math.min(totalSteps - 1, s + 1))}>Next →</button>
         <button className="btn-secondary btn-sm" onClick={() => setReplayStep(0)}>⏮ Start</button>
-        <button className="btn-secondary btn-sm" onClick={() => setReplayStep(replayData.totalSteps - 1)}>End ⏭</button>
+        <button className="btn-secondary btn-sm" onClick={() => setReplayStep(totalSteps - 1)}>End ⏭</button>
         <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: 'var(--text-faint)' }}>
           {replayData.model} · {replayData.experience}
         </span>
