@@ -1,13 +1,13 @@
-# Project Metrics: motor-pool
+# Project Metrics: agent-board
 
-This document tracks the health, performance, and quality metrics of the `motor-pool` project.
+This document tracks the health, performance, and quality metrics of the `agent-board` project.
 
 ## Core Metrics
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
 | **Unit Test Coverage** | 63.41% statements / 57.05% branches / 74.07% functions / 63.41% lines | >80% | 🟡 |
-| **Total Test Count** | 12 test files (9 unit + 3 integration/e2e) | >50 | 🟡 |
+| **Total Test Count** | 64 test files (48 unit + 16 integration/e2e) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -82,4 +82,4 @@ cloc . --exclude-dir=node_modules,dist
 ```
 
 ----
-*Last Updated: 2026-04-03*
+*Last Updated: 2026-08-22*
