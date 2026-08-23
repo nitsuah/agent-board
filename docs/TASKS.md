@@ -43,7 +43,7 @@ Last Updated: 2026-08-22
   - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
   - Acceptance Criteria: ✅ `config/mcp-registry.json` declarative registry; `GET/POST /api/mcp-registry/:key/ensure` JIT-starts; `POST /api/mcp-registry/:key/stop` stops; `config/docker-compose.stats.yml` opt-in override for socket access. 8 tests passing.
 
-- [x] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
+- [x] **[Q2-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
   - Priority: P2
   - Context: bb-mcp's server-side SSE transport is a Q2 item; this is the dashboard-side consumer. Together they complete the streaming story.
   - Acceptance Criteria: ✅ GET /api/mcp/:id/stream SSE endpoint; ToolStream React component with fade-in tokens + animated typing indicator; demo mode scripts for list_courses/get_announcements/submit_assignment; Stream button in ToolWorkbench for bb_mcp sessions; 4 passing tests.

@@ -124,9 +124,7 @@ scripts/                      # Setup & management scripts
 
 ## Models & Selective Loading
 
-Models are loaded at startup based on the `config/model-manifest.json` file. Only models listed in the `enabled` array will be loaded. By default, only `llama2:latest` is enabled for minimal RAM usage.
-
-The `ollama-init` service in the stack automatically pulls `PRIMARY_LLM_MODEL` (default: `llama3.2:3b`) when you run `docker compose up`, so no manual pull is needed for the default model.
+Models are loaded at startup based on the `config/model-manifest.json` file. Only models listed in the `enabled` array will be loaded. The application default is `llama3.2:3b` — `ollama-init` automatically pulls `PRIMARY_LLM_MODEL` (default: `llama3.2:3b`) on `docker compose up`, so no manual pull is needed for the default model.
 
 To enable additional models:
 
@@ -138,9 +136,9 @@ To enable additional models:
 
 ```json
 {
-  "default": "llama2:latest",
+  "default": "llama3.2:3b",
   "enabled": [
-    "llama2:latest",
+    "llama3.2:3b",
     "qwen3-coder:latest"
   ]
 }
@@ -301,7 +299,7 @@ Requires `WORKSPACE_PATH` in `.env` and the `docker-compose.workspace.yml` overl
   endpoint's configured model). Ollama pulls stream progress via `/ws/events`
   (`model_pull_progress`); Docker Model Runner pulls (`docker_runner`/`glm_flash`) require
   `AGENT_BOARD_ENABLE_DOCKER_CONTROL=true` and the [docker-control overlay](#docker-control-and-model-pulls-opt-in).
-- `POST /api/models/pull-all` — Kick off pulls for all configured endpoints where the default model is not yet installed
+- `POST /api/models/pull-all` — Kick off pulls for all configured endpoints where the default model has not yet been pulled (uses Docker Model Runner exact-ID matching; `docker.io/` prefix variants or omitted `:latest` tags may not match an already-pulled image)
 - `POST /api/models/unload` — Remove a Docker Model Runner model from disk (`{ model }`, requires Docker control)
 - `GET /api/models/pull-status` — In-progress/last-known pull status per `endpoint:model`
 - `GET /api/persistence/status` — Postgres persistence status (configured/enabled)

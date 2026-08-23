@@ -7,7 +7,7 @@ More detailed instructions can be found in the [[SETUP_INSTRUCTIONS]]
 
 ```powershell
 # Navigate to project
-cd C:\Users\$env:USERNAME\code\motor-pool
+cd C:\Users\$env:USERNAME\code\agent-board
 
 # Start all services
 docker compose up -d
@@ -81,7 +81,7 @@ node dashboard/tests/test-chat.js
 ## File Organization
 
 ```
-motor-pool/
+agent-board/
 ├── docker-compose.yml
 ├── dashboard/
 │   ├── server.js               # Express backend
@@ -216,7 +216,7 @@ docker-compose up -d
 - [Docker Compose Docs](https://docs.docker.com/compose/)
 - [Ollama Documentation](https://github.com/ollama/ollama)
 - [Qwen Model Card](https://huggingface.co/Qwen)
-- [motor-pool Repo](https://github.com/yourusername/motor-pool)
+- [agent-board Repo](https://github.com/yourusername/agent-board)
 
 ## 📞 Support
 
