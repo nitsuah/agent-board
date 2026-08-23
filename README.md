@@ -246,19 +246,19 @@ With the overlay applied:
 ### Messages
 
 - `POST /api/sessions/:id/message` — Send message (`{ message, useSafeMode }`)
-- `POST /api/sessions/:id/stream` — Stream message via SSE (`text/event-stream`; final event is `data: [DONE]`)
+- `POST /api/sessions/:id/stream` — Stream message via SSE (`text/event-stream`; final event is `data: {"type":"done","messageCount":<count>}`)
 
 ### Task Queue
 
 - `GET /api/tasks` — List all tasks (filter by `status`, `sessionId`, `priority`)
-- `POST /api/tasks` — Create task (`{ title, description, priority, sessionId }`)
+- `POST /api/tasks` — Create task (`{ title, description, priority, sessionId, experience }`)
 - `PUT /api/tasks/:id` — Update task status/priority/session
 - `DELETE /api/tasks/:id` — Delete task
 - `GET /api/sessions/:id/tasks` — Tasks assigned to a session
 
 ### Webhooks
 
-- `POST /api/webhooks/trigger` — Ingest an external event and optionally create a task (`{ event, source, payload, createTask }`)
+- `POST /api/webhooks/trigger` — Ingest an external event and optionally create a task (`{ event, source, payload, createTask }`); requests must include an `x-hub-signature-256` header — HMAC-SHA256 of the raw request body signed with `WEBHOOK_SECRET`
 
 ### External Endpoints (BYOK)
 
@@ -345,7 +345,7 @@ dashboard/
 │   │   └── useTaskManagement.js
 │   ├── constants/         # App-wide config (app-config.js)
 │   └── utils/             # Shared utilities (serviceErrors.js, …)
-├── tests/                 # 63 test files (47 unit + 16 integration/e2e)
+├── tests/                 # 64 test files (48 unit + 16 integration/e2e)
 │   ├── safety-layer.js    # Unit — PII/injection/harmful content checks
 │   ├── session-*.js       # Unit — session lifecycle, fork, export, filter, replay
 │   ├── task-*.js          # Unit — task queue CRUD, priority, search

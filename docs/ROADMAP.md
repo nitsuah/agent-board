@@ -59,16 +59,6 @@ Last Updated: 2026-08-22
 - [ ] **bb-mcp integration (opt-in)**: Wire bb-mcp as an optional, config-driven service in the compose stack or bind it specifically to agent/chat experiences.
 - [x] **Multi-MCP orchestration**: Declarative `config/mcp-registry.json` registry — declare new MCP containers once; `GET /api/mcp-registry` lists them with live health; `POST /api/mcp-registry/:key/ensure` JIT-starts a specific container on demand. Tested.
 
-## 2027 Q2 - Blackboard & MCP Frontend
-
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
-
-- [x] **bb-mcp streaming UI**: SSE endpoint `/api/mcp/:id/stream`; ToolStream React component with animated typing indicator + fade-in tokens; demo mode scripts; Stream button in ToolWorkbench; 4 passing tests.
-- [x] **Multi-persona Blackboard workflows**: Student/Instructor/Admin/Parent persona picker in SystemPanel BLACKBOARD MCP section; tool list filtered by persona; offline hint guiding BB_MCP_ENABLED=true.
-- [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
-- [x] **bb-mcp tool registry UI**: BLACKBOARD MCP section in SystemPanel shows tool list with name/description; Load tools button fetches from /api/mcp/blackboard-learn/tools; per-persona filtering.
-- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
-
 ## 2027 Q1 - Developer Experience & Quality
 
 - [ ] **Test coverage to ≥80%**: coverage currently at 63% statements; identify and fill gaps in lifecycle, workspace, and safety paths.
@@ -78,6 +68,16 @@ Last Updated: 2026-08-22
 - [ ] **Host architecture profiling Phase 2**: Windows host lean-baseline profile accounting for WSL2/Docker Desktop overhead.
 - [ ] **Authentication gate (P2)**: add an optional JWT/session auth layer so the dashboard can be safely exposed on a LAN without open-access risk.
 - [ ] **Persistent BYOK endpoints**: wire `CUSTOM_LLM_ENDPOINTS` env → encrypted volume store so runtime-added endpoints survive restart without editing `.env`.
+
+## 2027 Q2 - Blackboard & MCP Frontend
+
+> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
+
+- [x] **bb-mcp streaming UI**: SSE endpoint `/api/mcp/:id/stream`; ToolStream React component with animated typing indicator + fade-in tokens; demo mode scripts; Stream button in ToolWorkbench; 4 passing tests.
+- [x] **Multi-persona Blackboard workflows**: Student/Instructor/Admin/Parent persona picker in SystemPanel BLACKBOARD MCP section; tool list filtered by persona; offline hint guiding BB_MCP_ENABLED=true.
+- [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
+- [x] **bb-mcp tool registry UI**: BLACKBOARD MCP section in SystemPanel shows tool list with name/description; Load tools button fetches from /api/mcp/blackboard-learn/tools; per-persona filtering.
+- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
 
 ## 2027 Q2 - Portfolio & Ecosystem
 
