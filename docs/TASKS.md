@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-26
+Last Updated: 2026-08-22
 
 ## Todo
 
@@ -10,6 +10,16 @@ Last Updated: 2026-06-26
   - Priority: P1
   - Context: follow-up from Docker optimization pass; turbovec can reduce per-request memory overhead.
   - Acceptance Criteria: turbovec integrated and memory usage measurably reduced under load.
+
+- [ ] **[QUALITY] Raise test coverage to ≥80%** — statement coverage is 63.41%, below the documented target.
+  - Priority: P1
+  - Context: 64 test files exist but coverage (2026-04-03 baseline) sits at 63% statements / 57% branches / 74% functions. Gaps are concentrated in `persistence.js` (83%), `server.js` (63%), and `tracing.js` (54%). New route modules added since April are not yet measured.
+  - Acceptance Criteria: `npm run test:coverage` reports ≥80% statements; lcov report published as a CI artifact.
+
+- [ ] **[CI] Add unit-test step to `.github/workflows/ci.yml`** — the current CI pipeline builds the container and waits for a health check but never runs `npm run test:unit`.
+  - Priority: P1
+  - Context: CI currently runs pre-commit hooks and a Docker health check only. Regressions in server logic or safety layer are not caught by CI.
+  - Acceptance Criteria: `npm run test:unit` (via `docker compose --profile test run --rm test`) runs in the CI job and fails the build on test failure.
 
 ### P2 - Medium
 
@@ -33,7 +43,7 @@ Last Updated: 2026-06-26
   - Context: always-running MCP containers waste resources; a lifecycle manager lets agents request tools only when needed.
   - Acceptance Criteria: ✅ `config/mcp-registry.json` declarative registry; `GET/POST /api/mcp-registry/:key/ensure` JIT-starts; `POST /api/mcp-registry/:key/stop` stops; `config/docker-compose.stats.yml` opt-in override for socket access. 8 tests passing.
 
-- [x] **[Q3-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the motor-pool chat/task panel with a typing indicator and incremental token display.
+- [x] **[Q2-CEO] bb-mcp streaming UI** — render streaming SSE responses from bb-mcp tools in the agent-board chat/task panel with a typing indicator and incremental token display.
   - Priority: P2
   - Context: bb-mcp's server-side SSE transport is a Q2 item; this is the dashboard-side consumer. Together they complete the streaming story.
   - Acceptance Criteria: ✅ GET /api/mcp/:id/stream SSE endpoint; ToolStream React component with fade-in tokens + animated typing indicator; demo mode scripts for list_courses/get_announcements/submit_assignment; Stream button in ToolWorkbench for bb_mcp sessions; 4 passing tests.
@@ -49,7 +59,7 @@ Last Updated: 2026-06-26
   - Acceptance Criteria: `BB_MCP_ENABLED=true BB_MCP_DEMO=true docker compose up` runs the full demo flow; documented in README.
 
 - [ ] **[Q3-CEO] bb-mcp tool registry panel** — display available bb-mcp tools alongside other MCP providers in the dashboard; show last invocation time and per-role availability status.
-  - Priority: P3
+  - Priority: P2
   - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
   - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
 
