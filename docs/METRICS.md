@@ -6,8 +6,8 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | 63.41% statements / 57.05% branches / 74.07% functions / 63.41% lines | >80% | 🟡 |
-| **Total Test Count** | 64 test files (48 unit + 16 integration/e2e) | >50 | 🟢 |
+| **Unit Test Coverage** | 59% statements / 69% branches / 72% functions (Docker run 2026-08-23: 42/48 unit tests pass; 6 fail due to external service dependencies — discover-endpoints.js, models-byok.js, session-commands.js, session-health.js, session-replay.js require a live server at localhost:3000) | >80% | 🟡 |
+| **Total Test Count** | 64 test files (48 unit + 16 integration/e2e); 42 unit tests pass in Docker headless (2026-08-23) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -44,10 +44,15 @@ docker compose run --rm agent-dashboard npm run test
 docker compose run --rm agent-dashboard npm run test:coverage
 ```
 
-Current coverage baseline (2026-04-03):
-- `persistence.js`: 83.24% statements
-- `server.js`: 62.65% statements
-- `tracing.js`: 54.45% statements
+Current coverage baseline (Docker run 2026-08-23, c8 v8 report on 42-test partial run):
+- `safety.js`: 98% statements (strongest coverage)
+- `task-runner.js`: 87% statements
+- `endpoint-store.js`: 90% statements
+- `persistence.js`: 46% statements (down from 2026-04-03 baseline of 83% — coverage data limited by test failures)
+- `server.js`: 62% statements
+- `tracing.js`: 56% statements
+- `session-stream.js`: 2% statements (not exercised by passing tests)
+- `metrics.js`: 21% statements, `webhooks.js`: 17% statements (route modules added post-April, not yet covered)
 
 ### 3. Security Audit
 ```bash
@@ -82,4 +87,4 @@ cloc . --exclude-dir=node_modules,dist
 ```
 
 ----
-*Last Updated: 2026-08-22*
+*Last Updated: 2026-08-23*
