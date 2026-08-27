@@ -1,0 +1,39 @@
+{
+  "_comment": "Example plugin manifest. Copy this file, rename it <name>.plugin.json, and edit. Manifests are pure data — nothing here is executed at load time. See docs/PLUGINS.md.",
+  "manifestVersion": 1,
+  "name": "example-echo",
+  "version": "1.0.0",
+  "description": "Reference plugin showing the manifest shape. Points at the content-gen health endpoint so it resolves in a default stack.",
+  "enabled": true,
+  "baseUrl": "${EXAMPLE_ECHO_URL:-http://tool-content-gen:3200}",
+  "tools": [
+    {
+      "name": "health",
+      "description": "Ping the plugin backend and return its health payload.",
+      "transport": "http",
+      "method": "GET",
+      "path": "/health",
+      "timeoutMs": 5000,
+      "parameters": {}
+    },
+    {
+      "name": "echo",
+      "description": "Echo a message back through the plugin backend.",
+      "transport": "http",
+      "method": "POST",
+      "path": "/echo",
+      "timeoutMs": 10000,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string", "description": "Text to echo back" }
+        },
+        "required": ["message"]
+      }
+    }
+  ],
+  "events": {
+    "channel": "plugins",
+    "emits": ["example-echo.invoked", "example-echo.failed"]
+  }
+}

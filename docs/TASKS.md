@@ -10,6 +10,15 @@ Last Updated: 2026-06-26
   - Priority: P1
   - Context: follow-up from Docker optimization pass; turbovec can reduce per-request memory overhead.
   - Acceptance Criteria: turbovec integrated and memory usage measurably reduced under load.
+  - **Blocked — premise needs revisiting (2026-08-27).** turbovec is a Rust/Python
+    *vector index* that compresses embeddings for RAG (~8–16x smaller indexes). It does
+    not reduce LLM inference memory, so it cannot satisfy "reduce per-request memory
+    overhead" as written. It also has nothing to attach to here: the dashboard has no
+    embeddings, vector store, or RAG path anywhere in `dashboard/`. Adopting it would
+    mean first building a retrieval layer, then adding a Python/Rust sidecar to a Node
+    stack. Recommend splitting this into (a) a real measurement of where Ollama memory
+    actually goes under load, and (b) a separate RAG/vector-store item where turbovec
+    would be a legitimate candidate.
 
 ### P2 - Medium
 
@@ -75,10 +84,25 @@ Last Updated: 2026-06-26
   - Context: `openllm` 0.6.30 dropped arbitrary HuggingFace repo id support; catalog-only GPU-sized serving is incompatible with the local CPU-friendly workflow. `OPENLLM_ENABLED=false` remains the default.
   - Acceptance Criteria: revisit if a lightweight CPU-compatible serving stack (llama.cpp server, text-generation-inference) becomes the right fit.
 
-- [ ] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
+- [x] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
   - Priority: P3
   - Context: tools/ MCP servers handle external integrations; skills would be first-class task-specific capabilities registered and invoked within the agent runtime itself.
-  - Acceptance Criteria: at least one skill can be declared, loaded, and invoked from the dashboard; skills do not require modifying core server code.
+  - Acceptance Criteria: ✅ Shipped as the plugin architecture. Declarative manifests in
+    `dashboard/config/plugins/*.plugin.json` (loader: `dashboard/modules/plugin-loader.js`);
+    `GET /api/plugins`, `GET /api/plugins/tools`, `POST /api/plugins/reload`,
+    `POST /api/plugins/:name/tools/:tool/invoke`, `POST /api/plugins/:name/events`.
+    Registration is by file placement — no core server edits. Example manifest ships.
+    Documented in `docs/API.md`. Note: plugin tools are exposed over the API but are not
+    yet auto-injected into the agent loop's tool list — see follow-up below.
+
+- [ ] **Expose plugin tools to the agent loop** — `GET /api/plugins/tools` returns namespaced
+  `plugin.tool` descriptors, but `createAgentHelpers`/`getExperienceTools` does not yet merge
+  them into the tool list handed to the model.
+  - Priority: P3
+  - Context: follow-up from the plugin architecture. The registry and invoke path exist;
+    this is the wiring that lets an agent call a plugin tool on its own.
+  - Acceptance Criteria: a declared plugin tool appears in an agent's tool list and can be
+    invoked end-to-end from a chat session.
 
 - [ ] Clarify MCP integration scope.
   - Priority: P3

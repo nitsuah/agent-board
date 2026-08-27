@@ -37,6 +37,9 @@ import { createEndpointsRouter } from './routes/endpoints.js';
 import { createDiscoverRouter } from './routes/discover.js';
 import { createChannelsRouter } from './routes/channels.js';
 import { createMcpRegistryRouter } from './routes/mcp-registry.js';
+import { createPluginsRouter } from './routes/plugins.js';
+import { createWorktreesRouter } from './routes/worktrees.js';
+import { createPluginRegistry } from './modules/plugin-loader.js';
 import { startTaskRunner } from './task-runner.js';
 import outputsRouter from './routes/outputs.js';
 import {
@@ -72,6 +75,9 @@ const DOCKER_PROJECT_DIR = process.env.DOCKER_PROJECT_DIR || join(__dirname, '..
 const DOCKER_ENV_FILE = process.env.DOCKER_ENV_FILE || join(__dirname, '..', 'config', '.env');
 const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || null;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
+const TMUX_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_TMUX);
+const TMUX_SESSION = process.env.AGENT_BOARD_TMUX_SESSION || 'agentboard';
+const WORKTREE_ROOT = process.env.AGENT_BOARD_WORKTREE_ROOT || null;
 const WEBSITE_OUTPUT_DIR = process.env.WEBSITE_OUTPUT_DIR || join(__dirname, '..', 'tools', 'website', 'output');
 
 function parseUrlListEnv(rawValue, fallback = []) {
@@ -422,6 +428,11 @@ async function runPromptHandlers(rawMessage, session, safetyMode) {
   return { handled: false, blocked: false, message: normalized };
 }
 
+// Plugin registry — scans dashboard/config/plugins/*.plugin.json at boot.
+// Manifests are pure data; a bad file is logged and skipped, never fatal.
+const pluginRegistry = createPluginRegistry({ eventBus, logStructured });
+pluginRegistry.reload();
+
 // Router instances (initialized after shared state + helpers are declared)
 const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
 const workspaceRouter = createWorkspaceRouter(WORKSPACE_ROOT);
@@ -553,6 +564,11 @@ app.use('/api', createEndpointsRouter({ LLM_CONFIG, logStructured }));
 app.use('/api', createDiscoverRouter({ LLM_CONFIG, logStructured }));
 app.use('/api', createChannelsRouter({ eventBus, logStructured }));
 app.use('/api', createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRegistry: getServiceRegistry(), DOCKER_CONTROL_ENABLED, runComposeAction }));
+app.use('/api', createPluginsRouter({ pluginRegistry, logStructured }));
+app.use('/api', createWorktreesRouter({
+  execFileAsync, WORKSPACE_ROOT, WORKTREE_ROOT,
+  TMUX_ENABLED, TMUX_SESSION, eventBus, logStructured,
+}));
 
 app.get('/api/health', async (req, res) => {
   const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
