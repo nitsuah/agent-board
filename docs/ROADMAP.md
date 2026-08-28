@@ -42,7 +42,7 @@ Last Updated: 2026-08-28
 
 ### Custom Agent System & Safety Guardrails
 
-- [x] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with distinct worktrees, contexts, and output streams (PR #60). Execution is disabled by default (`AGENT_BOARD_ENABLE_TMUX`) and, since the route has no per-request authentication, command execution is additionally gated behind an empty-by-default exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist — enabling the feature alone grants worktree creation only, not command execution.
+- [x] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux windows, each with distinct worktrees, contexts, and output streams (PR #60). Execution is disabled by default (`AGENT_BOARD_ENABLE_TMUX`) and, since the route has no per-request authentication, command execution is additionally gated behind an empty-by-default exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist — enabling the feature alone grants worktree creation only, not command execution.
 - [x] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification (PR #60) — manifests register by file placement under `dashboard/config/plugins/`, no core edits required.
 - [x] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
 - [x] **3D LiminalDashboard home screen**: Three.js force-directed agent-board mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts. Hub v2 (2026-07-02): legend/hint repositioned, stats chips removed, mobile dropdown, Llama3.2 distance fix, ServiceDetail node panel (start/stop/restart/model-pull), BYOK endpoints appear in hub + model selector, settings panel slimmed to Stack/Memory/Uptime/LLM/AddExternal/Scan.
@@ -84,7 +84,6 @@ Last Updated: 2026-08-28
 
 - [ ] **Portfolio-grade Blackboard showcase**: single-command `BB_MCP_ENABLED=true docker compose up` with documented offline demo flow (course → assignment → grade).
 - [ ] **MCP container manager UI**: extend the declarative `config/mcp-registry.json` registry with a dashboard panel to spin tool containers up/down on demand.
-- [ ] **Plugin architecture v1**: define core plugin API; ship at least one example plugin that registers without core code changes.
 - [ ] **Odysseus router integration**: expose a standardized local endpoint for switching between OpenRouter tiers and local model pools.
 - [ ] **3D Memory Palace / Neo4j context**: map cross-session agent memories using Neo4j + Graphiti + 3D Force Graph (WebGL).
 
