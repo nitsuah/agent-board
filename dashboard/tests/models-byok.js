@@ -4,7 +4,7 @@
  */
 import assert from 'assert';
 
-const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+import { BASE, closeTestServer } from './helpers/test-server.js';
 
 // 1. /api/models returns base shape
 const res = await fetch(`${BASE}/api/models`);
@@ -41,4 +41,6 @@ const res3 = await fetch(`${BASE}/api/models`);
 const data3 = await res3.json();
 assert.ok(!data3.endpoints.includes('test_byok_model'), 'removed endpoint no longer in list');
 
+
+closeTestServer();
 console.log('Models BYOK integration tests passed.');

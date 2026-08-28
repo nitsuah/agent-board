@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { EXPERIENCE_META } from '../constants/app-config.js';
+import WorktreeLauncher from './WorktreeLauncher.jsx';
 
 function SessionDot({ sessionId, loadingSessions, sessionPendingReply, sessionErrors, wsConnected }) {
   const isWorking = loadingSessions.has(sessionId);
@@ -111,6 +112,11 @@ export default function TopBar({
           </div>
         )}
       </div>
+
+      <div className="topbar-divider" />
+
+      {/* ── Parallel agent worktrees (tmux) ── */}
+      <WorktreeLauncher />
 
       <div className="topbar-divider" />
 

@@ -3,7 +3,7 @@
  */
 import assert from 'assert';
 
-const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+import { BASE, closeTestServer } from './helpers/test-server.js';
 
 // 1. 404 for missing parent
 const r404 = await fetch(`${BASE}/api/sessions/nosuchsession/fork`, {
@@ -57,4 +57,6 @@ await fetch(`${BASE}/api/sessions/${pid}`, { method: 'DELETE' });
 await fetch(`${BASE}/api/sessions/${forkData.session.id}`, { method: 'DELETE' });
 await fetch(`${BASE}/api/sessions/${fork2.session.id}`, { method: 'DELETE' });
 
+
+closeTestServer();
 console.log('Session fork tests passed.');

@@ -13,7 +13,8 @@
 import axios from 'axios';
 import assert from 'node:assert/strict';
 
-const BASE = process.env.DASHBOARD_URL || 'http://localhost:3000';
+import { BASE as TEST_BASE, closeTestServer } from './helpers/test-server.js';
+const BASE = process.env.DASHBOARD_URL || TEST_BASE;
 const TIMEOUT = 10000;
 
 async function get(path) {
@@ -211,6 +212,7 @@ async function run() {
   await testDockerStatusOllamaAlignedWithHealth();
   await testDockerStatusOllamaModelFields();
   console.log('Functional health tests passed.');
+  closeTestServer();
 }
 
 run().catch((err) => {

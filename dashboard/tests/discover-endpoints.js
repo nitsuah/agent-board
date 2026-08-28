@@ -5,7 +5,7 @@
  */
 import assert from 'assert';
 
-const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+import { BASE, closeTestServer } from './helpers/test-server.js';
 
 // 1. Route exists and returns success shape
 const res = await fetch(`${BASE}/api/discover/endpoints`);
@@ -38,4 +38,6 @@ for (const entry of data.discovered) {
   assert.ok(typeof entry.alreadyRegistered === 'boolean', 'alreadyRegistered is bool');
 }
 
+
+closeTestServer();
 console.log('Endpoint discovery tests passed.');

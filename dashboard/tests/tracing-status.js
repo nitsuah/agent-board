@@ -9,7 +9,8 @@
 import assert from 'assert';
 import http from 'http';
 
-const PORT = process.env.PORT || 3000;
+import { BASE as TEST_BASE } from './helpers/test-server.js';
+const PORT = Number(new URL(TEST_BASE).port) || Number(process.env.PORT) || 3000;
 
 function get(path) {
   return new Promise((resolve, reject) => {

@@ -3,7 +3,7 @@
  */
 import assert from 'assert';
 
-const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+import { BASE, closeTestServer } from './helpers/test-server.js';
 
 // 1. 404 for missing session
 const r404 = await fetch(`${BASE}/api/sessions/nonexistent/replay`);
@@ -37,4 +37,6 @@ assert.deepStrictEqual(emptyData.replay.steps, [], 'empty session steps array is
 // Cleanup
 await fetch(`${BASE}/api/sessions/${sid}`, { method: 'DELETE' });
 
+
+closeTestServer();
 console.log('Session replay tests passed.');

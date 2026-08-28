@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-08-22
+Last Updated: 2026-08-27
 
 ## Todo
 
@@ -10,11 +10,35 @@ Last Updated: 2026-08-22
   - Priority: P1
   - Context: follow-up from Docker optimization pass; turbovec can reduce per-request memory overhead.
   - Acceptance Criteria: turbovec integrated and memory usage measurably reduced under load.
+  - **Blocked — premise needs revisiting (2026-08-27).** turbovec is a Rust/Python
+    *vector index* that compresses embeddings for RAG (~8–16x smaller indexes). It does
+    not reduce LLM inference memory, so it cannot satisfy "reduce per-request memory
+    overhead" as written. It also has nothing to attach to here: the dashboard has no
+    embeddings, vector store, or RAG path anywhere in `dashboard/`. Adopting it would
+    mean first building a retrieval layer, then adding a Python/Rust sidecar to a Node
+    stack. Recommend splitting this into (a) a real measurement of where Ollama memory
+    actually goes under load, and (b) a separate RAG/vector-store item where turbovec
+    would be a legitimate candidate.
 
-- [ ] **[QUALITY] Raise test coverage to ≥80%** — statement coverage is 63.41%, below the documented target.
+- [x] **[QUALITY] Raise statement coverage to ≥80%** — statement coverage is 63.41%, below the documented target.
   - Priority: P1
   - Context: 64 test files exist but coverage (2026-04-03 baseline) sits at 63% statements / 57% branches / 74% functions. Gaps are concentrated in `persistence.js` (83%), `server.js` (63%), and `tracing.js` (54%). New route modules added since April are not yet measured.
-  - Acceptance Criteria: `npm run test:coverage` reports ≥80% statements; lcov report published as a CI artifact.
+  - Acceptance Criteria: `npm run test:coverage` reports ≥80% statements. (Publishing the lcov report as a CI artifact is tracked separately below — this task is scoped to the coverage number itself.)
+  - Done (2026-08-27): **81.03% statements** / 71.85% branches / 89.59% functions,
+    66/66 unit tests passing. The 63.41% figure was not reproducible; the real
+    measured baseline was 64.27%. Got there by (a) un-excluding 12 suites that
+    already started the app in-process but were skipped by `run-unit-tests.mjs`,
+    (b) fixing 6 suites that hardcoded `localhost:3000` without starting a server
+    (`tests/helpers/test-server.js`), and (c) new behavioral suites for
+    `mcp-helpers` (100%), `workspace` with a real git root (29→71%),
+    `agent-tools` via a scripted stub LLM (43→82%), and `session-stream`
+    (2→69%). Remaining gaps are integration-shaped — Postgres, OTEL collector,
+    Docker daemon — and are itemized in `docs/METRICS.md`.
+
+- [ ] **[CI] Publish the lcov coverage report as a CI artifact** — `npm run test:coverage` already generates lcov output locally; it is not yet uploaded anywhere CI runs.
+  - Priority: P2
+  - Context: split out from the coverage task above, which is complete on the coverage number itself but never covered CI publication. Depends on the CI task below actually running tests in the pipeline.
+  - Acceptance Criteria: the CI workflow uploads the lcov report (e.g. as a workflow artifact or to a coverage service) on every run.
 
 - [ ] **[CI] Add unit-test step to `.github/workflows/ci.yml`** — the current CI pipeline builds the container and waits for a health check but never runs `npm run test:unit`.
   - Priority: P1
@@ -85,10 +109,25 @@ Last Updated: 2026-08-22
   - Context: `openllm` 0.6.30 dropped arbitrary HuggingFace repo id support; catalog-only GPU-sized serving is incompatible with the local CPU-friendly workflow. `OPENLLM_ENABLED=false` remains the default.
   - Acceptance Criteria: revisit if a lightweight CPU-compatible serving stack (llama.cpp server, text-generation-inference) becomes the right fit.
 
+- [x] **Plugin architecture (infrastructure)** — declarative plugin manifests, loader, and API.
+  - Priority: P3
+  - Context: infrastructure half of the Agent skills system below.
+  - Acceptance Criteria: ✅ Declarative manifests in `dashboard/config/plugins/*.plugin.json`
+    (loader: `dashboard/modules/plugin-loader.js`); `GET /api/plugins`, `GET /api/plugins/tools`,
+    `POST /api/plugins/reload`, `POST /api/plugins/:name/tools/:tool/invoke`,
+    `POST /api/plugins/:name/events`. Registration is by file placement — no core server
+    edits. Example manifest ships (disabled by default). Documented in `docs/API.md#plugins`.
+
 - [ ] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
   - Priority: P3
   - Context: tools/ MCP servers handle external integrations; skills would be first-class task-specific capabilities registered and invoked within the agent runtime itself.
   - Acceptance Criteria: at least one skill can be declared, loaded, and invoked from the dashboard; skills do not require modifying core server code.
+  - Status: declaration + loading + invocation over the API are done (see plugin architecture
+    above). Still open because the task requires capabilities **invoked within the agent
+    runtime**: `GET /api/plugins/tools` returns namespaced `plugin.tool` descriptors, but
+    `createAgentHelpers`/`getExperienceTools` does not yet merge them into the tool list handed
+    to the model, so an agent cannot call a plugin tool on its own. Closing needs that wiring
+    plus an end-to-end invocation from a chat session.
 
 - [ ] Clarify MCP integration scope.
   - Priority: P3
