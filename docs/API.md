@@ -1262,6 +1262,20 @@ curl -X DELETE 'http://localhost:3000/api/worktrees/refactor-auth?keepWorktree=t
 `worktree_removed`. The dashboard UI exposes all of this through the **Agents**
 dropdown in the top bar.
 
+**Teardown will not destroy live work.** `git worktree remove --force` discards
+uncommitted changes, so it only runs once the window is confirmed gone:
+
+| `tmux kill-window` result | Result |
+|---------------------------|--------|
+| succeeded | worktree removed, `200 success: true` |
+| window/session did not exist | treated as orphan cleanup — worktree removed, `200` |
+| failed for any other reason (busy, locked, permissions) | **`409`, worktree left untouched** — an agent may still be working in it |
+| tmux not installed | `503` |
+| removal itself failed | `500 success: false`, reporting that the checkout is still on disk |
+
+The endpoint never reports `success: true` while the window survived or the
+checkout is still present.
+
 ---
 
 ## Model Lifecycle

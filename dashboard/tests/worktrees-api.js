@@ -293,6 +293,89 @@ const create = (base, body) => fetch(`${base}/api/worktrees`, {
   console.log('  ✅ allowlist is exact-match: shell-chained variants refused, exact match runs');
 }
 
+// ── Teardown never destroys work behind a failed kill-window ─────────────────
+// `git worktree remove --force` discards uncommitted changes, so it must not
+// run when the window is still alive for a real reason.
+{
+  // Build a router whose kill-window fails with an arbitrary (non-"missing") error.
+  const log = [];
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: async (cmd, args) => {
+      log.push({ cmd, args });
+      if (cmd === 'tmux' && args[0] === 'kill-window') {
+        const e = new Error('kill failed'); e.stderr = 'window is locked'; throw e;
+      }
+      return { stdout: '', stderr: '' };
+    },
+    WORKSPACE_ROOT: '/tmp/workspace', WORKTREE_ROOT: '/tmp/wt',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  const res = await fetch(`http://127.0.0.1:${s.address().port}/api/worktrees/busy`, { method: 'DELETE' });
+  assert.strictEqual(res.status, 409, 'a real kill-window failure → 409, not a false success');
+  const d = await res.json();
+  assert.strictEqual(d.success, false, 'REGRESSION: must not report success when the window survived');
+  assert.strictEqual(d.worktreeRemoved, false, 'worktree not reported as removed');
+  assert.match(d.error, /Refusing to remove the worktree/, 'error explains why removal was refused');
+  assert.ok(
+    !log.some(c => c.cmd === 'git' && c.args[1] === 'remove'),
+    'REGRESSION: git worktree remove --force must not run behind a failed kill-window'
+  );
+  s.close();
+  console.log('  ✅ failed kill-window blocks the force-remove and returns 409, not a false success');
+}
+{
+  // A window that was already gone is orphan cleanup — removal should proceed.
+  const log = [];
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: async (cmd, args) => {
+      log.push({ cmd, args });
+      if (cmd === 'tmux' && args[0] === 'kill-window') {
+        const e = new Error('exit 1'); e.stderr = "can't find window: ab-gone"; throw e;
+      }
+      return { stdout: '', stderr: '' };
+    },
+    WORKSPACE_ROOT: '/tmp/workspace', WORKTREE_ROOT: '/tmp/wt',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  const res = await fetch(`http://127.0.0.1:${s.address().port}/api/worktrees/gone`, { method: 'DELETE' });
+  assert.strictEqual(res.status, 200, 'an already-missing window is not an error');
+  const d = await res.json();
+  assert.strictEqual(d.success, true);
+  assert.strictEqual(d.worktreeRemoved, true, 'orphaned checkout is still cleaned up');
+  assert.ok(log.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'removal proceeds for an orphan');
+  s.close();
+  console.log('  ✅ an already-missing window still allows orphan checkout cleanup');
+}
+{
+  // git refuses the removal → report it instead of claiming success.
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: async (cmd, args) => {
+      if (cmd === 'git' && args[0] === 'worktree' && args[1] === 'remove') {
+        const e = new Error('remove failed'); e.stderr = 'worktree is dirty'; throw e;
+      }
+      return { stdout: '', stderr: '' };
+    },
+    WORKSPACE_ROOT: '/tmp/workspace', WORKTREE_ROOT: '/tmp/wt',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  const res = await fetch(`http://127.0.0.1:${s.address().port}/api/worktrees/stuck`, { method: 'DELETE' });
+  assert.strictEqual(res.status, 500, 'a failed git removal is reported');
+  const d = await res.json();
+  assert.strictEqual(d.success, false, 'does not claim success over a worktree still on disk');
+  assert.match(d.error, /removing the worktree failed/, 'error names the removal failure');
+  s.close();
+  console.log('  ✅ a failed git worktree remove is reported instead of claimed as success');
+}
+
 // ── GET reports the real branch for a custom-branch worktree ─────────────────
 {
   const a = express();

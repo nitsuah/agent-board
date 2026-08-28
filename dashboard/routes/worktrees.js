@@ -107,6 +107,16 @@ export function createWorktreesRouter({
     return result.code === 'ENOENT' || /not found|is not recognized|no such file/i.test(details);
   }
 
+  /**
+   * True when kill-window failed only because the window/session was not there.
+   * That is a no-op, not a failure — it means the window is already gone, so
+   * cleaning up the leftover checkout is safe.
+   */
+  function windowAlreadyGone(result) {
+    const details = `${result.error || ''} ${result.stderr || ''}`;
+    return /can't find (window|session)|no such window|window not found|session not found/i.test(details);
+  }
+
   function guard(res) {
     if (!TMUX_ENABLED) {
       res.status(503).json({
@@ -304,11 +314,18 @@ export function createWorktreesRouter({
     if (command) {
       const sent = await run('tmux', ['send-keys', '-t', target, command, 'Enter']);
       if (!sent.ok) {
-        await run('tmux', ['kill-window', '-t', target]);
-        await removeWorktree();
+        // Roll back, but only remove the checkout once the window is gone —
+        // otherwise we would delete the directory out from under a live window.
+        // This worktree was created moments ago and holds no user work, so the
+        // risk here is small, but the ordering rule is the same as on DELETE.
+        const killed = await run('tmux', ['kill-window', '-t', target]);
+        const windowGone = killed.ok || windowAlreadyGone(killed);
+        if (windowGone) await removeWorktree();
         return res.status(503).json({
           success: false,
           error: `Failed to deliver command to ${target}: ${sent.stderr || sent.error}`,
+          rolledBack: windowGone,
+          ...(windowGone ? {} : { warning: `Could not kill ${target}; the worktree at ${worktreePath} was left in place for manual cleanup.` }),
           naming,
         });
       }
@@ -351,14 +368,45 @@ export function createWorktreesRouter({
       return res.status(503).json({ success: false, error: 'tmux is not installed on the dashboard host', naming });
     }
 
+    // `git worktree remove --force` discards uncommitted changes. Only do that
+    // once we know the window is actually gone. A window that never existed is
+    // fine — that is orphan cleanup — but a kill that failed for a real reason
+    // (busy window, locked session, permissions) means an agent may still be
+    // working in that checkout, so refuse rather than delete its work and
+    // report success anyway.
+    if (!killed.ok && !windowAlreadyGone(killed)) {
+      const detail = killed.stderr || killed.error;
+      logStructured('warn', 'worktree_remove_blocked', { slug, target, error: detail });
+      return res.status(409).json({
+        success: false,
+        slug,
+        target,
+        windowKilled: false,
+        worktreeRemoved: false,
+        error: `Refusing to remove the worktree: could not kill ${target} (${detail}). An agent may still be working in that checkout, and removal would discard uncommitted changes. Kill the window manually, then retry.`,
+      });
+    }
+
     let worktreeRemoved = false;
+    let removeError = null;
     if (removeWorktree && WORKSPACE_ROOT) {
       const removed = await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: WORKSPACE_ROOT });
       worktreeRemoved = removed.ok;
+      if (!removed.ok) removeError = removed.stderr || removed.error;
     }
 
     logStructured('info', 'worktree_removed', { slug, target, windowKilled: killed.ok, worktreeRemoved });
     eventBus?.emit('worktree_removed', { metadata: { slug, target, windowKilled: killed.ok, worktreeRemoved } });
+
+    // Asked to remove the checkout but git refused: report it rather than
+    // claiming success over a worktree that is still on disk.
+    if (removeWorktree && WORKSPACE_ROOT && !worktreeRemoved) {
+      return res.status(500).json({
+        success: false, slug, target,
+        windowKilled: killed.ok, worktreeRemoved: false,
+        error: `tmux window handled, but removing the worktree failed: ${removeError}`,
+      });
+    }
 
     res.json({ success: true, slug, target, windowKilled: killed.ok, worktreeRemoved });
   });
