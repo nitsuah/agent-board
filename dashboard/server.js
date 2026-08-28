@@ -78,6 +78,9 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || null;
 const TMUX_ENABLED = isTruthyEnv(process.env.AGENT_BOARD_ENABLE_TMUX);
 const TMUX_SESSION = process.env.AGENT_BOARD_TMUX_SESSION || 'agentboard';
 const WORKTREE_ROOT = process.env.AGENT_BOARD_WORKTREE_ROOT || null;
+// Fail-closed allowlist of commands the worktree route may execute. Empty = none.
+const TMUX_ALLOWED_COMMANDS = String(process.env.AGENT_BOARD_TMUX_ALLOWED_COMMANDS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
 const WEBSITE_OUTPUT_DIR = process.env.WEBSITE_OUTPUT_DIR || join(__dirname, '..', 'tools', 'website', 'output');
 
 function parseUrlListEnv(rawValue, fallback = []) {
@@ -567,7 +570,8 @@ app.use('/api', createMcpRegistryRouter({ logStructured, TOOL_SERVERS, serviceRe
 app.use('/api', createPluginsRouter({ pluginRegistry, logStructured }));
 app.use('/api', createWorktreesRouter({
   execFileAsync, WORKSPACE_ROOT, WORKTREE_ROOT,
-  TMUX_ENABLED, TMUX_SESSION, eventBus, logStructured,
+  TMUX_ENABLED, TMUX_SESSION, ALLOWED_COMMANDS: TMUX_ALLOWED_COMMANDS,
+  eventBus, logStructured,
 }));
 
 app.get('/api/health', async (req, res) => {

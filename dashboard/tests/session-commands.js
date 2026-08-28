@@ -3,7 +3,7 @@
  */
 import assert from 'assert';
 
-const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+import { BASE, closeTestServer } from './helpers/test-server.js';
 
 async function makeSession(name) {
   const res = await fetch(`${BASE}/api/sessions`, {
@@ -58,4 +58,6 @@ assert.strictEqual(h2.status, 'stopped', 'health shows stopped');
 // Cleanup
 await fetch(`${BASE}/api/sessions/${sid}`, { method: 'DELETE' });
 
+
+closeTestServer();
 console.log('Session command tests passed.');

