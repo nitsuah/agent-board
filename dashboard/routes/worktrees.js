@@ -315,11 +315,15 @@ export function createWorktreesRouter({
     const created = await run('tmux', ['new-window', '-d', '-t', TMUX_SESSION, '-n', windowName, '-c', startDir]);
     if (!created.ok) {
       // Roll the worktree back so a failed launch does not leave orphaned checkouts.
-      await removeWorktree();
+      const removal = await removeWorktree();
       return res.status(503).json({
         success: false,
         error: `Failed to create tmux window: ${created.stderr || created.error}`,
         tmuxAvailable: !tmuxUnavailable(created),
+        rolledBack: removal.ok,
+        ...(removal.ok
+          ? {}
+          : { warning: `Could not remove the worktree at ${worktreePath}: ${removal.stderr || removal.error}; left in place for manual cleanup.` }),
         naming,
       });
     }
@@ -338,12 +342,19 @@ export function createWorktreesRouter({
         // risk here is small, but the ordering rule is the same as on DELETE.
         const killed = await run('tmux', ['kill-window', '-t', target]);
         const windowGone = killed.ok || windowAlreadyGone(killed);
-        if (windowGone) await removeWorktree();
+        const removal = windowGone ? await removeWorktree() : null;
+        const rolledBack = windowGone && !!removal?.ok;
         return res.status(503).json({
           success: false,
           error: `Failed to deliver command to ${target}: ${sent.stderr || sent.error}`,
-          rolledBack: windowGone,
-          ...(windowGone ? {} : { warning: `Could not kill ${target}; the worktree at ${worktreePath} was left in place for manual cleanup.` }),
+          rolledBack,
+          ...(windowGone
+            ? removal?.ok
+              ? {}
+              : {
+                  warning: `Killed ${target}, but could not remove the worktree at ${worktreePath}: ${removal?.stderr || removal?.error}; left in place for manual cleanup.`,
+                }
+            : { warning: `Could not kill ${target}; the worktree at ${worktreePath} was left in place for manual cleanup.` }),
           naming,
         });
       }

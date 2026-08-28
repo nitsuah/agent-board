@@ -7,7 +7,7 @@ This document tracks the health, performance, and quality metrics of the `agent-
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
 | **Unit Test Coverage** | 81.03% statements / 71.85% branches / 89.59% functions (Docker run 2026-08-27, `npm run test:unit` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
-| **Total Test Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-08-27) | >50 | 🟢 |
+| **Test File Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-08-27) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -20,7 +20,7 @@ This document tracks the health, performance, and quality metrics of the `agent-
 ## Metric Definitions
 
 *   **Unit Test Coverage:** Percentage of code branches and lines executed during test suites.
-*   **Total Test Count:** Total number of individual test cases (Jest/Mocha/Vitest).
+*   **Test File Count:** Number of test files run by the suite (not individual test cases/assertions within them).
 *   **Critical Vulnerabilities:** High or Critical security issues reported by `npm audit`.
 *   **ESLint Errors:** Number of breaking linting violations based on the local configuration.
 *   **Avg. Cyclomatic Complexity:** The average number of linearly independent paths through the source code.

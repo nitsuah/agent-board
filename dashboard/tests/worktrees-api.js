@@ -250,8 +250,42 @@ const create = (base, body) => fetch(`${base}/api/worktrees`, {
   assert.match(d.error, /Failed to deliver command/, 'error names the delivery failure');
   assert.ok(t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'kill-window'), 'window killed after failed delivery');
   assert.ok(t.log.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'worktree removed after failed delivery');
+  assert.strictEqual(d.rolledBack, true, 'rollback is reported as complete when removal actually succeeded');
   t.close();
   console.log('  ✅ send-keys fails → 503, window killed and worktree removed');
+}
+
+// send-keys fails, window is killed, but the worktree removal itself then
+// fails too → rolledBack must be false, not true, and the path must be named.
+{
+  const t = makeApp({
+    failOn: (cmd, args) =>
+      (cmd === 'tmux' && args[0] === 'send-keys') ||
+      (cmd === 'git' && args[0] === 'worktree' && args[1] === 'remove'),
+  });
+  const res = await create(t.base, { name: 'send-and-remove-fail', command: 'npm test' });
+  assert.strictEqual(res.status, 503);
+  const d = await res.json();
+  assert.strictEqual(d.rolledBack, false, 'REGRESSION: must not claim rollback when removeWorktree also failed');
+  assert.match(d.warning, /could not remove the worktree/i, 'warning names the still-present checkout');
+  t.close();
+  console.log('  ✅ send-keys fails and the rollback removal also fails → rolledBack: false, not a false success');
+}
+
+// tmux new-window fails, and the rollback removal also fails → surfaced, not silent.
+{
+  const t = makeApp({
+    failOn: (cmd, args) =>
+      (cmd === 'tmux' && args[0] === 'new-window') ||
+      (cmd === 'git' && args[0] === 'worktree' && args[1] === 'remove'),
+  });
+  const res = await create(t.base, { name: 'window-and-remove-fail' });
+  assert.strictEqual(res.status, 503);
+  const d = await res.json();
+  assert.strictEqual(d.rolledBack, false, 'REGRESSION: new-window rollback must report a failed removal, not silence it');
+  assert.match(d.warning, /could not remove the worktree/i, 'warning names the still-present checkout');
+  t.close();
+  console.log('  ✅ tmux new-window fails and the rollback removal also fails → rolledBack: false, surfaced in the response');
 }
 
 // ── Command execution is fail-closed, independent of the feature flag ────────

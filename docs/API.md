@@ -1211,7 +1211,7 @@ then `Ctrl-b w` gives a human the full picture of every running agent, and
 ```bash
 curl -X POST http://localhost:3000/api/worktrees \
   -H 'Content-Type: application/json' \
-  -d '{"name": "Refactor Auth", "command": "npm test"}'
+  -d '{"name": "Refactor Auth"}'
 ```
 
 ```json
@@ -1225,15 +1225,25 @@ curl -X POST http://localhost:3000/api/worktrees \
     "branch": "agent/refactor-auth",
     "path": "/workspace/.worktrees/refactor-auth",
     "worktreeCreated": true,
-    "commandSent": true,
+    "commandSent": false,
     "attachCommand": "tmux attach -t agentboard \\; select-window -t ab-refactor-auth"
   }
 }
 ```
 
-`command` is optional; when present it must appear verbatim in
-`AGENT_BOARD_TMUX_ALLOWED_COMMANDS` or the request is refused with `403` before
-anything is created. It is then sent to the new window with `tmux send-keys`.
+`command` is optional and, under the default empty
+`AGENT_BOARD_TMUX_ALLOWED_COMMANDS` shown above, any value refuses the request
+with `403` before anything is created — so the example omits it. To also send a
+command, first configure the allowlist:
+
+```bash
+AGENT_BOARD_TMUX_ALLOWED_COMMANDS="npm test" npm start
+curl -X POST http://localhost:3000/api/worktrees \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Refactor Auth", "command": "npm test"}'
+# → "commandSent": true, sent to the new window with `tmux send-keys`
+```
+
 A slug that already has a window returns `409` rather than launching a second
 agent into it. Emits `worktree_created` on the event bus.
 
@@ -1245,10 +1255,13 @@ put concurrent agents in one working tree:
 |---------|--------|
 | `WORKSPACE_ROOT` unset | `503`, nothing created |
 | `git worktree add` fails | `503`, no tmux window created |
-| `tmux new-window` fails | `503`, worktree rolled back |
-| `tmux send-keys` fails | `503`, window killed **and** worktree rolled back |
+| `tmux new-window` fails | `503`, worktree rolled back — `rolledBack: true` only if the removal itself also succeeded; otherwise `rolledBack: false` with a `warning` naming the checkout path |
+| `tmux send-keys` fails | `503`, window killed **and** worktree rolled back — same `rolledBack`/`warning` contract: rollback requires both the window to be gone **and** the worktree removal to succeed |
 
-No partial state is left behind in any of these cases.
+Rollback is attempted in every case above, but is not guaranteed to succeed
+(e.g. a locked working tree can make `git worktree remove` itself fail) — check
+`rolledBack` and `warning` in the response rather than assuming success from the
+`503` alone.
 
 ### List and tear down
 
@@ -1275,7 +1288,10 @@ uncommitted changes, so it only runs once the window is confirmed gone:
 | removal itself failed | `500 success: false`, reporting that the checkout is still on disk |
 
 The endpoint never reports `success: true` while the window survived or the
-checkout is still present.
+checkout is still present — except with `?keepWorktree=true`, where retaining
+the checkout is the intended outcome: that request reports `200 success: true`
+once the window is gone, with the checkout deliberately left behind for
+inspection rather than removed.
 
 ---
 
