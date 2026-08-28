@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import express from 'express';
-import { slugifyWorktreeName, windowNameFor, tmuxTargetFor, branchNameFor, createWorktreesRouter } from '../routes/worktrees.js';
+import { slugifyWorktreeName, windowNameFor, tmuxTargetFor, branchNameFor, samePath, createWorktreesRouter } from '../routes/worktrees.js';
 
 process.env.AGENT_DASHBOARD_DISABLE_LISTEN = '1';
 const { app } = await import('../server.js');
@@ -176,6 +176,113 @@ const kept = await fetch(`${stubBase}/api/worktrees/refactor-auth?keepWorktree=t
 assert.strictEqual(kept.status, 200);
 assert.ok(!calls.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'git worktree preserved with keepWorktree=true');
 console.log('  ✅ ?keepWorktree=true kills the window but keeps the checkout');
+
+// ── Isolation is enforced, never degraded ────────────────────────────────────
+// These are the important ones: a launch must never fall back to the shared
+// worktree root, because that would put concurrent agents in one working tree.
+
+/** Build a router whose executor fails for commands matching `failOn`. */
+function makeApp({ failOn = () => false, workspaceRoot = '/tmp/workspace' } = {}) {
+  const log = [];
+  const exec = async (cmd, args) => {
+    log.push({ cmd, args });
+    if (cmd === 'tmux' && args[0] === 'list-windows') return { stdout: '', stderr: '' };
+    if (failOn(cmd, args)) { const e = new Error('stub failure'); e.stderr = 'stub failure'; throw e; }
+    return { stdout: '', stderr: '' };
+  };
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: exec, WORKSPACE_ROOT: workspaceRoot, WORKTREE_ROOT: '/tmp/wt',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  return { log, base: `http://127.0.0.1:${s.address().port}`, close: () => s.close() };
+}
+
+const create = (base, body) => fetch(`${base}/api/worktrees`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+});
+
+// No WORKSPACE_ROOT → refuse rather than launch into the shared root.
+{
+  const t = makeApp({ workspaceRoot: null });
+  const res = await create(t.base, { name: 'no-root' });
+  assert.strictEqual(res.status, 503, 'missing WORKSPACE_ROOT → 503');
+  const d = await res.json();
+  assert.match(d.error, /isolated git worktree cannot be created|WORKSPACE_ROOT/, 'error explains the refusal');
+  assert.ok(!t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'new-window'), 'no tmux window created without isolation');
+  t.close();
+  console.log('  ✅ no WORKSPACE_ROOT → 503, no window created');
+}
+
+// git worktree add fails → no tmux window at all.
+{
+  const t = makeApp({ failOn: (cmd, args) => cmd === 'git' && args[0] === 'worktree' && args[1] === 'add' });
+  const res = await create(t.base, { name: 'git-fails' });
+  assert.strictEqual(res.status, 503, 'git worktree add failure → 503');
+  const d = await res.json();
+  assert.match(d.error, /refusing to launch without an isolated checkout/, 'error states the isolation refusal');
+  assert.ok(!t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'new-window'),
+    'REGRESSION: a failed worktree must not leave an agent running in the shared root');
+  t.close();
+  console.log('  ✅ git worktree add fails → 503 and no tmux window is created');
+}
+
+// tmux new-window fails → worktree rolled back, no orphaned checkout.
+{
+  const t = makeApp({ failOn: (cmd, args) => cmd === 'tmux' && args[0] === 'new-window' });
+  const res = await create(t.base, { name: 'window-fails' });
+  assert.strictEqual(res.status, 503, 'new-window failure → 503');
+  assert.ok(t.log.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'worktree rolled back on window failure');
+  t.close();
+  console.log('  ✅ tmux new-window fails → 503 and the worktree is rolled back');
+}
+
+// send-keys fails → window killed AND worktree removed; not reported as success.
+{
+  const t = makeApp({ failOn: (cmd, args) => cmd === 'tmux' && args[0] === 'send-keys' });
+  const res = await create(t.base, { name: 'send-fails', command: 'npm test' });
+  assert.strictEqual(res.status, 503, 'send-keys failure → 503, not a false success');
+  const d = await res.json();
+  assert.strictEqual(d.success, false);
+  assert.match(d.error, /Failed to deliver command/, 'error names the delivery failure');
+  assert.ok(t.log.some(c => c.cmd === 'tmux' && c.args[0] === 'kill-window'), 'window killed after failed delivery');
+  assert.ok(t.log.some(c => c.cmd === 'git' && c.args[1] === 'remove'), 'worktree removed after failed delivery');
+  t.close();
+  console.log('  ✅ send-keys fails → 503, window killed and worktree removed');
+}
+
+// ── GET reports the real branch for a custom-branch worktree ─────────────────
+{
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: async (cmd, args) => {
+      if (cmd === 'tmux' && args[0] === 'list-windows') {
+        return { stdout: 'ab-custom\t2\t/tmp/wt/custom', stderr: '' };
+      }
+      if (cmd === 'git' && args[0] === 'worktree' && args[1] === 'list') {
+        return { stdout: 'worktree /tmp/wt/custom\nbranch refs/heads/feature/my-branch\n', stderr: '' };
+      }
+      return { stdout: '', stderr: '' };
+    },
+    WORKSPACE_ROOT: '/tmp/workspace', WORKTREE_ROOT: '/tmp/wt',
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  const data = await (await fetch(`http://127.0.0.1:${s.address().port}/api/worktrees`)).json();
+  assert.strictEqual(data.worktrees.length, 1);
+  assert.strictEqual(data.worktrees[0].branch, 'feature/my-branch', 'GET reports the actual branch, not agent/<slug>');
+  assert.strictEqual(data.worktrees[0].hasGitWorktree, true, 'matched by path, so the checkout is detected');
+  s.close();
+  console.log('  ✅ GET reports the real branch for a custom-branch worktree');
+}
+
+assert.strictEqual(samePath('/tmp/wt/a', '\\tmp\\wt\\a'), true, 'samePath tolerates separators');
+assert.strictEqual(samePath('/tmp/wt/a/', '/tmp/wt/a'), true, 'samePath tolerates trailing slash');
+assert.strictEqual(samePath('/tmp/wt/a', '/tmp/wt/b'), false, 'samePath distinguishes real differences');
+assert.strictEqual(samePath(null, '/x'), false, 'samePath handles null');
 
 stubServer.close();
 server.close();

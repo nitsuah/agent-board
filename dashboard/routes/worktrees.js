@@ -40,6 +40,13 @@ export function slugifyWorktreeName(raw) {
   return SLUG_RE.test(slug) ? slug : null;
 }
 
+/** Compare filesystem paths tolerating separator and trailing-slash differences. */
+export function samePath(a, b) {
+  if (!a || !b) return false;
+  const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '');
+  return norm(a) === norm(b);
+}
+
 export function windowNameFor(slug) { return `${WINDOW_PREFIX}${slug}`; }
 export function tmuxTargetFor(slug, session = DEFAULT_SESSION) { return `${session}:${WINDOW_PREFIX}${slug}`; }
 export function branchNameFor(slug) { return `${BRANCH_PREFIX}${slug}`; }
@@ -149,16 +156,20 @@ export function createWorktreesRouter({
     const gitWorktrees = await listGitWorktrees();
     const worktrees = windows.map(w => {
       const slug = w.name.slice(WINDOW_PREFIX.length);
-      const branch = branchNameFor(slug);
+      // Match on the checkout path, not the conventional branch name: a worktree
+      // created with a custom `branch` would otherwise be reported as
+      // agent/<slug> with hasGitWorktree:false.
+      const entry = gitWorktrees.find(g => samePath(g.path, join(worktreeRoot, slug)))
+        || (w.path ? gitWorktrees.find(g => samePath(g.path, w.path)) : null);
       return {
         slug,
         window: w.name,
         windowIndex: w.index,
         target: tmuxTargetFor(slug, TMUX_SESSION),
         path: w.path,
-        branch,
+        branch: entry?.branch ?? branchNameFor(slug),
         attachCommand: `tmux attach -t ${TMUX_SESSION} \\; select-window -t ${w.name}`,
-        hasGitWorktree: gitWorktrees.some(g => g.branch === branch),
+        hasGitWorktree: !!entry,
       };
     });
     res.json({ success: true, enabled: true, tmuxAvailable: available, worktrees, count: worktrees.length, gitWorktrees, naming });
@@ -198,31 +209,40 @@ export function createWorktreesRouter({
       return res.status(409).json({ success: false, error: `Worktree "${slug}" already has a tmux window (${target})`, target });
     }
 
-    // Create the git worktree. If the branch already exists, check it out instead of -b.
-    let worktreeCreated = false;
-    let worktreeWarning = null;
-    if (WORKSPACE_ROOT) {
-      let add = await run('git', ['worktree', 'add', '-b', branch, worktreePath], { cwd: WORKSPACE_ROOT });
-      if (!add.ok && /already exists|already used by worktree/i.test(`${add.stderr} ${add.error}`)) {
-        add = await run('git', ['worktree', 'add', worktreePath, branch], { cwd: WORKSPACE_ROOT });
-      }
-      if (add.ok) {
-        worktreeCreated = true;
-      } else {
-        worktreeWarning = `git worktree add failed: ${add.stderr || add.error}`;
-        logStructured('warn', 'worktree_git_add_failed', { slug, branch, error: worktreeWarning });
-      }
-    } else {
-      worktreeWarning = 'WORKSPACE_ROOT not set — tmux window created without a git worktree';
+    // Isolation is the entire point of this feature. Without a dedicated
+    // checkout the agent would run in the shared root alongside every other
+    // agent, so a worktree failure must abort the launch rather than degrade
+    // into the shared tree.
+    if (!WORKSPACE_ROOT) {
+      return res.status(503).json({
+        success: false,
+        error: 'WORKSPACE_ROOT is not configured, so an isolated git worktree cannot be created. Refusing to launch an agent in the shared root.',
+        naming,
+      });
     }
 
-    const startDir = worktreeCreated ? worktreePath : worktreeRoot;
+    // Create the git worktree. If the branch already exists, check it out instead of -b.
+    let add = await run('git', ['worktree', 'add', '-b', branch, worktreePath], { cwd: WORKSPACE_ROOT });
+    if (!add.ok && /already exists|already used by worktree/i.test(`${add.stderr} ${add.error}`)) {
+      add = await run('git', ['worktree', 'add', worktreePath, branch], { cwd: WORKSPACE_ROOT });
+    }
+    if (!add.ok) {
+      const detail = add.stderr || add.error;
+      logStructured('warn', 'worktree_git_add_failed', { slug, branch, error: detail });
+      return res.status(503).json({
+        success: false,
+        error: `git worktree add failed, refusing to launch without an isolated checkout: ${detail}`,
+        naming,
+      });
+    }
+
+    const startDir = worktreePath;
+    const removeWorktree = () => run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: WORKSPACE_ROOT });
+
     const created = await run('tmux', ['new-window', '-d', '-t', TMUX_SESSION, '-n', windowName, '-c', startDir]);
     if (!created.ok) {
       // Roll the worktree back so a failed launch does not leave orphaned checkouts.
-      if (worktreeCreated) {
-        await run('git', ['worktree', 'remove', '--force', worktreePath], { cwd: WORKSPACE_ROOT });
-      }
+      await removeWorktree();
       return res.status(503).json({
         success: false,
         error: `Failed to create tmux window: ${created.stderr || created.error}`,
@@ -233,13 +253,25 @@ export function createWorktreesRouter({
 
     // send-keys passes `command` as a single argv element to tmux (execFile, no
     // shell on our side), but tmux itself runs it in the window's shell.
+    // A launch that was asked to run a command but could not deliver it is a
+    // failed launch: tear the window and worktree back down rather than
+    // reporting success over an idle shell.
     if (command) {
-      await run('tmux', ['send-keys', '-t', target, command, 'Enter']);
+      const sent = await run('tmux', ['send-keys', '-t', target, command, 'Enter']);
+      if (!sent.ok) {
+        await run('tmux', ['kill-window', '-t', target]);
+        await removeWorktree();
+        return res.status(503).json({
+          success: false,
+          error: `Failed to deliver command to ${target}: ${sent.stderr || sent.error}`,
+          naming,
+        });
+      }
     }
 
-    logStructured('info', 'worktree_created', { slug, target, branch, path: startDir, worktreeCreated, hasCommand: !!command });
+    logStructured('info', 'worktree_created', { slug, target, branch, path: startDir, hasCommand: !!command });
     eventBus?.emit('worktree_created', {
-      metadata: { slug, target, branch, path: startDir, session: TMUX_SESSION, worktreeCreated },
+      metadata: { slug, target, branch, path: startDir, session: TMUX_SESSION, worktreeCreated: true },
     });
 
     res.status(201).json({
@@ -251,11 +283,10 @@ export function createWorktreesRouter({
         target,
         branch,
         path: startDir,
-        worktreeCreated,
+        worktreeCreated: true,
         commandSent: !!command,
         attachCommand: `tmux attach -t ${TMUX_SESSION} \\; select-window -t ${windowName}`,
       },
-      warning: worktreeWarning,
       naming,
     });
   });

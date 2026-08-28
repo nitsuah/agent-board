@@ -1021,6 +1021,22 @@ manifests are logged and skipped; they never prevent the dashboard from booting.
 
 Override the directory with `AGENT_BOARD_PLUGINS_DIR`.
 
+> **Security — treat the plugins directory as trusted input.**
+> "Not executed" is not the same as "harmless". A manifest names an http(s) host
+> that the dashboard will then call on request, so anyone who can write to
+> `dashboard/config/plugins/` can make the dashboard issue arbitrary HTTP
+> requests from its own network position — including to hosts reachable only
+> from inside the Docker network (SSRF). There is no plugin sandbox, no
+> egress allow-list, and no per-plugin authentication.
+>
+> Mitigations in place: only `http(s)` URLs are accepted, redirects are not
+> followed (`maxRedirects: 0`), request arguments are capped at 256 KB, response
+> bodies at 8 MB, and every tool has a bounded timeout (default 15s, max 120s).
+>
+> Give the plugins directory the same level of trust as the compose files. Do
+> not point it at a location writable by untrusted users, and do not load
+> third-party manifests you have not read.
+
 ### Manifest shape (v1)
 
 ```json
@@ -1124,6 +1140,28 @@ dashboard to spawn processes — the same opt-in shape as
 `AGENT_BOARD_ENABLE_DOCKER_CONTROL`. While disabled, `GET` reports
 `enabled: false` and the mutating routes return `503` naming the env var.
 
+> **Security — this endpoint runs commands, and the dashboard has no auth.**
+> `POST /api/worktrees` accepts a `command` and delivers it to the new window
+> with `tmux send-keys`, where tmux runs it in that window's shell. That is the
+> feature, but it means **anyone who can reach the dashboard port while
+> `AGENT_BOARD_ENABLE_TMUX=true` can execute arbitrary commands on the host**,
+> with the privileges of the dashboard process.
+>
+> The dashboard ships with no authentication or authorization on any route, so
+> this endpoint inherits that posture. `AGENT_BOARD_ENABLE_TMUX` is the only
+> gate, which is why it defaults to off.
+>
+> What is bounded: worktree names are slugified to `[a-z0-9][a-z0-9-]{0,39}` and
+> rejected otherwise, branch names are pattern-checked, commands are capped at
+> 2000 chars, and every command is passed via `execFile` as a single argv
+> element — so callers cannot inject *extra* commands through the slug or
+> branch. The `command` field itself is still executed by design.
+>
+> Only enable this on a host you control, bound to a trusted interface. If the
+> dashboard is exposed beyond localhost, put an authenticating reverse proxy in
+> front of it before turning this on. Adding real per-route auth is tracked as
+> repo-wide work, not something this endpoint solves alone.
+
 ### Session naming scheme
 
 | Element | Pattern | Example |
@@ -1179,9 +1217,20 @@ curl -X POST http://localhost:3000/api/worktrees \
 
 `command` is optional; when present it is sent to the new window with
 `tmux send-keys`. A slug that already has a window returns `409` rather than
-launching a second agent into it. If the tmux window cannot be created, an
-already-created git worktree is rolled back so no orphaned checkouts are left
-behind. Emits `worktree_created` on the event bus.
+launching a second agent into it. Emits `worktree_created` on the event bus.
+
+**Isolation is enforced, never degraded.** A launch either gets its own checkout
+or fails — it will not fall back to the shared worktree root, because that would
+put concurrent agents in one working tree:
+
+| Failure | Result |
+|---------|--------|
+| `WORKSPACE_ROOT` unset | `503`, nothing created |
+| `git worktree add` fails | `503`, no tmux window created |
+| `tmux new-window` fails | `503`, worktree rolled back |
+| `tmux send-keys` fails | `503`, window killed **and** worktree rolled back |
+
+No partial state is left behind in any of these cases.
 
 ### List and tear down
 

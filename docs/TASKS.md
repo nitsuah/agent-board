@@ -1,6 +1,6 @@
 # TASKS
 
-Last Updated: 2026-06-26
+Last Updated: 2026-08-27
 
 ## Todo
 
@@ -84,25 +84,25 @@ Last Updated: 2026-06-26
   - Context: `openllm` 0.6.30 dropped arbitrary HuggingFace repo id support; catalog-only GPU-sized serving is incompatible with the local CPU-friendly workflow. `OPENLLM_ENABLED=false` remains the default.
   - Acceptance Criteria: revisit if a lightweight CPU-compatible serving stack (llama.cpp server, text-generation-inference) becomes the right fit.
 
-- [x] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
+- [x] **Plugin architecture (infrastructure)** — declarative plugin manifests, loader, and API.
+  - Priority: P3
+  - Context: infrastructure half of the Agent skills system below.
+  - Acceptance Criteria: ✅ Declarative manifests in `dashboard/config/plugins/*.plugin.json`
+    (loader: `dashboard/modules/plugin-loader.js`); `GET /api/plugins`, `GET /api/plugins/tools`,
+    `POST /api/plugins/reload`, `POST /api/plugins/:name/tools/:tool/invoke`,
+    `POST /api/plugins/:name/events`. Registration is by file placement — no core server
+    edits. Example manifest ships (disabled by default). Documented in `docs/API.md#plugins`.
+
+- [ ] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
   - Priority: P3
   - Context: tools/ MCP servers handle external integrations; skills would be first-class task-specific capabilities registered and invoked within the agent runtime itself.
-  - Acceptance Criteria: ✅ Shipped as the plugin architecture. Declarative manifests in
-    `dashboard/config/plugins/*.plugin.json` (loader: `dashboard/modules/plugin-loader.js`);
-    `GET /api/plugins`, `GET /api/plugins/tools`, `POST /api/plugins/reload`,
-    `POST /api/plugins/:name/tools/:tool/invoke`, `POST /api/plugins/:name/events`.
-    Registration is by file placement — no core server edits. Example manifest ships.
-    Documented in `docs/API.md`. Note: plugin tools are exposed over the API but are not
-    yet auto-injected into the agent loop's tool list — see follow-up below.
-
-- [ ] **Expose plugin tools to the agent loop** — `GET /api/plugins/tools` returns namespaced
-  `plugin.tool` descriptors, but `createAgentHelpers`/`getExperienceTools` does not yet merge
-  them into the tool list handed to the model.
-  - Priority: P3
-  - Context: follow-up from the plugin architecture. The registry and invoke path exist;
-    this is the wiring that lets an agent call a plugin tool on its own.
-  - Acceptance Criteria: a declared plugin tool appears in an agent's tool list and can be
-    invoked end-to-end from a chat session.
+  - Acceptance Criteria: at least one skill can be declared, loaded, and invoked from the dashboard; skills do not require modifying core server code.
+  - Status: declaration + loading + invocation over the API are done (see plugin architecture
+    above). Still open because the task requires capabilities **invoked within the agent
+    runtime**: `GET /api/plugins/tools` returns namespaced `plugin.tool` descriptors, but
+    `createAgentHelpers`/`getExperienceTools` does not yet merge them into the tool list handed
+    to the model, so an agent cannot call a plugin tool on its own. Closing needs that wiring
+    plus an end-to-end invocation from a chat session.
 
 - [ ] Clarify MCP integration scope.
   - Priority: P3

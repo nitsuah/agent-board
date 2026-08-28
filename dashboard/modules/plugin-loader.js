@@ -43,8 +43,18 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const PLUGIN_MANIFEST_VERSION = 1;
-export const DEFAULT_PLUGINS_DIR =
-  process.env.AGENT_BOARD_PLUGINS_DIR || join(__dirname, '..', 'config', 'plugins');
+
+/**
+ * Resolve the plugins directory at call time, not module-load time, so that
+ * AGENT_BOARD_PLUGINS_DIR is honored regardless of import order (ESM hoists
+ * static imports above any env setup in the importing module).
+ */
+export function resolvePluginsDir(env = process.env) {
+  return env.AGENT_BOARD_PLUGINS_DIR || join(__dirname, '..', 'config', 'plugins');
+}
+
+/** Snapshot of the directory as of module load. Prefer resolvePluginsDir(). */
+export const DEFAULT_PLUGINS_DIR = resolvePluginsDir();
 
 const PLUGIN_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -59,9 +69,32 @@ const MAX_TIMEOUT_MS = 120_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_CHANNEL = 'plugins';
 
-/** Expand ${VAR} / ${VAR:-default} — same single-pass form used by mcp-registry.js */
+/**
+ * Expand ${VAR} / ${VAR:-default} in a single string.
+ * Uses a presence check rather than truthiness, so a variable that is defined
+ * but empty stays empty instead of silently falling back to the default.
+ */
 export function expandEnv(raw, env = process.env) {
-  return raw.replace(/\$\{(\w+)(?::-(.*?))?\}/g, (_, name, fallback = '') => env[name] || fallback);
+  return raw.replace(/\$\{(\w+)(?::-(.*?))?\}/g, (_, name, fallback = '') =>
+    Object.prototype.hasOwnProperty.call(env, name) ? env[name] : fallback);
+}
+
+/**
+ * Expand env vars across an already-parsed structure, string leaves only.
+ *
+ * Substitution deliberately happens *after* JSON.parse, never on the raw file
+ * text: a variable whose value contains a quote, backslash, or newline would
+ * otherwise corrupt the document or inject new manifest fields (e.g. a baseUrl
+ * of `http://x", "enabled": false, "_x":"` silently flipping `enabled`).
+ * Expanding leaves post-parse means a hostile value can only ever be a string.
+ */
+export function expandDeep(value, env = process.env) {
+  if (typeof value === 'string') return expandEnv(value, env);
+  if (Array.isArray(value)) return value.map(v => expandDeep(v, env));
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, expandDeep(v, env)]));
+  }
+  return value;
 }
 
 function isPlainObject(value) {
@@ -205,7 +238,7 @@ export function validateManifest(manifest, { source = 'unknown' } = {}) {
  * Read + validate every *.plugin.json in `dir`.
  * Never throws: unreadable/invalid manifests land in `errors`.
  */
-export function loadPluginsFromDir(dir = DEFAULT_PLUGINS_DIR, { env = process.env } = {}) {
+export function loadPluginsFromDir(dir = resolvePluginsDir(), { env = process.env } = {}) {
   const plugins = [];
   const errors = [];
 
@@ -223,7 +256,7 @@ export function loadPluginsFromDir(dir = DEFAULT_PLUGINS_DIR, { env = process.en
     const fullPath = join(dir, file);
     let parsed;
     try {
-      parsed = JSON.parse(expandEnv(readFileSync(fullPath, 'utf8'), env));
+      parsed = expandDeep(JSON.parse(readFileSync(fullPath, 'utf8')), env);
     } catch (err) {
       errors.push({ source: file, errors: [`invalid JSON: ${err.message}`] });
       continue;
@@ -252,11 +285,11 @@ export function loadPluginsFromDir(dir = DEFAULT_PLUGINS_DIR, { env = process.en
  *   emit()                       — publish a declared event onto the event bus
  *   reload()                     — re-scan the plugins directory
  */
-export function createPluginRegistry({ pluginsDir = DEFAULT_PLUGINS_DIR, eventBus = null, logStructured = () => {} } = {}) {
-  let state = { plugins: [], errors: [], dir: pluginsDir, loadedAt: null };
+export function createPluginRegistry({ pluginsDir = null, eventBus = null, logStructured = () => {} } = {}) {
+  let state = { plugins: [], errors: [], dir: pluginsDir || resolvePluginsDir(), loadedAt: null };
 
   function reload() {
-    const { plugins, errors, dir } = loadPluginsFromDir(pluginsDir);
+    const { plugins, errors, dir } = loadPluginsFromDir(pluginsDir || resolvePluginsDir());
     state = { plugins, errors, dir, loadedAt: new Date().toISOString() };
     logStructured('info', 'plugins_loaded', {
       dir,
@@ -299,15 +332,15 @@ export function createPluginRegistry({ pluginsDir = DEFAULT_PLUGINS_DIR, eventBu
      */
     emit(pluginName, eventType, metadata = {}) {
       const plugin = state.plugins.find(p => p.name === pluginName);
-      if (!plugin) return { ok: false, error: `Unknown plugin: ${pluginName}` };
-      if (!plugin.enabled) return { ok: false, error: `Plugin is disabled: ${pluginName}` };
+      if (!plugin) return { ok: false, code: 'unknown_plugin', error: `Unknown plugin: ${pluginName}` };
+      if (!plugin.enabled) return { ok: false, code: 'plugin_disabled', error: `Plugin is disabled: ${pluginName}` };
       if (!EVENT_TYPE_RE.test(String(eventType || ''))) {
-        return { ok: false, error: 'Invalid event type' };
+        return { ok: false, code: 'invalid_event_type', error: 'Invalid event type' };
       }
       if (!plugin.events.emits.includes(eventType)) {
-        return { ok: false, error: `Plugin "${pluginName}" does not declare event "${eventType}" in events.emits` };
+        return { ok: false, code: 'event_not_declared', error: `Plugin "${pluginName}" does not declare event "${eventType}" in events.emits` };
       }
-      if (!eventBus) return { ok: false, error: 'Event bus unavailable' };
+      if (!eventBus) return { ok: false, code: 'event_bus_unavailable', error: 'Event bus unavailable' };
       const event = eventBus.publish(plugin.events.channel, eventType, {
         metadata: { ...(isPlainObject(metadata) ? metadata : {}), plugin: plugin.name },
       });

@@ -9,12 +9,26 @@
  * POST /api/plugins/:name/events                — emit a declared event onto the event bus
  *
  * Plugins are declared in dashboard/config/plugins/*.plugin.json. See
- * modules/plugin-loader.js for the manifest shape and docs/PLUGINS.md for the guide.
+ * modules/plugin-loader.js for the manifest shape and docs/API.md#plugins for the guide.
  */
 import express from 'express';
 import axios from 'axios';
 
 const MAX_INVOKE_BODY_BYTES = 256 * 1024;
+// Plugin backends are operator-declared but not necessarily trusted. Axios
+// defaults both limits to unlimited, which lets a hostile or broken backend
+// exhaust the dashboard's heap with an oversized (or decompression-bomb)
+// response. Cap both explicitly.
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+/** Registry emit() failure codes → HTTP status. Disabled matches the invoke route's 409. */
+const EMIT_ERROR_STATUS = {
+  unknown_plugin: 404,
+  plugin_disabled: 409,
+  invalid_event_type: 400,
+  event_not_declared: 400,
+  event_bus_unavailable: 503,
+};
 
 export function createPluginsRouter({ pluginRegistry, logStructured = () => {} }) {
   const router = express.Router();
@@ -108,6 +122,8 @@ export function createPluginsRouter({ pluginRegistry, logStructured = () => {} }
         url: tool.endpoint,
         timeout: tool.timeoutMs,
         maxRedirects: 0,
+        maxContentLength: MAX_RESPONSE_BYTES,
+        maxBodyLength: MAX_RESPONSE_BYTES,
         validateStatus: () => true,
         ...(isBodyless ? { params: args } : { data: args }),
       });
@@ -148,8 +164,8 @@ export function createPluginsRouter({ pluginRegistry, logStructured = () => {} }
     }
     const result = pluginRegistry.emit(name, eventType, metadata);
     if (!result.ok) {
-      const status = result.error?.startsWith('Unknown plugin') ? 404 : 400;
-      return res.status(status).json({ success: false, error: result.error });
+      const status = EMIT_ERROR_STATUS[result.code] ?? 400;
+      return res.status(status).json({ success: false, error: result.error, code: result.code });
     }
     logStructured('info', 'plugin_event_emitted', {
       plugin: name, event_type: eventType, channel: result.channel,
