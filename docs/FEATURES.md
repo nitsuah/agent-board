@@ -56,7 +56,8 @@
 
 ## Developer Experience
 
-- `[planned]` **Modular Plugin Architecture** - Extend board functionality with custom middleware and UI components.
+- **Modular Plugin Architecture** - Manifests register by file placement under `dashboard/config/plugins/`; no core codebase edits required to add a plugin (PR #60).
+- **tmux Multi-Agent Worktrees** - Spawn parallel agent instances, each isolated in its own tmux window with its own git worktree, so several agents can work on the same repo without colliding. Disabled by default (`AGENT_BOARD_ENABLE_TMUX`). The launch/teardown route has no per-request authentication, so command execution is gated behind a second, independent switch: an empty-by-default exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist — enabling the feature grants worktree creation and empty windows only, never remote command execution, until an operator explicitly names each permitted command (PR #60).
 - `[planned]` **Hot Reloading for Scripts** - Automatically refresh agent logic when source files are modified during development.
 - **Comprehensive Event Logging** - Structured JSON logging for easier debugging and integration with ELK stacks.
 - **Server/Frontend Refactor** - `server.js` route logic extracted into focused route modules (`routes/`); `App.jsx` stateful logic extracted into `src/hooks/` (`useWebSocket`, `useSessionStreaming`, `useServiceActions`) and discrete UI components extracted into `src/components/` (11 extracted: `ServiceRow`, `ByokEndpointForm`, `ServiceDiscovery`, `SessionHeader`, `MessageComposer`, `ReplayPanel`, `GitLogTab`, `TasksPanel`, `ServiceDetail`, `StatusBar`, `OnboardingStrip`); improves maintainability and test isolation.

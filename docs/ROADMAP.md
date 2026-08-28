@@ -1,6 +1,6 @@
 # ROADMAP
 
-Last Updated: 2026-08-22
+Last Updated: 2026-08-28
 
 ## 2026 Q2 - Persistence and Agent Control
 
@@ -42,8 +42,8 @@ Last Updated: 2026-08-22
 
 ### Custom Agent System & Safety Guardrails
 
-- [ ] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux panes, each with distinct worktrees, contexts, and output streams.
-- [ ] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification.
+- [x] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux windows, each with distinct worktrees, contexts, and output streams (PR #60). Execution is disabled by default (`AGENT_BOARD_ENABLE_TMUX`) and, since the route has no per-request authentication, command execution is additionally gated behind an empty-by-default exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist — enabling the feature alone grants worktree creation only, not command execution.
+- [x] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification (PR #60) — manifests register by file placement under `dashboard/config/plugins/`, no core edits required.
 - [x] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
 - [x] **3D LiminalDashboard home screen**: Three.js force-directed agent-board mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts. Hub v2 (2026-07-02): legend/hint repositioned, stats chips removed, mobile dropdown, Llama3.2 distance fix, ServiceDetail node panel (start/stop/restart/model-pull), BYOK endpoints appear in hub + model selector, settings panel slimmed to Stack/Memory/Uptime/LLM/AddExternal/Scan.
 - [ ] **Odysseus router integration (Phase 1)**: Expose a standardized local endpoint for graceful switching between OpenRouter tiers and local model pools.
@@ -61,12 +61,13 @@ Last Updated: 2026-08-22
 
 ## 2027 Q1 - Developer Experience & Quality
 
-- [ ] **Test coverage to ≥80%**: coverage currently at 63% statements; identify and fill gaps in lifecycle, workspace, and safety paths.
+- [x] **Test coverage to ≥80%**: 81.03% statements / 71.85% branches / 89.59% functions (measured, PR #60) — raised from a measured 64.27% baseline by un-hiding suites wrongly excluded as "integration" and adding real coverage for MCP parsing, workspace path-traversal, agent-loop tool execution, and SSE streaming.
 - [ ] **CI unit-test gate**: add a `npm run test:unit` step to `.github/workflows/ci.yml` so coverage regressions are caught on every push.
 - [x] **Content-gen Docker socket security fix**: MPT sidecar service declared in docker-compose.yml; Docker socket mount removed from content-gen; content-gen calls `MPT_API_URL` via HTTP (see TASKS.md ARCH item — complete).
 - [ ] **Service lifecycle dashboard (UI completion)**: mount `/var/run/docker.sock` for in-container `docker stats` or add a host-side stats sidecar; surface per-service resource charts in the dashboard.
 - [ ] **Host architecture profiling Phase 2**: Windows host lean-baseline profile accounting for WSL2/Docker Desktop overhead.
 - [ ] **Authentication gate (P2)**: add an optional JWT/session auth layer so the dashboard can be safely exposed on a LAN without open-access risk.
+- [ ] **Scoped API token for exec-capable routes (interim, before full auth gate)**: new idea (2026-08-28) — the worktree launch/exec route and `/api/workspace/exec` both stay unauthenticated by design until the full JWT/session gate lands; a single shared-secret header check on just the exec-capable routes (not full session auth) would close the gap for LAN exposure sooner without waiting on the larger auth project.
 - [ ] **Persistent BYOK endpoints**: wire `CUSTOM_LLM_ENDPOINTS` env → encrypted volume store so runtime-added endpoints survive restart without editing `.env`.
 
 ## 2027 Q2 - Blackboard & MCP Frontend
@@ -83,7 +84,6 @@ Last Updated: 2026-08-22
 
 - [ ] **Portfolio-grade Blackboard showcase**: single-command `BB_MCP_ENABLED=true docker compose up` with documented offline demo flow (course → assignment → grade).
 - [ ] **MCP container manager UI**: extend the declarative `config/mcp-registry.json` registry with a dashboard panel to spin tool containers up/down on demand.
-- [ ] **Plugin architecture v1**: define core plugin API; ship at least one example plugin that registers without core code changes.
 - [ ] **Odysseus router integration**: expose a standardized local endpoint for switching between OpenRouter tiers and local model pools.
 - [ ] **3D Memory Palace / Neo4j context**: map cross-session agent memories using Neo4j + Graphiti + 3D Force Graph (WebGL).
 
