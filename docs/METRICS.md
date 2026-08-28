@@ -6,7 +6,7 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | 80.98% statements / 71.75% branches / 89.53% functions (Docker run 2026-08-27, `npm run test:unit` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
+| **Unit Test Coverage** | 81.03% statements / 71.85% branches / 89.59% functions (Docker run 2026-08-27, `npm run test:unit` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
 | **Total Test Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-08-27) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
@@ -48,7 +48,7 @@ Current coverage baseline (Docker run 2026-08-27, c8 v8 report over a clean
 66/66 unit run). Measured, not estimated — the previous figures in this file
 were not reproducible.
 
-**All files: 80.98% statements / 71.75% branches / 89.53% functions.**
+**All files: 81.03% statements / 71.85% branches / 89.59% functions.**
 
 Two changes account for most of the movement from the 64.27% measured baseline:
 

@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import express from 'express';
-import { slugifyWorktreeName, windowNameFor, tmuxTargetFor, branchNameFor, samePath, createWorktreesRouter } from '../routes/worktrees.js';
+import { slugifyWorktreeName, windowNameFor, tmuxTargetFor, branchNameFor, samePath, resolveExecTimeout, createWorktreesRouter } from '../routes/worktrees.js';
 
 process.env.AGENT_DASHBOARD_DISABLE_LISTEN = '1';
 const { app } = await import('../server.js');
@@ -401,6 +401,38 @@ const create = (base, body) => fetch(`${base}/api/worktrees`, {
   s.close();
   console.log('  ✅ GET reports the real branch for a custom-branch worktree');
 }
+
+// ── enabled but unconfigured: 503, not an Express 500 ────────────────────────
+// worktreeRoot is null here, so join(null, slug) would throw a TypeError.
+{
+  const a = express();
+  a.use(express.json());
+  a.use('/api', createWorktreesRouter({
+    execFileAsync: async (cmd, args) => (cmd === 'tmux' && args[0] === 'list-windows'
+      ? { stdout: 'ab-orphan\t1\t/somewhere', stderr: '' }
+      : { stdout: '', stderr: '' }),
+    WORKSPACE_ROOT: null, WORKTREE_ROOT: null,
+    TMUX_ENABLED: true, TMUX_SESSION: 'agentboard',
+  }));
+  const s = a.listen(0);
+  const res = await fetch(`http://127.0.0.1:${s.address().port}/api/worktrees`);
+  assert.strictEqual(res.status, 503, 'enabled but unconfigured → the route\'s own 503, not a 500');
+  const d = await res.json();
+  assert.match(d.error, /No worktree root configured/, 'returns the configured error message');
+  s.close();
+  console.log('  ✅ GET with no worktree root → 503 rather than an Express 500');
+}
+
+// ── exec timeout is configurable and validated ───────────────────────────────
+assert.strictEqual(resolveExecTimeout(undefined), 30_000, 'defaults to 30s');
+assert.strictEqual(resolveExecTimeout(''), 30_000, 'empty value falls back');
+assert.strictEqual(resolveExecTimeout('not a number'), 30_000, 'garbage falls back');
+assert.strictEqual(resolveExecTimeout(0), 30_000, 'zero falls back');
+assert.strictEqual(resolveExecTimeout(-5), 30_000, 'negative falls back');
+assert.strictEqual(resolveExecTimeout('45000'), 45_000, 'numeric string is accepted');
+assert.strictEqual(resolveExecTimeout(10), 1_000, 'clamped up to the 1s floor');
+assert.strictEqual(resolveExecTimeout(99_999_999), 600_000, 'clamped down to the 10m ceiling');
+console.log('  ✅ resolveExecTimeout validates and clamps operator-supplied timeouts');
 
 assert.strictEqual(samePath('/tmp/wt/a', '\\tmp\\wt\\a'), true, 'samePath tolerates separators');
 assert.strictEqual(samePath('/tmp/wt/a/', '/tmp/wt/a'), true, 'samePath tolerates trailing slash');

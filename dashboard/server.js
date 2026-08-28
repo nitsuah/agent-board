@@ -571,6 +571,7 @@ app.use('/api', createPluginsRouter({ pluginRegistry, logStructured }));
 app.use('/api', createWorktreesRouter({
   execFileAsync, WORKSPACE_ROOT, WORKTREE_ROOT,
   TMUX_ENABLED, TMUX_SESSION, ALLOWED_COMMANDS: TMUX_ALLOWED_COMMANDS,
+  EXEC_TIMEOUT_MS: process.env.AGENT_BOARD_TMUX_EXEC_TIMEOUT_MS,
   eventBus, logStructured,
 }));
 

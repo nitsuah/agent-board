@@ -24,7 +24,7 @@ Last Updated: 2026-08-27
   - Priority: P1
   - Context: 64 test files exist but coverage (2026-04-03 baseline) sits at 63% statements / 57% branches / 74% functions. Gaps are concentrated in `persistence.js` (83%), `server.js` (63%), and `tracing.js` (54%). New route modules added since April are not yet measured.
   - Acceptance Criteria: `npm run test:coverage` reports ≥80% statements; lcov report published as a CI artifact.
-  - Done (2026-08-27): **80.98% statements** / 71.75% branches / 89.53% functions,
+  - Done (2026-08-27): **81.03% statements** / 71.85% branches / 89.59% functions,
     66/66 unit tests passing. The 63.41% figure was not reproducible; the real
     measured baseline was 64.27%. Got there by (a) un-excluding 12 suites that
     already started the app in-process but were skipped by `run-unit-tests.mjs`,

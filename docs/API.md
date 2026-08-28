@@ -1204,6 +1204,7 @@ then `Ctrl-b w` gives a human the full picture of every running agent, and
 | `AGENT_BOARD_TMUX_SESSION` | `agentboard` | Session name |
 | `AGENT_BOARD_WORKTREE_ROOT` | `$WORKSPACE_ROOT/.worktrees` | Where worktrees are checked out |
 | `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` | *(empty)* | Comma-separated, exact-match allowlist of commands `POST` may run. Empty means no command may be executed. |
+| `AGENT_BOARD_TMUX_EXEC_TIMEOUT_MS` | `30000` | Timeout for each `tmux`/`git` invocation. Clamped to 1s–10m; invalid values fall back to the default. |
 
 ### Launch an agent
 

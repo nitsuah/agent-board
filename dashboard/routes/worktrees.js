@@ -36,7 +36,14 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const DEFAULT_SESSION = 'agentboard';
 const WINDOW_PREFIX = 'ab-';
 const BRANCH_PREFIX = 'agent/';
-const EXEC_TIMEOUT_MS = 30_000;
+const DEFAULT_EXEC_TIMEOUT_MS = 30_000;
+
+/** Clamp an operator-supplied timeout to a sane range, falling back to the default. */
+export function resolveExecTimeout(raw, fallback = DEFAULT_EXEC_TIMEOUT_MS) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(1_000, Math.min(Math.floor(n), 600_000));
+}
 
 /** Lowercase, collapse to [a-z0-9-], trim dashes, cap at 40 chars. */
 export function slugifyWorktreeName(raw) {
@@ -67,10 +74,12 @@ export function createWorktreesRouter({
   TMUX_ENABLED = false,
   TMUX_SESSION = DEFAULT_SESSION,
   ALLOWED_COMMANDS = [],
+  EXEC_TIMEOUT_MS = DEFAULT_EXEC_TIMEOUT_MS,
   eventBus = null,
   logStructured = () => {},
 }) {
   const router = express.Router();
+  const execTimeoutMs = resolveExecTimeout(EXEC_TIMEOUT_MS);
   // Command execution is fail-closed and separate from the feature flag.
   // AGENT_BOARD_ENABLE_TMUX alone lets callers create an isolated worktree and
   // an empty window; it does NOT let them run anything. Sending a command
@@ -95,7 +104,7 @@ export function createWorktreesRouter({
   /** Run a command, never throwing — callers branch on `ok`. */
   async function run(cmd, args, opts = {}) {
     try {
-      const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: EXEC_TIMEOUT_MS, maxBuffer: 1024 * 1024, ...opts });
+      const { stdout, stderr } = await execFileAsync(cmd, args, { timeout: execTimeoutMs, maxBuffer: 1024 * 1024, ...opts });
       return { ok: true, stdout: String(stdout || '').trim(), stderr: String(stderr || '').trim() };
     } catch (err) {
       return { ok: false, error: err.message, stderr: String(err.stderr || '').trim(), code: err.code };
@@ -182,6 +191,15 @@ export function createWorktreesRouter({
   router.get('/worktrees', async (req, res) => {
     if (!TMUX_ENABLED) {
       return res.json({ success: true, enabled: false, worktrees: [], naming, tmuxAvailable: false, commandExecutionEnabled: false, allowedCommands: [] });
+    }
+    // Enabled but unconfigured: return the route's own 503 rather than letting
+    // join(null, slug) throw a TypeError and surface as an Express 500.
+    if (!worktreeRoot) {
+      return res.status(503).json({
+        success: false,
+        error: 'No worktree root configured. Set WORKSPACE_ROOT or AGENT_BOARD_WORKTREE_ROOT.',
+        naming,
+      });
     }
     const { available, windows } = await listTmuxWindows();
     const gitWorktrees = await listGitWorktrees();
