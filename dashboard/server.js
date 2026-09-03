@@ -392,8 +392,15 @@ async function markSessionEndedWithSnapshot(sessionId, endedAt, log) {
   scheduleSnapshotWrite(log);
 }
 
+// Plugin registry — scans dashboard/config/plugins/*.plugin.json at boot.
+// Manifests are pure data; a bad file is logged and skipped, never fatal.
+// Created before createAgentHelpers so enabled plugin tools can be merged into the
+// tool list handed to the model for developer/research/website experiences.
+const pluginRegistry = createPluginRegistry({ eventBus, logStructured });
+pluginRegistry.reload();
+
 const { getExperienceTools, runAgentLoop } = createAgentHelpers({
-  WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS,
+  WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS, pluginRegistry,
 });
 
 async function runPromptHandlers(rawMessage, session, safetyMode) {
@@ -430,11 +437,6 @@ async function runPromptHandlers(rawMessage, session, safetyMode) {
   }
   return { handled: false, blocked: false, message: normalized };
 }
-
-// Plugin registry — scans dashboard/config/plugins/*.plugin.json at boot.
-// Manifests are pure data; a bad file is logged and skipped, never fatal.
-const pluginRegistry = createPluginRegistry({ eventBus, logStructured });
-pluginRegistry.reload();
 
 // Router instances (initialized after shared state + helpers are declared)
 const tasksRouter = createTasksRouter({ tasks, sessions, eventBus, logStructured, normalizeTaskStatus, normalizeTaskPriority, buildTaskSummary, resolveTaskAssignment });
