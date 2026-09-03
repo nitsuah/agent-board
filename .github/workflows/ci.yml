@@ -22,7 +22,11 @@ jobs:
       - name: Run pre-commit
         run: pre-commit run --all-files --config config/.pre-commit-config.yaml
       - name: Create .env for compose
-        run: touch config/.env
+        # config/docker-compose.yml's env_file entries resolve as ../.env relative to
+        # the compose file (config/), i.e. repo-root .env — not config/.env.
+        run: touch .env
+      - name: Run unit tests
+        run: docker compose -f config/docker-compose.yml --profile test run --rm test npm run test:unit
       - name: Docker Compose Build
         run: docker compose -f config/docker-compose.yml build agent-dashboard
       - name: Docker Compose Up
