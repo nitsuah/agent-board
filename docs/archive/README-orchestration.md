@@ -1,3 +1,8 @@
+> **Archived 2026-09-02.** Superseded by the root `README.md`, which reflects the
+> current compose services, profiles, plugin architecture, and tmux worktrees. This
+> file predates most of those and is redundant/stale (old MCP install instructions,
+> `docker-compose` v1 syntax in places). Kept for history only.
+
 # Agent Ecosystem - Local Development Stack
 
 Local AI agent dashboard backed by Ollama (container: ollama), with NemoClaw safety sandbox (container: nemoclaw), and optional Docker Model Runner support (not a container).

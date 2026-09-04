@@ -12,6 +12,11 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 
 const STORE_PATH = process.env.ENDPOINT_STORE_PATH || '/data/endpoints.json';
+// NOTE: the literal strings below are key-derivation material (scrypt input), not
+// display branding — do not "fix" the motor-pool naming here. Changing either value
+// changes the derived AES key and silently makes any existing encrypted
+// /data/endpoints.json unreadable for installs relying on the default (unset
+// ENDPOINT_STORE_SECRET) key. Left as-is intentionally; see docs/TASKS.md naming pass.
 const RAW_SECRET = process.env.ENDPOINT_STORE_SECRET || 'motor-pool-default-secret-change-me';
 const ALGO = 'aes-256-gcm';
 const SALT = Buffer.from('motor-pool-ep-v1');

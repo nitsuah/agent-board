@@ -19,13 +19,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hardware detection script** (`scripts/detect-profile.ps1`) — PowerShell script that queries `nvidia-smi` and WMI to detect GPU VRAM and system RAM, then recommends and optionally writes a `DEVICE_PROFILE` value to `.env`. Run `.\scripts\detect-profile.ps1 -Write` for a one-command setup.
 - **Workspace file I/O** — agents can now read, write, and git-commit files in a user-declared host folder. Set `WORKSPACE_PATH` in `.env` and apply `config/docker-compose.workspace.yml` to bind-mount it into the container at `/workspace`. New `/api/workspace/*` API routes: `GET /status`, `GET /ls`, `GET /read`, `POST /write`, `GET /git/status`, `POST /git/commit`, `POST /git/push` — all sandboxed to prevent path traversal. The System panel gains a file browser, breadcrumb navigation, changed-file list, commit message input, and Commit + Push buttons. `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` env vars control commit attribution.
 
+### Added
+
+- **Plugin tools in the agent runtime** — enabled plugin tools are now merged into
+  the model's tool list for the developer/research/website experiences (exposed as
+  `<plugin>__<tool>` function-call names), so an agent can call a plugin tool on its
+  own instead of only through the manual `POST /api/plugins/:name/tools/:tool/invoke`
+  HTTP endpoint. See `docs/API.md#plugins`.
+- **CI unit-test gate** — `.github/workflows/ci.yml` now runs `npm run test:unit`
+  before the image build, so a failing suite fails CI.
+
 ### Changed
+
+- Consistent `agent-board` naming across the dashboard UI (page title, onboarding
+  banner, 3D LiminalDashboard hub/hero text), OTEL service identifiers, PowerShell
+  scripts, and the `tools/website` and `tools/content-gen` npm package scopes
+  (`@motor-pool/*` → `@agent-board/*`). A prior docs-only rename (PR #61) hadn't
+  reached the running application.
 
 ### Deprecated
 
 ### Removed
 
+- Archived `docs/QUICK_REFERENCE.md`, `docs/README-orchestration.md`, and
+  `docs/MCP_SETUP.md` to `docs/archive/` — all three predated the current compose
+  service names and MCP/plugin architecture and were superseded by `README.md` and
+  `docs/API.md`.
+
 ### Fixed
+
+- `config/docker-compose.yml` mixed two incompatible relative-path conventions
+  (build contexts resolved from the compose file's own directory; `env_file`/volume
+  entries assumed `--project-directory .`), so the README's own Quick Start command
+  failed every build. All paths now resolve consistently from `config/`.
+- `scripts/setup-docker-stack.ps1` cd'd into a `motor-pool` directory that doesn't
+  exist for anyone who cloned this repo under its real name.
 
 ### Security
 

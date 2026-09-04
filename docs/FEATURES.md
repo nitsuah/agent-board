@@ -16,7 +16,6 @@
 ## Integrations & AI Runtimes
 
 - **Content Studio & Website Agent** - Native proxying and schema-generated UI workbench panels for local HTTP MCP tool servers.
-- **Kryptos RAG Service** - Embedded Fastapi layer utilizing TurboVec semantic vector search over localized document repositories.
 - **Multi-Tier Model Provisioning** - Automated hardware profile matching (`minimal`, `laptop`, `desktop`) with JIT model orchestration and custom model-runner registries.
 - **Webhook Triggers** - Initiate agent actions via incoming external HTTP requests.
 - **RESTful API** - Core API endpoints are implemented and validated by integration tests.

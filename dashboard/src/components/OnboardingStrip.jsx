@@ -4,7 +4,7 @@ export default function OnboardingStrip({ runningServices, totalServices, demoMo
   return (
     <div className="onboarding-strip">
       <div className="onboarding-copy">
-        <strong>Welcome to motor-pool.</strong>
+        <strong>Welcome to agent-board.</strong>
         <span>
           Choose an experience, pick a model, then click <strong>+ New ▾</strong> to create a session.
           {totalServices > 0 && ` ${runningServices}/${totalServices} services are live.`}

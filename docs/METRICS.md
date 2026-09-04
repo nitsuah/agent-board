@@ -6,8 +6,8 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | 81.03% statements / 71.85% branches / 89.59% functions (Docker run 2026-08-27, `npm run test:unit` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
-| **Test File Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-08-27) | >50 | 🟢 |
+| **Unit Test Coverage** | 81.53% statements / 72.68% branches / 90.39% functions (Docker run 2026-09-04, `npm run test:coverage` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
+| **Test File Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-09-04) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -44,26 +44,25 @@ docker compose run --rm agent-dashboard npm run test
 docker compose run --rm agent-dashboard npm run test:coverage
 ```
 
-Current coverage baseline (Docker run 2026-08-27, c8 v8 report over a clean
-66/66 unit run). Measured, not estimated — the previous figures in this file
-were not reproducible.
+Current coverage baseline (Docker run 2026-09-04, `docker compose -f
+config/docker-compose.yml --profile test run --rm test npm run test:coverage`,
+c8 v8 report over a clean 66/66 unit run). Measured, not estimated.
 
-**All files: 81.03% statements / 71.85% branches / 89.59% functions.**
+**All files: 81.53% statements / 72.68% branches / 90.39% functions.**
 
-Two changes account for most of the movement from the 64.27% measured baseline:
-
-1. Twelve suites that already started the app in-process were excluded from
-   `test:unit` by `scripts/run-unit-tests.mjs`, so their coverage was never
-   counted. Only the four suites that genuinely need a live LLM or Docker stack
-   (`e2e-chat`, `e2e-agents`, `e2e-services`, `test-chat`) are excluded now.
-2. Six suites hardcoded `http://localhost:3000` without starting a server and so
-   always failed. They now use `tests/helpers/test-server.js`, which starts the
-   app on an ephemeral port (still honoring `TEST_BASE_URL`).
+Essentially flat versus the 2026-08-27 baseline (81.03% / 71.85% / 89.59%) —
+the small gain is real test coverage added for the new plugin-tool wiring in
+`agent-tools.js` (`dashboard/tests/agent-tools-unit.js`: a stub plugin
+registry + a real HTTP backend exercising `getExperienceTools`'s plugin merge,
+the `<plugin>__<tool>` call path, and the unknown-plugin-tool error path),
+which took that file from 75.48% to 84.46% statements. No other production
+code changed shape this cycle.
 
 Strongest:
 - `safety.js` 99%, `mcp-helpers.js` 100%, `logger.js` 100%
 - `plugins.js` 99%, `sessions.js` 95%, `worktrees.js` 95%, `channels.js` 96%
 - `plugin-loader.js` 96%, `endpoints.js` 95%, `metrics.js` 92%, `webhooks.js` 92%
+- `agent-tools.js` 84% (was 75%, see above)
 
 Remaining gaps, and why:
 - `persistence.js` 46% — the uncovered half is live Postgres I/O; the no-op
@@ -114,4 +113,4 @@ cloc . --exclude-dir=node_modules,dist
 ```
 
 ----
-*Last Updated: 2026-08-27*
+*Last Updated: 2026-09-04*

@@ -1,5 +1,5 @@
 {
-  "name": "@motor-pool/tool-content-gen",
+  "name": "@agent-board/tool-content-gen",
   "version": "1.0.0",
   "description": "MCP server — AI video generation via MoneyPrinterTurbo",
   "type": "module",

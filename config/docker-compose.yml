@@ -301,7 +301,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - ../.env
     environment:
       - GITHUB_ID=${GITHUB_ID}
       - GITHUB_SECRET=${GITHUB_SECRET}
@@ -381,7 +381,9 @@ services:
   # Enable with:  docker compose --profile tools up tool-content-gen
   tool-content-gen:
     build:
-      # Relative to the project directory (compose is run with --project-directory .)
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
       context: ../tools/content-gen
       dockerfile: Dockerfile
     container_name: tool-content-gen
@@ -392,7 +394,7 @@ services:
     ports:
       - "3200:3200"
     env_file:
-      - .env
+      - ../.env
     environment:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
@@ -416,7 +418,9 @@ services:
   # Enable with:  docker compose --profile tools up tool-website
   tool-website:
     build:
-      # Relative to the project directory (compose is run with --project-directory .)
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
       context: ../tools/website
       dockerfile: Dockerfile
     container_name: tool-website
@@ -427,7 +431,7 @@ services:
     ports:
       - "3201:3201"
     env_file:
-      - .env
+      - ../.env
     environment:
       - WEBSITE_PORT=3201
       - WEBSITE_OUTPUT_DIR=/output
@@ -443,8 +447,10 @@ services:
     volumes:
       # /app/output matches $PSScriptRoot/../output inside the container scripts
       - website_output:/app/output
-      # Relative to the project directory (compose is run with --project-directory .)
-      - ./tools/website/templates:/app/templates:ro
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
+      - ../tools/website/templates:/app/templates:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

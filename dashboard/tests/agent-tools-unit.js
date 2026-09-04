@@ -51,6 +51,29 @@ const noWorkspace = createAgentHelpers({
   WORKSPACE_ROOT: null, execAsync, TOOL_SERVERS: {}, TOOL_CALL_TIMEOUT_MS: 5000,
 });
 
+// ── Stub plugin backend + registry ──────────────────────────────────────────
+// A minimal HTTP backend standing in for a plugin's declared tool endpoint, plus
+// a stub registry shaped like modules/plugin-loader.js's createPluginRegistry().
+const pluginApp = express();
+pluginApp.use(express.json());
+pluginApp.post('/echo', (req, res) => res.json({ echoed: req.body.message }));
+const pluginBackend = pluginApp.listen(0);
+const PLUGIN_URL = `http://127.0.0.1:${pluginBackend.address().port}`;
+
+const echoTool = {
+  name: 'echo', plugin: 'stub-plugin', method: 'POST', endpoint: `${PLUGIN_URL}/echo`,
+  timeoutMs: 5000, description: 'Echo a message', parameters: { type: 'object', properties: { message: { type: 'string' } } },
+};
+const stubPluginRegistry = {
+  listTools: () => [echoTool],
+  get: (name) => (name === 'stub-plugin' ? { name, enabled: true } : null),
+  getTool: (pluginName, toolName) => (pluginName === 'stub-plugin' && toolName === 'echo' ? echoTool : null),
+};
+const helpersWithPlugin = createAgentHelpers({
+  WORKSPACE_ROOT: WORKSPACE, execAsync, TOOL_SERVERS: {}, TOOL_CALL_TIMEOUT_MS: 5000,
+  pluginRegistry: stubPluginRegistry,
+});
+
 const run = (h, tools = DEVELOPER_TOOLS, style = 'ollama') =>
   h.runAgentLoop([{ role: 'user', content: 'go' }], style, LLM_URL, {}, tools, session);
 
@@ -190,8 +213,44 @@ try {
   assert.strictEqual(out.toolLog[0].result.content, 'file contents\n', 'object-form arguments are accepted');
   console.log('  ✅ tool arguments are accepted as both JSON strings and objects');
 
+  // ── plugin tools merge into the tool list ──────────────────────────────────
+  const devToolsWithPlugin = helpersWithPlugin.getExperienceTools('developer');
+  assert.strictEqual(devToolsWithPlugin.length, DEVELOPER_TOOLS.length + 1, 'plugin tool is appended');
+  const pluginFn = devToolsWithPlugin.at(-1).function;
+  assert.strictEqual(pluginFn.name, 'stub-plugin__echo', 'plugin tool uses <plugin>__<tool> naming');
+  assert.match(pluginFn.description, /\[Plugin: stub-plugin\]/, 'description is prefixed with the plugin name');
+  assert.deepStrictEqual(
+    helpers.getExperienceTools('developer'), DEVELOPER_TOOLS,
+    'a registry with no plugins leaves the tool list untouched',
+  );
+  assert.deepStrictEqual(
+    helpersWithPlugin.getExperienceTools('safechat'), [],
+    'plugin tools never leak into a non-tool-using experience',
+  );
+  assert.deepStrictEqual(
+    helpersWithPlugin.getExperienceTools(undefined), [],
+    'plugin tools never leak into the undefined/default experience',
+  );
+  console.log('  ✅ enabled plugin tools merge into developer/research/website tool lists only');
+
+  // ── plugin tool actually executes ──────────────────────────────────────────
+  script = [toolCall('stub-plugin__echo', { message: 'hi from agent' }), { content: 'echoed back' }];
+  out = await run(helpersWithPlugin, devToolsWithPlugin);
+  assert.strictEqual(out.content, 'echoed back');
+  assert.strictEqual(out.toolLog[0].name, 'stub-plugin__echo');
+  assert.strictEqual(out.toolLog[0].result.success, true, 'plugin call reports success');
+  assert.strictEqual(out.toolLog[0].result.result.echoed, 'hi from agent', 'the real HTTP backend ran and echoed the argument');
+  console.log('  ✅ a <plugin>__<tool> function call routes through to the plugin backend');
+
+  // ── unknown plugin tool name still errors cleanly ──────────────────────────
+  script = [toolCall('stub-plugin__no_such_tool', {}), { content: 'unknown plugin tool' }];
+  out = await run(helpersWithPlugin, devToolsWithPlugin);
+  assert.ok(out.toolLog[0].result.error, 'an unregistered <plugin>__<tool> name yields an error, not a throw');
+  console.log('  ✅ an unknown plugin/tool pair produces an error result rather than throwing');
+
   console.log('Agent tools tests passed.');
 } finally {
   llm.close();
+  pluginBackend.close();
   rmSync(WORKSPACE, { recursive: true, force: true });
 }

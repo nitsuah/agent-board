@@ -1,24 +1,10 @@
 # TASKS
 
-Last Updated: 2026-08-27
+Last Updated: 2026-09-02
 
 ## Todo
 
 ### P1 - High
-
-- [ ] **PERFORMANCE** — setup turbovec to decrease LLM memory usage significantly.
-  - Priority: P1
-  - Context: follow-up from Docker optimization pass; turbovec can reduce per-request memory overhead.
-  - Acceptance Criteria: turbovec integrated and memory usage measurably reduced under load.
-  - **Blocked — premise needs revisiting (2026-08-27).** turbovec is a Rust/Python
-    *vector index* that compresses embeddings for RAG (~8–16x smaller indexes). It does
-    not reduce LLM inference memory, so it cannot satisfy "reduce per-request memory
-    overhead" as written. It also has nothing to attach to here: the dashboard has no
-    embeddings, vector store, or RAG path anywhere in `dashboard/`. Adopting it would
-    mean first building a retrieval layer, then adding a Python/Rust sidecar to a Node
-    stack. Recommend splitting this into (a) a real measurement of where Ollama memory
-    actually goes under load, and (b) a separate RAG/vector-store item where turbovec
-    would be a legitimate candidate.
 
 - [x] **[QUALITY] Raise statement coverage to ≥80%** — statement coverage is 63.41%, below the documented target.
   - Priority: P1
@@ -40,10 +26,15 @@ Last Updated: 2026-08-27
   - Context: split out from the coverage task above, which is complete on the coverage number itself but never covered CI publication. Depends on the CI task below actually running tests in the pipeline.
   - Acceptance Criteria: the CI workflow uploads the lcov report (e.g. as a workflow artifact or to a coverage service) on every run.
 
-- [ ] **[CI] Add unit-test step to `.github/workflows/ci.yml`** — the current CI pipeline builds the container and waits for a health check but never runs `npm run test:unit`.
+- [x] **[CI] Add unit-test step to `.github/workflows/ci.yml`** — the current CI pipeline builds the container and waits for a health check but never runs `npm run test:unit`.
   - Priority: P1
   - Context: CI currently runs pre-commit hooks and a Docker health check only. Regressions in server logic or safety layer are not caught by CI.
   - Acceptance Criteria: `npm run test:unit` (via `docker compose --profile test run --rm test`) runs in the CI job and fails the build on test failure.
+  - Done (2026-09-02): `Run unit tests` step added to `.github/workflows/ci.yml`, running
+    before the image build so a failing suite fails fast. Also fixed the CI `.env` setup:
+    it was creating `config/.env`, which is the wrong path now that `config/docker-compose.yml`'s
+    `env_file` entries were corrected to `../.env` (repo-root) — see the docker-compose
+    path fix below.
 
 ### P2 - Medium
 
@@ -118,26 +109,71 @@ Last Updated: 2026-08-27
     `POST /api/plugins/:name/events`. Registration is by file placement — no core server
     edits. Example manifest ships (disabled by default). Documented in `docs/API.md#plugins`.
 
-- [ ] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
+- [x] **[Backlog] Agent skills system** — loadable skill modules for the dashboard agent runtime, similar in spirit to the Odysseus router integration.
   - Priority: P3
   - Context: tools/ MCP servers handle external integrations; skills would be first-class task-specific capabilities registered and invoked within the agent runtime itself.
   - Acceptance Criteria: at least one skill can be declared, loaded, and invoked from the dashboard; skills do not require modifying core server code.
-  - Status: declaration + loading + invocation over the API are done (see plugin architecture
-    above). Still open because the task requires capabilities **invoked within the agent
-    runtime**: `GET /api/plugins/tools` returns namespaced `plugin.tool` descriptors, but
-    `createAgentHelpers`/`getExperienceTools` does not yet merge them into the tool list handed
-    to the model, so an agent cannot call a plugin tool on its own. Closing needs that wiring
-    plus an end-to-end invocation from a chat session.
+  - Done (2026-09-02): the missing wiring is in. `createAgentHelpers` (`dashboard/modules/agent-tools.js`)
+    now takes `pluginRegistry` and merges every enabled plugin's tools into the tool list for the
+    developer/research/website experiences, exposed to the model as `<plugin>__<tool>` function-call
+    names (double underscore — plugin/tool names are restricted to `[a-zA-Z0-9_-]`, so this can't
+    collide with a real name; `.` is unsafe in OpenAI/Ollama function names, which is why the
+    `/api/plugins` HTTP API's `plugin.tool` qualifiedName isn't reused directly here). A matching
+    `<plugin>__<tool>` call routes through `callPluginTool`, which does the same HTTP invocation as
+    `POST /api/plugins/:name/tools/:tool/invoke`. Plain chat / Safe Chat experiences still get zero
+    tools, plugin or otherwise — enabling a plugin cannot change chat/safety behavior there.
+    `example-echo` (`dashboard/config/plugins/example-echo.plugin.json`) ships disabled by default,
+    so this is inert until an operator both enables a plugin and uses a tool-using experience.
 
-- [ ] Clarify MCP integration scope.
+- [x] Clarify MCP integration scope.
   - Priority: P3
   - Context: `docs/MCP_SETUP.md` exists, but the practical integration story is still unclear.
   - Acceptance Criteria: one documented MCP provider flow works end to end.
+  - Done (2026-09-02): the integration story was never actually unclear — `docs/MCP_SETUP.md`
+    was describing an unrelated concept (installing generic Claude Desktop MCP servers)
+    and was archived to `docs/archive/`. The real, working MCP integration is the
+    declarative `config/mcp-registry.json` registry (`GET /api/mcp-registry`,
+    `POST /api/mcp-registry/:key/ensure`) plus the `bb-mcp` service and plugin
+    architecture, documented end to end in `docs/API.md` (`## MCP Tool Servers`,
+    `## Plugins`) with passing tests (`dashboard/tests/mcp-registry.js`,
+    `dashboard/tests/plugins-api.js`).
 
 - [ ] Validate cross-agent event bus behavior.
   - Priority: P3
   - Context: event-bus coordination is still listed as capability without a proven scenario.
   - Acceptance Criteria: two agents exchange events in a documented demo path.
+
+- [ ] **[Follow-up] Measure Ollama memory usage under load** — replaces the rejected
+  turbovec item below with something the codebase can actually act on.
+  - Priority: P3
+  - Context: the original "reduce LLM memory usage" goal is real, but nothing has ever
+    measured where Ollama's memory actually goes (model weights vs. KV cache vs.
+    concurrent-request overhead). `docker stats` on the `ollama` container during a
+    sustained multi-session chat load, compared against `config/model-manifest.json`
+    sizes, would show whether the real lever is fewer concurrently-loaded models,
+    quantization, or context-length limits — before reaching for any new dependency.
+  - Acceptance Criteria: a documented measurement (README/METRICS.md note) of Ollama
+    RSS/VRAM under a defined load profile, with a recommendation on the actual lever
+    to pull (if any) — no new service required to close this out.
+
+## Rejected / Won't Do
+
+- [x] ~~**PERFORMANCE** — setup turbovec to decrease LLM memory usage significantly.~~
+  **Rejected (2026-09-02), formally closed after a second review.** turbovec is a
+  Rust/Python *vector index* that compresses embeddings for RAG (~8–16x smaller
+  indexes) — it does not reduce LLM inference memory, so it cannot satisfy "reduce
+  per-request memory overhead" as originally written. It also has nothing to attach to:
+  a repo-wide search confirms zero references to embeddings, a vector store, or any RAG
+  path anywhere in `dashboard/`. Adopting it would mean building a retrieval layer that
+  nothing in this product currently needs, purely to justify a Python/Rust sidecar in a
+  Node stack. This was flagged as blocked on 2026-08-27 and left open pending a
+  decision; the decision is: do not build it. Split into two concrete replacements
+  instead of leaving this ambiguous a third time:
+  1. **[Follow-up] Measure Ollama memory usage under load** (P3, above) — addresses the
+     real underlying goal without a new dependency.
+  2. **RAG / vector-store foundation** — moved to `ROADMAP.md` 2027 Q3 as a scoped,
+     larger architectural item. turbovec is a legitimate candidate *if and when* that
+     foundation gets built, not before.
 
 ## In Progress
 
