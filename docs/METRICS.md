@@ -6,8 +6,8 @@ This document tracks the health, performance, and quality metrics of the `agent-
 
 | Metric | Current | Target | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Coverage** | 81.03% statements / 71.85% branches / 89.59% functions (Docker run 2026-08-27, `npm run test:unit` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
-| **Test File Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass in Docker headless (2026-08-27) | >50 | 🟢 |
+| **Unit Test Coverage** | 80.89% statements / 71.51% branches / 89.59% functions (native run 2026-09-04, cloud audit agent — Docker unavailable; `cd dashboard && npm run test:coverage` with NODE_V8_COVERAGE + c8; 66/66 unit tests pass, 0 failures) | >80% | 🟢 |
+| **Test File Count** | 70 test files (66 unit + 4 e2e requiring a live LLM/Docker stack); 66/66 unit tests pass natively (2026-09-04) | >50 | 🟢 |
 | **Critical Vulnerabilities** | 0 | 0 | 🟢 |
 | **ESLint Errors** | 0 | 0 | 🟢 |
 | **Avg. Cyclomatic Complexity** | TBD | <10 | ⚪ |
@@ -44,11 +44,11 @@ docker compose run --rm agent-dashboard npm run test
 docker compose run --rm agent-dashboard npm run test:coverage
 ```
 
-Current coverage baseline (Docker run 2026-08-27, c8 v8 report over a clean
-66/66 unit run). Measured, not estimated — the previous figures in this file
-were not reproducible.
+Current coverage baseline (native run 2026-09-04, cloud audit agent — Docker
+unavailable in this environment; c8 v8 report over a clean 66/66 unit run).
+Measured, not estimated.
 
-**All files: 81.03% statements / 71.85% branches / 89.59% functions.**
+**All files: 80.89% statements / 71.51% branches / 89.59% functions.**
 
 Two changes account for most of the movement from the 64.27% measured baseline:
 
@@ -114,4 +114,4 @@ cloc . --exclude-dir=node_modules,dist
 ```
 
 ----
-*Last Updated: 2026-08-27*
+*Last Updated: 2026-09-04*
