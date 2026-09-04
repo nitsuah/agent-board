@@ -1,7 +1,7 @@
 /**
  * content-gen MCP server
  *
- * Wraps MoneyPrinterTurbo's REST API as MCP tools so motor-pool and Claude
+ * Wraps MoneyPrinterTurbo's REST API as MCP tools so agent-board and Claude
  * can generate AI short videos without touching the Docker stack directly.
  *
  * Ports:
