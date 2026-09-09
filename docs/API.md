@@ -1134,11 +1134,13 @@ Beyond the HTTP API above, enabled plugin tools are also merged directly into
 the model's tool list for the **developer**, **research**, and **website**
 experiences — an agent can call a plugin tool on its own mid-conversation, not
 just via a manual `curl` to the invoke endpoint. Each tool is exposed as a
-`<plugin>__<tool>` function-call name (double underscore; plugin and tool
-names are restricted to `[a-zA-Z0-9_-]`, so this can't collide with a real
-name — a literal `.`, used in `qualifiedName` above, isn't a valid
-OpenAI/Ollama function-call name character). The call routes through the same
-HTTP invocation as `POST /api/plugins/:name/tools/:tool/invoke`.
+`<plugin>__<tool>` function-call name (double underscore, since a literal `.`
+— used in `qualifiedName` above — isn't a valid OpenAI/Ollama function-call
+name character). `[a-zA-Z0-9_-]` alone would let a name legally contain
+`__`, making that join ambiguous; manifest validation additionally rejects
+`__` inside a plugin or tool name specifically to keep this encoding
+collision-free. The call routes through the same HTTP invocation as
+`POST /api/plugins/:name/tools/:tool/invoke`.
 
 Plain chat and Safe Chat sessions still get zero tools, plugin or otherwise —
 enabling a plugin cannot change behavior in those experiences.

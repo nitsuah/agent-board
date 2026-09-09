@@ -393,8 +393,12 @@ services:
       - prebuild
     ports:
       - "3200:3200"
-    env_file:
-      - ../.env
+    # No env_file here deliberately: this container proxies to
+    # MoneyPrinterTurbo and handles untrusted video-generation prompts, so it
+    # gets only the specific variables it actually needs below rather than
+    # every secret in the root .env (GITHUB_SECRET, POSTGRES_PASSWORD,
+    # NETLIFY_AUTH_TOKEN, etc. — CWE-200, a compromised tool container had no
+    # reason to be able to read those).
     environment:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
@@ -430,8 +434,12 @@ services:
       - prebuild
     ports:
       - "3201:3201"
-    env_file:
-      - ../.env
+    # No env_file here deliberately: this container handles untrusted
+    # website-generation and lead-discovery input, so it gets only the
+    # specific variables it needs below (including NETLIFY_AUTH_TOKEN, which
+    # this container's own deploy scripts use) rather than every secret in
+    # the root .env — GITHUB_SECRET, POSTGRES_PASSWORD, etc. — that a
+    # compromised tool container had no reason to read (CWE-200).
     environment:
       - WEBSITE_PORT=3201
       - WEBSITE_OUTPUT_DIR=/output

@@ -1,9 +1,9 @@
+# Quick Reference Guide
+
 > **Archived 2026-09-02.** Superseded by `README.md` (Quick Start, Directory Structure,
 > Troubleshooting) and `docs/API.md`. Container names here (`llm_qwen_coder`) predate
 > the current compose service names (`ollama`); commands and endpoint tables are stale.
 > Kept for history only — do not follow these instructions.
-
-# Quick Reference Guide
 
 Fast reference for common operations.
 More detailed instructions can be found in the [[SETUP_INSTRUCTIONS]]

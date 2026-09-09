@@ -8,6 +8,11 @@ on:
   pull_request:
     branches: [ main, feat/* ]
 
+# Least-privilege default: no step here needs anything beyond reading the
+# checked-out repo (checkout, pre-commit, docker compose build/up/test).
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,7 +31,7 @@ jobs:
         # the compose file (config/), i.e. repo-root .env — not config/.env.
         run: touch .env
       - name: Run unit tests
-        run: docker compose -f config/docker-compose.yml --profile test run --rm test npm run test:unit
+        run: docker compose -f config/docker-compose.yml --profile test run --build --rm test npm run test:unit
       - name: Docker Compose Build
         run: docker compose -f config/docker-compose.yml build agent-dashboard
       - name: Docker Compose Up

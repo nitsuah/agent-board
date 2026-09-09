@@ -223,6 +223,32 @@ try {
     helpers.getExperienceTools('developer'), DEVELOPER_TOOLS,
     'a registry with no plugins leaves the tool list untouched',
   );
+
+  // Plugin tools layer onto every tool-using experience, not just developer.
+  const researchToolsWithPlugin = helpersWithPlugin.getExperienceTools('research');
+  assert.strictEqual(researchToolsWithPlugin.length, RESEARCH_TOOLS.length + 1, 'plugin tool is appended to research');
+  assert.deepStrictEqual(
+    researchToolsWithPlugin.slice(0, RESEARCH_TOOLS.length), RESEARCH_TOOLS,
+    'research base tools are preserved ahead of the plugin tool',
+  );
+  assert.strictEqual(researchToolsWithPlugin.at(-1).function.name, 'stub-plugin__echo');
+  assert.deepStrictEqual(
+    helpers.getExperienceTools('research'), RESEARCH_TOOLS,
+    'a registry with no plugins leaves the research tool list untouched',
+  );
+
+  const websiteToolsWithPlugin = helpersWithPlugin.getExperienceTools('website');
+  assert.strictEqual(websiteToolsWithPlugin.length, WEBSITE_AGENT_TOOLS.length + 1, 'plugin tool is appended to website');
+  assert.deepStrictEqual(
+    websiteToolsWithPlugin.slice(0, WEBSITE_AGENT_TOOLS.length), WEBSITE_AGENT_TOOLS,
+    'website base tools are preserved ahead of the plugin tool',
+  );
+  assert.strictEqual(websiteToolsWithPlugin.at(-1).function.name, 'stub-plugin__echo');
+  assert.deepStrictEqual(
+    helpers.getExperienceTools('website'), WEBSITE_AGENT_TOOLS,
+    'a registry with no plugins leaves the website tool list untouched',
+  );
+  console.log('  ✅ plugin tools merge into developer, research, and website tool lists');
   assert.deepStrictEqual(
     helpersWithPlugin.getExperienceTools('safechat'), [],
     'plugin tools never leak into a non-tool-using experience',

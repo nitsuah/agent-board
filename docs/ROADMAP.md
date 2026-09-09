@@ -26,7 +26,7 @@ Last Updated: 2026-09-02
   events (channel + allowed emit types) as the boundary — a plugin can only do what
   its manifest declares, registration is by file placement, and nothing requires a
   core server edit.
-- [x] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines.
+- [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines. The topic-based mechanism itself is implemented; kept open pending `docs/TASKS.md`'s "Validate cross-agent event bus behavior" (two agents exchanging events in a documented demo path) so this isn't marked done ahead of that validation.
 - `[moved to 2027 Q3]` Multi-tenancy (user login/SSO) and RBAC planning — see below.
 - `[moved to 2027 Q3]` Audit logging and compliance support — see below.
 - `[moved to 2027 Q3]` Analytics and operational observability — see below.
@@ -61,7 +61,7 @@ Last Updated: 2026-09-02
 
 ## 2027 Q1 - Developer Experience & Quality
 
-- [x] **Test coverage to ≥80%**: 81.03% statements / 71.85% branches / 89.59% functions (measured, PR #60) — raised from a measured 64.27% baseline by un-hiding suites wrongly excluded as "integration" and adding real coverage for MCP parsing, workspace path-traversal, agent-loop tool execution, and SSE streaming.
+- [x] **Test coverage to ≥80%**: 81.53% statements / 72.68% branches / 90.39% functions (Docker run 2026-09-04; 81.03% / 71.85% / 89.59% at the original 2026-08-27 measurement, PR #60) — raised from a measured 64.27% baseline by un-hiding suites wrongly excluded as "integration" and adding real coverage for MCP parsing, workspace path-traversal, agent-loop tool execution, and SSE streaming.
 - [x] **CI unit-test gate**: `npm run test:unit` runs in `.github/workflows/ci.yml` before the image build so a failing suite fails CI. lcov artifact publication remains open (`TASKS.md`).
 - [x] **Content-gen Docker socket security fix**: MPT sidecar service declared in docker-compose.yml; Docker socket mount removed from content-gen; content-gen calls `MPT_API_URL` via HTTP (see TASKS.md ARCH item — complete).
 - [ ] **Service lifecycle dashboard (UI completion)**: mount `/var/run/docker.sock` for in-container `docker stats` or add a host-side stats sidecar; surface per-service resource charts in the dashboard.

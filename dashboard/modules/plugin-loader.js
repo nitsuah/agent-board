@@ -126,6 +126,13 @@ export function validateManifest(manifest, { source = 'unknown' } = {}) {
   const name = typeof manifest.name === 'string' ? manifest.name.trim() : '';
   if (!PLUGIN_NAME_RE.test(name)) {
     errors.push(`invalid plugin name "${manifest.name}" (expected ${PLUGIN_NAME_RE})`);
+  } else if (name.includes('__')) {
+    // agent-tools.js encodes a model-facing tool call as `<plugin>__<tool>`
+    // and decodes it by splitting on the first "__" — a name containing "__"
+    // itself makes that encoding non-injective (e.g. plugin "a__b" + tool "c"
+    // and plugin "a" + tool "b__c" both encode to "a__b__c"), so resolving a
+    // call could silently dispatch to the wrong plugin's tool.
+    errors.push(`plugin name "${name}" must not contain "__" (reserved as the tool-name separator)`);
   }
 
   const version = typeof manifest.version === 'string' ? manifest.version.trim() : '';
@@ -149,6 +156,12 @@ export function validateManifest(manifest, { source = 'unknown' } = {}) {
 
       const toolName = typeof rawTool.name === 'string' ? rawTool.name.trim() : '';
       if (!TOOL_NAME_RE.test(toolName)) { errors.push(`tools[${i}].name invalid: "${rawTool.name}"`); continue; }
+      if (toolName.includes('__')) {
+        // See the matching plugin-name check above — "__" is reserved as the
+        // <plugin>__<tool> separator and must not appear inside either half.
+        errors.push(`tools[${i}].name "${toolName}" must not contain "__" (reserved as the tool-name separator)`);
+        continue;
+      }
       if (seenToolNames.has(toolName)) { errors.push(`tools[${i}] duplicate tool name "${toolName}"`); continue; }
       seenToolNames.add(toolName);
 

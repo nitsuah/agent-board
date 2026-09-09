@@ -1,3 +1,5 @@
+# Model Context Protocol (MCP) Setup Guide
+
 > **Archived 2026-09-02.** This guide covers installing generic Claude Desktop MCP
 > servers (Docker, Filesystem, Git) — a different concept from this repo's actual MCP
 > integration, which is the declarative `config/mcp-registry.json` registry, the
@@ -6,8 +8,6 @@
 > "Clarify MCP integration scope" item in `TASKS.md` — the real integration story was
 > never actually unclear, this doc was just describing something else. Kept for
 > history only.
-
-# Model Context Protocol (MCP) Setup Guide
 
 This document lists the MCPs needed for your agent ecosystem and how to install them.
 

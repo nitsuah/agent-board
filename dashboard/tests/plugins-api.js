@@ -106,6 +106,19 @@ try {
   assert.strictEqual(validateManifest({ name: 'ok', version: '1.0.0', events: 'nope' }).valid, false, 'rejects non-object events');
   console.log('  ✅ invalid manifests rejected (name, version, manifestVersion, type, tools, events)');
 
+  // Regression: agent-tools.js encodes a model-facing tool call as
+  // `<plugin>__<tool>` and resolves it by exact-match lookup. Without this
+  // check, plugin "a__b" + tool "c" and plugin "a" + tool "b__c" both encode
+  // to "a__b__c" — resolvePluginTool would silently pick whichever is first
+  // in the registry, dispatching a model's call to the wrong plugin's tool.
+  assert.strictEqual(
+    validateManifest({ name: 'a__b', version: '1.0.0', baseUrl: 'http://h:1', tools: [{ name: 't', path: '/x' }] }).valid,
+    false, 'rejects a plugin name containing "__"');
+  assert.strictEqual(
+    validateManifest({ name: 'a', version: '1.0.0', baseUrl: 'http://h:1', tools: [{ name: 'b__c', path: '/x' }] }).valid,
+    false, 'rejects a tool name containing "__"');
+  console.log('  ✅ plugin/tool names containing "__" are rejected (keeps <plugin>__<tool> encoding collision-free)');
+
   const noHost = validateManifest({ name: 'ok', version: '1.0.0', tools: [{ name: 't', path: '/x' }] });
   assert.strictEqual(noHost.valid, false, 'tool without url or baseUrl is rejected');
   assert.ok(noHost.errors.some(e => /baseUrl/.test(e)), 'error explains the missing host');

@@ -11,7 +11,9 @@ Last Updated: 2026-09-02
   - Context: 64 test files exist but coverage (2026-04-03 baseline) sits at 63% statements / 57% branches / 74% functions. Gaps are concentrated in `persistence.js` (83%), `server.js` (63%), and `tracing.js` (54%). New route modules added since April are not yet measured.
   - Acceptance Criteria: `npm run test:coverage` reports ≥80% statements. (Publishing the lcov report as a CI artifact is tracked separately below — this task is scoped to the coverage number itself.)
   - Done (2026-08-27): **81.03% statements** / 71.85% branches / 89.59% functions,
-    66/66 unit tests passing. The 63.41% figure was not reproducible; the real
+    66/66 unit tests passing (updated 2026-09-04 Docker run: **81.53% statements**
+    / 72.68% branches / 90.39% functions — see `docs/METRICS.md`). The 63.41%
+    figure was not reproducible; the real
     measured baseline was 64.27%. Got there by (a) un-excluding 12 suites that
     already started the app in-process but were skipped by `run-unit-tests.mjs`,
     (b) fixing 6 suites that hardcoded `localhost:3000` without starting a server
@@ -116,9 +118,10 @@ Last Updated: 2026-09-02
   - Done (2026-09-02): the missing wiring is in. `createAgentHelpers` (`dashboard/modules/agent-tools.js`)
     now takes `pluginRegistry` and merges every enabled plugin's tools into the tool list for the
     developer/research/website experiences, exposed to the model as `<plugin>__<tool>` function-call
-    names (double underscore — plugin/tool names are restricted to `[a-zA-Z0-9_-]`, so this can't
-    collide with a real name; `.` is unsafe in OpenAI/Ollama function names, which is why the
-    `/api/plugins` HTTP API's `plugin.tool` qualifiedName isn't reused directly here). A matching
+    names (double underscore, since `.` is unsafe in OpenAI/Ollama function names, which is why the
+    `/api/plugins` HTTP API's `plugin.tool` qualifiedName isn't reused directly here — `[a-zA-Z0-9_-]`
+    alone would let a name legally contain `__`, making that join ambiguous, so manifest validation
+    also rejects `__` inside a plugin or tool name to keep the encoding collision-free). A matching
     `<plugin>__<tool>` call routes through `callPluginTool`, which does the same HTTP invocation as
     `POST /api/plugins/:name/tools/:tool/invoke`. Plain chat / Safe Chat experiences still get zero
     tools, plugin or otherwise — enabling a plugin cannot change chat/safety behavior there.
@@ -182,6 +185,10 @@ Last Updated: 2026-09-02
 <!--
 AGENT INSTRUCTIONS:
 1. Keep active items in P0-P3.
-2. Move completed items to Done with [x].
+2. Mark a completed item [x] in place with an inline "Done (YYYY-MM-DD): ..."
+   note under its own Acceptance Criteria, rather than moving it out of its
+   priority/context section — this is the convention actually followed
+   throughout this file. Use the Done/In Progress sections below only for
+   items that don't belong under any P0-P3 priority grouping.
 3. Keep each task scannable: checkbox, short context, clear acceptance.
 -->
