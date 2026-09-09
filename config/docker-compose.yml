@@ -403,8 +403,11 @@ services:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
       - MPT_UI_URL=${MPT_UI_URL:-http://host.docker.internal:8501}
-    volumes:
-      - ../:/workspace-root:ro
+    # No repo-root mount either: this service only wraps MoneyPrinterTurbo's
+    # HTTP API (which runs separately on the host — see the header comment
+    # above), and never reads from tools/content-gen's own codebase at
+    # /workspace-root; the mount would otherwise expose the root .env to a
+    # container handling untrusted video-generation prompts (CWE-200).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
