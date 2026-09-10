@@ -120,7 +120,23 @@ export const WEBSITE_AGENT_TOOLS = [
 
 const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
 
-export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS }) {
+// Plugin tools are exposed to the model as `<plugin>__<tool>` (double underscore)
+// since OpenAI/Ollama function-call names reject the `.` used in the qualifiedName
+// shown over the /api/plugins HTTP API. [a-zA-Z0-9_-] alone would let a name legally
+// contain "__", making the join non-injective (plugin "a__b" + tool "c" and plugin
+// "a" + tool "b__c" both encode to "a__b__c"); plugin-loader.js's manifest
+// validation additionally rejects "__" inside either half specifically to keep this
+// encoding collision-free, so resolvePluginTool's equality lookup below is safe.
+const PLUGIN_TOOL_SEPARATOR = '__';
+const PLUGIN_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
+// Mirrors dashboard/routes/plugins.js's MAX_INVOKE_BODY_BYTES — the HTTP
+// /plugins/:name/tools/:tool/invoke route rejects arguments over 256 KB, but
+// this agent-loop dispatch path forwards a model-supplied `args` object
+// straight to axios (8 MB body limit) with no such check, so a model could
+// send an oversized payload this path was never meant to allow (CWE-400).
+const PLUGIN_ARGS_MAX_BYTES = 256 * 1024;
+
+export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TOOL_CALL_TIMEOUT_MS, pluginRegistry = null }) {
   function resolveWorkspacePath(reqPath) {
     if (!WORKSPACE_ROOT) return null;
     const safe = reqPath ? reqPath.replace(/\\/g, '/').replace(/^\/+/, '') : '';
@@ -129,13 +145,76 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
     return abs;
   }
 
-  function getExperienceTools(experience) {
-    switch (experience) {
-      case 'developer': return WORKSPACE_ROOT ? DEVELOPER_TOOLS : [];
-      case 'research': return RESEARCH_TOOLS;
-      case 'website': return WEBSITE_AGENT_TOOLS;
-      default: return [];
+  /** Enabled plugin tools, shaped as OpenAI/Ollama function-call definitions. */
+  function pluginToolDefinitions() {
+    if (!pluginRegistry) return [];
+    return pluginRegistry.listTools().map(t => ({
+      type: 'function',
+      function: {
+        name: `${t.plugin}${PLUGIN_TOOL_SEPARATOR}${t.name}`,
+        description: `[Plugin: ${t.plugin}] ${t.description || ''}`.slice(0, 1024),
+        parameters: (t.parameters && typeof t.parameters === 'object' && Object.keys(t.parameters).length)
+          ? t.parameters
+          : { type: 'object', properties: {} },
+      },
+    }));
+  }
+
+  /** Resolve a `<plugin>__<tool>` function-call name back to its registry entry. */
+  function resolvePluginTool(toolName) {
+    if (!pluginRegistry || !toolName.includes(PLUGIN_TOOL_SEPARATOR)) return null;
+    return pluginRegistry.listTools().find(t => `${t.plugin}${PLUGIN_TOOL_SEPARATOR}${t.name}` === toolName) || null;
+  }
+
+  async function callPluginTool(pluginName, toolName, args) {
+    const plugin = pluginRegistry?.get(pluginName);
+    if (!plugin || !plugin.enabled) return JSON.stringify({ error: `Plugin unavailable: ${pluginName}` });
+    const tool = pluginRegistry.getTool(pluginName, toolName);
+    if (!tool) return JSON.stringify({ error: `Unknown tool "${toolName}" on plugin "${pluginName}"` });
+    const serializedArgs = JSON.stringify(args ?? {});
+    if (Buffer.byteLength(serializedArgs, 'utf8') > PLUGIN_ARGS_MAX_BYTES) {
+      return JSON.stringify({ error: 'Tool arguments exceed 256 KB' });
     }
+    try {
+      const isBodyless = tool.method === 'GET' || tool.method === 'DELETE';
+      const response = await axios({
+        method: tool.method,
+        url: tool.endpoint,
+        timeout: tool.timeoutMs,
+        maxRedirects: 0,
+        maxContentLength: PLUGIN_RESPONSE_MAX_BYTES,
+        maxBodyLength: PLUGIN_RESPONSE_MAX_BYTES,
+        validateStatus: () => true,
+        ...(isBodyless ? { params: args } : { data: args }),
+      });
+      const ok = response.status >= 200 && response.status < 300;
+      return JSON.stringify({
+        success: ok,
+        status: response.status,
+        result: response.data,
+        error: ok ? undefined : `Plugin backend returned ${response.status}`,
+      });
+    } catch (err) {
+      return JSON.stringify({ error: `Plugin backend unreachable: ${err.message}` });
+    }
+  }
+
+  // Plugin tools layer onto every tool-using experience (developer/research/website).
+  // 'default' (plain chat / Safe Chat) intentionally gets no tools at all, plugin or
+  // otherwise, so enabling a plugin never changes chat/safety behavior there.
+  function getExperienceTools(experience) {
+    const TOOL_USING_EXPERIENCES = new Set(['developer', 'research', 'website']);
+    const base = (() => {
+      switch (experience) {
+        case 'developer': return WORKSPACE_ROOT ? DEVELOPER_TOOLS : [];
+        case 'research': return RESEARCH_TOOLS;
+        case 'website': return WEBSITE_AGENT_TOOLS;
+        default: return [];
+      }
+    })();
+    if (!TOOL_USING_EXPERIENCES.has(experience)) return base;
+    const plugins = pluginToolDefinitions();
+    return plugins.length ? [...base, ...plugins] : base;
   }
 
   async function callAgentTool(toolName, toolArgs, session) {
@@ -250,6 +329,11 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
         return JSON.stringify({ leads: text });
       }
 
+      const pluginTool = resolvePluginTool(toolName);
+      if (pluginTool) {
+        return await callPluginTool(pluginTool.plugin, pluginTool.name, toolArgs);
+      }
+
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
     } catch (err) {
       return JSON.stringify({ error: err.message });
@@ -279,6 +363,16 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
     const toolLog = [];
     const localMsgs = [...msgs];
     let consecutiveErrors = 0;
+    // The model is only ever offered this experience's active tool set (empty
+    // for Safe Chat / plain-chat experiences, which never set reqBody.tools
+    // below), but a tool_calls entry it returns anyway must not be dispatched
+    // — an upstream/prompt-injected model claiming a tool name outside what
+    // was actually offered would otherwise still reach callAgentTool, which
+    // has no notion of "active experience" and will happily execute anything
+    // it recognizes by name (CWE-862).
+    const allowedToolNames = new Set(
+      tools.map(t => t.function?.name || t.name).filter(Boolean),
+    );
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const reqBody = { model: session.model, messages: localMsgs, stream: false };
@@ -303,7 +397,9 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
         const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
         const callId = tc.id || randomUUID();
 
-        const rawResult = await callAgentTool(name, args, session);
+        const rawResult = allowedToolNames.has(name)
+          ? await callAgentTool(name, args, session)
+          : JSON.stringify({ error: `Tool "${name}" is not in the active tool list for this experience` });
         const result = capToolResult(rawResult);
 
         let parsed;
