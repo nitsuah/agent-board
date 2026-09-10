@@ -301,7 +301,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - ../.env
     environment:
       - GITHUB_ID=${GITHUB_ID}
       - GITHUB_SECRET=${GITHUB_SECRET}
@@ -381,7 +381,9 @@ services:
   # Enable with:  docker compose --profile tools up tool-content-gen
   tool-content-gen:
     build:
-      # Relative to the project directory (compose is run with --project-directory .)
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
       context: ../tools/content-gen
       dockerfile: Dockerfile
     container_name: tool-content-gen
@@ -391,14 +393,21 @@ services:
       - prebuild
     ports:
       - "3200:3200"
-    env_file:
-      - .env
+    # No env_file here deliberately: this container proxies to
+    # MoneyPrinterTurbo and handles untrusted video-generation prompts, so it
+    # gets only the specific variables it actually needs below rather than
+    # every secret in the root .env (GITHUB_SECRET, POSTGRES_PASSWORD,
+    # NETLIFY_AUTH_TOKEN, etc. — CWE-200, a compromised tool container had no
+    # reason to be able to read those).
     environment:
       - CONTENT_GEN_PORT=3200
       - MPT_API_URL=${MPT_API_URL:-http://host.docker.internal:8080}
       - MPT_UI_URL=${MPT_UI_URL:-http://host.docker.internal:8501}
-    volumes:
-      - ../:/workspace-root:ro
+    # No repo-root mount either: this service only wraps MoneyPrinterTurbo's
+    # HTTP API (which runs separately on the host — see the header comment
+    # above), and never reads from tools/content-gen's own codebase at
+    # /workspace-root; the mount would otherwise expose the root .env to a
+    # container handling untrusted video-generation prompts (CWE-200).
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -416,7 +425,9 @@ services:
   # Enable with:  docker compose --profile tools up tool-website
   tool-website:
     build:
-      # Relative to the project directory (compose is run with --project-directory .)
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
       context: ../tools/website
       dockerfile: Dockerfile
     container_name: tool-website
@@ -426,8 +437,12 @@ services:
       - prebuild
     ports:
       - "3201:3201"
-    env_file:
-      - .env
+    # No env_file here deliberately: this container handles untrusted
+    # website-generation and lead-discovery input, so it gets only the
+    # specific variables it needs below (including NETLIFY_AUTH_TOKEN, which
+    # this container's own deploy scripts use) rather than every secret in
+    # the root .env — GITHUB_SECRET, POSTGRES_PASSWORD, etc. — that a
+    # compromised tool container had no reason to read (CWE-200).
     environment:
       - WEBSITE_PORT=3201
       - WEBSITE_OUTPUT_DIR=/output
@@ -443,8 +458,10 @@ services:
     volumes:
       # /app/output matches $PSScriptRoot/../output inside the container scripts
       - website_output:/app/output
-      # Relative to the project directory (compose is run with --project-directory .)
-      - ./tools/website/templates:/app/templates:ro
+      # Relative to this compose file's directory (config/) — run compose commands
+      # WITHOUT --project-directory so build contexts, volumes, and env_file paths
+      # all resolve consistently from here.
+      - ../tools/website/templates:/app/templates:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

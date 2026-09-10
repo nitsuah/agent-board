@@ -1,5 +1,5 @@
 # One-time setup for content-gen / MoneyPrinterTurbo
-# Run this once from C:\Users\ajhar\code\motor-pool\tools\content-gen\scripts\
+# Run this once from C:\Users\ajhar\code\agent-board\tools\content-gen\scripts\
 # Keys are read automatically from .env in the parent directory.
 # CLI params override .env values if both are present.
 param(

@@ -310,7 +310,7 @@ async function testBbMcp() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function run() {
-  console.log(`\nmotor-pool — E2E Services Test`);
+  console.log(`\nagent-board — E2E Services Test`);
   console.log(`Target: ${BASE}\n`);
 
   const { ok, body } = await api('GET', '/api/health');

@@ -50,7 +50,7 @@ async function cleanupSession(id) {
 }
 
 async function run() {
-  console.log('=== motor-pool E2E Agent Tests ===\n');
+  console.log('=== agent-board E2E Agent Tests ===\n');
 
   // ── 1. Health + experience config ────────────────────────────────────────────
   console.log('1) Verifying dashboard health and experience configs...');
