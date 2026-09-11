@@ -4,9 +4,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feedback-dev-*, feat/* ]
+    branches: [ main, master, feedback-dev-*, feat/* ]
   pull_request:
-    branches: [ main, feat/* ]
+    branches: [ main, master, feat/* ]
 
 # Least-privilege default: no step here needs anything beyond reading the
 # checked-out repo (checkout, pre-commit, docker compose build/up/test).
