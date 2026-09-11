@@ -482,6 +482,11 @@ services:
       - test
     environment:
       - AGENT_DASHBOARD_DISABLE_LISTEN=1
+    # Bind-mount the lcov report dir so `npm run test:coverage` output
+    # (coverage/lcov.info, written by c8) survives after `--rm` removes the
+    # container — CI needs it on the host filesystem to upload as an artifact.
+    volumes:
+      - ../dashboard/coverage:/app/coverage
 
 volumes:
   agent_db_data:

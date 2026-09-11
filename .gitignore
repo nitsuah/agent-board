@@ -56,6 +56,10 @@ build/
 *.a
 *.so
 
+# Test coverage output (dashboard `npm run test:coverage` — c8 lcov report)
+dashboard/coverage/
+dashboard/.v8-coverage/
+
 # Database
 *.db
 *.sqlite

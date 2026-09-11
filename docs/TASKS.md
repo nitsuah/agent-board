@@ -23,10 +23,21 @@ Last Updated: 2026-09-02
     (2→69%). Remaining gaps are integration-shaped — Postgres, OTEL collector,
     Docker daemon — and are itemized in `docs/METRICS.md`.
 
-- [ ] **[CI] Publish the lcov coverage report as a CI artifact** — `npm run test:coverage` already generates lcov output locally; it is not yet uploaded anywhere CI runs.
+- [x] **[CI] Publish the lcov coverage report as a CI artifact** — `npm run test:coverage` already generates lcov output locally; it is not yet uploaded anywhere CI runs.
   - Priority: P2
   - Context: split out from the coverage task above, which is complete on the coverage number itself but never covered CI publication. Depends on the CI task below actually running tests in the pipeline.
   - Acceptance Criteria: the CI workflow uploads the lcov report (e.g. as a workflow artifact or to a coverage service) on every run.
+  - Done (2026-09-11): CI's `Run unit tests` step now runs `npm run test:coverage` (was
+    `test:unit`) and a new `Upload coverage report` step uploads `dashboard/coverage/lcov.info`
+    via `actions/upload-artifact@v4`. Coverage is generated inside the Docker `test` container
+    (`config/docker-compose.yml`'s `test` service), which previously discarded its filesystem
+    on `--rm` with nothing bind-mounted — added a `../dashboard/coverage:/app/coverage` volume
+    so the lcov report lands on the runner's host filesystem for `upload-artifact` to pick up.
+    Verified locally via `docker compose -f config/docker-compose.yml --profile test run --build
+    --rm test npm run test:coverage`: produced a 1400-line `dashboard/coverage/lcov.info`
+    (`test:coverage` only reaches the `c8 report` step if `test:unit` exits 0 first, so the
+    file's presence also confirms the suite passed). Added `dashboard/coverage/` and
+    `dashboard/.v8-coverage/` to `.gitignore` so the generated report doesn't get committed.
 
 - [x] **[CI] Add unit-test step to `.github/workflows/ci.yml`** — the current CI pipeline builds the container and waits for a health check but never runs `npm run test:unit`.
   - Priority: P1
