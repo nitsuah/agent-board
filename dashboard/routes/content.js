@@ -80,10 +80,10 @@ export function createContentRouter({ WEBSITE_OUTPUT_DIR, WORKSPACE_ROOT }) {
     res.download(safe);
   });
 
-  router.get('/content/download/:slug/*', (req, res) => {
+  router.get('/content/download/:slug/*splat', (req, res) => {
     const { slug } = req.params;
     if (!/^[\w-]+$/.test(slug)) return res.status(400).json({ success: false, error: 'Invalid slug' });
-    const filePath = req.params[0];
+    const filePath = Array.isArray(req.params.splat) ? req.params.splat.join('/') : req.params.splat;
     if (!filePath) return res.status(400).json({ success: false, error: 'Missing file path' });
     const fullPath = resolvePath(join(WEBSITE_OUTPUT_DIR, slug, filePath));
     if (!fullPath.startsWith(resolvePath(WEBSITE_OUTPUT_DIR))) {
