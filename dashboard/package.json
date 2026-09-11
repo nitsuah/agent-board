@@ -15,19 +15,19 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.72.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-node": "^0.214.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/sdk-trace-node": "^2.6.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
-    "axios": "^1.6.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "axios": "^1.20.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "pg": "^8.13.1",
-    "three": "^0.167.1",
-    "ws": "^8.18.3"
+    "pg": "^8.23.0",
+    "three": "^0.185.1",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
