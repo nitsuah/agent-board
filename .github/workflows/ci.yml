@@ -4,9 +4,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, feedback-dev-*, feat/* ]
+    branches: [ main, master, feedback-dev-*, feat/* ]
   pull_request:
-    branches: [ main, feat/* ]
+    branches: [ main, master, feat/* ]
 
 # Least-privilege default: no step here needs anything beyond reading the
 # checked-out repo (checkout, pre-commit, docker compose build/up/test).
@@ -30,8 +30,23 @@ jobs:
         # config/docker-compose.yml's env_file entries resolve as ../.env relative to
         # the compose file (config/), i.e. repo-root .env — not config/.env.
         run: touch .env
-      - name: Run unit tests
-        run: docker compose -f config/docker-compose.yml --profile test run --build --rm test npm run test:unit
+      - name: Create coverage output dir
+        # The `test` service bind-mounts ./dashboard/coverage into the container so the
+        # lcov report survives after --rm. Pre-create it so the mount lands with the
+        # runner user's ownership rather than being auto-created as root by the Docker
+        # daemon, which would leave a later step unable to clean it up.
+        run: mkdir -p dashboard/coverage
+      - name: Run unit tests with coverage
+        # test:coverage runs test:unit under c8 and writes coverage/lcov.info (see
+        # dashboard/package.json) — same fail-fast-on-test-failure behavior as plain
+        # test:unit, plus the lcov report the next step uploads.
+        run: docker compose -f config/docker-compose.yml --profile test run --build --rm test npm run test:coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-report
+          path: dashboard/coverage/lcov.info
+          if-no-files-found: error
       - name: Docker Compose Build
         run: docker compose -f config/docker-compose.yml build agent-dashboard
       - name: Docker Compose Up
