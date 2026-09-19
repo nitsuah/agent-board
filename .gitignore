@@ -64,6 +64,7 @@ dashboard/.v8-coverage/
 *.db
 *.sqlite
 *.sqlite3
+dashboard/data/
 
 # ai gen
 .claude/worktrees/
