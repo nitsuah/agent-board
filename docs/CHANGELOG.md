@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTTP endpoint. See `docs/API.md#plugins`.
 - **CI unit-test gate** — `.github/workflows/ci.yml` now runs `npm run test:unit`
   before the image build, so a failing suite fails CI.
+- **MCP container manager** — declarative `config/mcp-registry.json` registry;
+  `GET /api/mcp-registry` lists containers with live health, `POST
+  /api/mcp-registry/:key/ensure` JIT-starts one on demand, `POST
+  /api/mcp-registry/:key/stop` stops it.
+- **bb-mcp streaming UI** — `GET /api/mcp/:id/stream` SSE endpoint; `ToolStream`
+  React component with fade-in tokens and an animated typing indicator; Stream
+  button in ToolWorkbench for bb-mcp sessions.
+- **Multi-persona Blackboard selector** — Student/Instructor/Admin/Parent persona
+  picker in the SystemPanel BLACKBOARD MCP section; switching persona reloads and
+  filters the available tool list.
+- **Content-gen Docker socket removal (security fix)** — `tool-content-gen` is
+  now a `tools`-profile sidecar that wraps the MoneyPrinterTurbo HTTP API (which
+  runs separately on the host, not in this stack) via `MPT_API_URL`, instead of
+  mounting `/var/run/docker.sock` to spin MPT up on demand itself; `generate_video`
+  reports an MCP tool error when MPT is unavailable.
 
 ### Changed
 
