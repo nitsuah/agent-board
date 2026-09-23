@@ -35,11 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-persona Blackboard selector** — Student/Instructor/Admin/Parent persona
   picker in the SystemPanel BLACKBOARD MCP section; switching persona reloads and
   filters the available tool list.
-- **Content-gen MPT sidecar (security fix)** — MoneyPrinterTurbo now runs as a
-  first-class `tools`-profile sidecar service instead of content-gen mounting
-  `/var/run/docker.sock` to spin it up on demand; content-gen calls `MPT_API_URL`
-  over HTTP (same pattern as Ollama) and returns a clean 503 when MPT isn't in the
-  stack.
+- **Content-gen Docker socket removal (security fix)** — `tool-content-gen` is
+  now a `tools`-profile sidecar that wraps the MoneyPrinterTurbo HTTP API (which
+  runs separately on the host, not in this stack) via `MPT_API_URL`, instead of
+  mounting `/var/run/docker.sock` to spin MPT up on demand itself; `generate_video`
+  reports an MCP tool error when MPT is unavailable.
 
 ### Changed
 

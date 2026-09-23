@@ -62,7 +62,7 @@ Last Updated: 2026-09-23
 ## 2027 Q1 - Developer Experience & Quality
 
 - [x] **Test coverage to ≥80%**: 81.53% statements / 72.68% branches / 90.39% functions (Docker run 2026-09-04; 81.03% / 71.85% / 89.59% at the original 2026-08-27 measurement, PR #60) — raised from a measured 64.27% baseline by un-hiding suites wrongly excluded as "integration" and adding real coverage for MCP parsing, workspace path-traversal, agent-loop tool execution, and SSE streaming.
-- [x] **CI unit-test gate**: `npm run test:unit` (via `test:coverage`) runs in `.github/workflows/ci.yml` before the image build so a failing suite fails CI; the lcov report is uploaded as a workflow artifact (`actions/upload-artifact@v4`).
+- [x] **CI unit-test gate**: `npm run test:unit` (via `test:coverage`) runs in `.github/workflows/ci.yml` before the image build so a failing suite fails CI; the lcov report is uploaded as a workflow artifact (`actions/upload-artifact@v7`).
 - [x] **Content-gen Docker socket security fix**: MPT sidecar service declared in docker-compose.yml; Docker socket mount removed from content-gen; content-gen calls `MPT_API_URL` via HTTP (see TASKS.md ARCH item — complete).
 - [ ] **Service lifecycle dashboard (UI completion)**: mount `/var/run/docker.sock` for in-container `docker stats` or add a host-side stats sidecar; surface per-service resource charts in the dashboard.
 - [ ] **Host architecture profiling Phase 2**: Windows host lean-baseline profile accounting for WSL2/Docker Desktop overhead.

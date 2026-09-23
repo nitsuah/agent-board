@@ -85,7 +85,7 @@ AGENT INSTRUCTIONS:
 1. Keep active items in P0-P3.
 2. When an item is completed, remove it from this file rather than leaving an
    inline "Done" note — condense the outcome into `docs/FEATURES.md` (user-facing
-   capability), `docs/ROADMAP.md` (quarter it shipped in), or `CHANGELOG.md`
+   capability), `docs/ROADMAP.md` (quarter it shipped in), or `docs/CHANGELOG.md`
    (Unreleased/Added), whichever already tracks that area, then extend that
    entry if one exists rather than duplicating it. Use the Done/In Progress
    sections below only for items that don't belong under any P0-P3 priority
