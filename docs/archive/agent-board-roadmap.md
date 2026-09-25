@@ -1,5 +1,7 @@
 # motor-pool — Product Improvement Roadmap
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 > Goal: Evolve motor-pool from a personal internal tool into a consumer-facing product with meaningful safety guardrails, user context, and observable metrics. This is the "wrapping and splitting the logic" phase.
 
 ---

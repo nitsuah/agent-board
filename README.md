@@ -489,6 +489,24 @@ Every tracked doc in this repo, so nothing is orphaned (also used by the Obsidia
 - [Project Metrics: agent-board](./docs/METRICS.md) — `docs/METRICS.md`
 - [ROADMAP](./docs/ROADMAP.md) — `docs/ROADMAP.md`
 - [TASKS](./docs/TASKS.md) — `docs/TASKS.md`
+
+**`docs/archive/`**
+
+- [motor-pool 2-Minute Demo Script (Ready to Record)](./docs/archive/AGENT-BOARD-DEMO_VIDEO_SCRIPT.md) — `docs/archive/AGENT-BOARD-DEMO_VIDEO_SCRIPT.md`
+- [AI Stack Strategy](./docs/archive/AI_STACK_STRATEGY.md) — `docs/archive/AI_STACK_STRATEGY.md`
+- [Architecture Overview](./docs/archive/ARCHITECTURE.md) — `docs/archive/ARCHITECTURE.md`
+- [motor-pool Short Demo Script (60-75s)](./docs/archive/DEMO_VIDEO_SCRIPT_SHORT.md) — `docs/archive/DEMO_VIDEO_SCRIPT_SHORT.md`
+- [Delivery Pipeline Handoff](./docs/archive/HANDOFF-bb-mcp-opt-in-20260403.md) — `docs/archive/HANDOFF-bb-mcp-opt-in-20260403.md`
+- [Delivery Pipeline Handoff](./docs/archive/HANDOFF-service-discovery-system-panel-20260403.md) — `docs/archive/HANDOFF-service-discovery-system-panel-20260403.md`
+- [Model Context Protocol (MCP) Setup Guide](./docs/archive/MCP_SETUP.md) — `docs/archive/MCP_SETUP.md`
+- [Migration Notes](./docs/archive/MIGRATION.md) — `docs/archive/MIGRATION.md`
+- [Ollama Model Loading Performance Audit](./docs/archive/MODEL_LOADING_AUDIT.md) — `docs/archive/MODEL_LOADING_AUDIT.md`
+- [Quick Reference Guide](./docs/archive/QUICK_REFERENCE.md) — `docs/archive/QUICK_REFERENCE.md`
+- [Agent Ecosystem - Local Development Stack](./docs/archive/README-orchestration.md) — `docs/archive/README-orchestration.md`
+- [Reorganization Summary](./docs/archive/REORGANIZATION_SUMMARY.md) — `docs/archive/REORGANIZATION_SUMMARY.md`
+- [Setup Instructions](./docs/archive/SETUP_INSTRUCTIONS.md) — `docs/archive/SETUP_INSTRUCTIONS.md`
+- [motor-pool — Product Improvement Roadmap](./docs/archive/agent-board-roadmap.md) — `docs/archive/agent-board-roadmap.md`
+- [3D Memory Palace — Design Notes (raw)](./docs/archive/neo4js-memory-palace-notes.md) — `docs/archive/neo4js-memory-palace-notes.md`
 <!-- docs-index:end -->
 
 ## License

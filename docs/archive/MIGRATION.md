@@ -1,5 +1,7 @@
 # Migration Notes
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 This document captures what changed when the project was reorganized from a flat structure into the current layout.
 
 ## Current Structure (post-migration)

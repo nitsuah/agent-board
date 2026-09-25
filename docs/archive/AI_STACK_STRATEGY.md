@@ -1,5 +1,7 @@
 # AI Stack Strategy
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 > Local orchestration architecture for motor-pool, Kryptos, and personal automation
 
 **Last updated:** June 2026

@@ -1,5 +1,7 @@
 # motor-pool 2-Minute Demo Script (Ready to Record)
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 ## Goal
 Show the core product story in 120 seconds:
 - Multi-experience AI chat in one local dashboard

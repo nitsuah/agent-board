@@ -1,5 +1,7 @@
 # 3D Memory Palace — Design Notes (raw)
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 > **Archived 2026-09-02.** Raw brainstorm notes (originally one unformatted paragraph,
 > reformatted here for readability) behind the "3D Memory Palace context" line in
 > `ROADMAP.md`. Summarized into a proper writeup under `ROADMAP.md`'s 2027 Q3 section;

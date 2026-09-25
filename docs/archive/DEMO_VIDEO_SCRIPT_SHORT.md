@@ -1,5 +1,7 @@
 # motor-pool Short Demo Script (60-75s)
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 ## Purpose
 A short-form version of the main demo designed for quick sharing on X, LinkedIn, and YouTube Shorts while preserving the core proof points.
 

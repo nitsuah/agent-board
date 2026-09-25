@@ -1,5 +1,7 @@
 # Quick Reference Guide
 
+> 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
+
 > **Archived 2026-09-02.** Superseded by `README.md` (Quick Start, Directory Structure,
 > Troubleshooting) and `docs/API.md`. Container names here (`llm_qwen_coder`) predate
 > the current compose service names (`ollama`); commands and endpoint tables are stale.
