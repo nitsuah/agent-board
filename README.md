@@ -1,5 +1,9 @@
 # agent-board — Local AI Ops Cockpit
 
+
+<!-- Deployment Status -->
+[![Deploy Status](https://github.com/nitsuah/agent-board/actions/workflows/CI.yml/badge.svg)](https://github.com/nitsuah/agent-board/actions)
+
 > 🧭 **agent-board** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
 
 agent-board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
