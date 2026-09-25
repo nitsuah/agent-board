@@ -1,7 +1,7 @@
 # Setup Instructions
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
-
+>
 > **Historical document** — initial setup is complete. See [README.md](../README.md) for current quick start.
 
 ## Current Quick Start

@@ -1,7 +1,7 @@
 # Model Context Protocol (MCP) Setup Guide
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
-
+>
 > **Archived 2026-09-02.** This guide covers installing generic Claude Desktop MCP
 > servers (Docker, Filesystem, Git) — a different concept from this repo's actual MCP
 > integration, which is the declarative `config/mcp-registry.json` registry, the

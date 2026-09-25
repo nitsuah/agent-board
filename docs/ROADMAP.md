@@ -6,7 +6,8 @@ Last Updated: 2026-09-24
 
 > 2027 planning reset (2026-09-24, `pmo-ff`): every completed 2026 item was removed from this file and
 > condensed into [FEATURES](./FEATURES.md) / [CHANGELOG](./CHANGELOG.md). Open 2026 items were carried
-> into 2027 Q1 below; nothing is scheduled in a 2026 quarter anymore.
+> into 2027 Q1 below, except the multi-tenancy/RBAC, audit logging, analytics, host profiling Phase 1, decoupled
+> runtimes, and guardrails items, which had already been re-scoped to 2027 Q3. Nothing is scheduled in a 2026 quarter anymore.
 
 ## 2027 Q1 - Developer Experience & Quality (Planned)
 

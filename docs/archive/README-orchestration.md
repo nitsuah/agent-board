@@ -1,7 +1,7 @@
 # Agent Ecosystem - Local Development Stack
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
-
+>
 > **Archived 2026-09-02.** Superseded by the root `README.md`, which reflects the
 > current compose services, profiles, plugin architecture, and tmux worktrees. This
 > file predates most of those and is redundant/stale (old MCP install instructions,

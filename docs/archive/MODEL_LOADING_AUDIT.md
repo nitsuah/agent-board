@@ -1,7 +1,7 @@
 # Ollama Model Loading Performance Audit
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
-
+>
 > **Status:** Audit complete. Profiling data below; partial optimization already
 > shipped (model swap), additional opt-in mitigation added (warmup), GPU work
 > tracked separately as the path to a larger win.
