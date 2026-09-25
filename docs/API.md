@@ -1524,6 +1524,6 @@ if it doesn't exist.
 ## See Also
 
 - [README.md](../README.md) — Quick start, profiles, Docker control
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — System design
+- [ARCHITECTURE.md](./archive/ARCHITECTURE.md) — System design (archived)
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — Production deployment guide
-- [MIGRATION.md](./MIGRATION.md) — Upgrading from v0.3
+- [MIGRATION.md](./archive/MIGRATION.md) — Upgrading from v0.3 (archived)
