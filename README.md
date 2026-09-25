@@ -481,7 +481,7 @@ services:
 
 ## Docs Index
 
-Every committed doc in this repo (other than this README, `.github/` and `templates/`), the same set mirrored into the Obsidian vault, so none of them is orphaned.
+Every committed Markdown doc in this repo (other than this README, `.github/` and `templates/`), the same set mirrored into the Obsidian vault, so none of them is orphaned.
 
 - [API Documentation](./docs/API.md) — `docs/API.md`
 - [Changelog](./docs/CHANGELOG.md) — `docs/CHANGELOG.md`
