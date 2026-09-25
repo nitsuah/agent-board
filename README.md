@@ -2,7 +2,7 @@
 
 
 <!-- Deployment Status -->
-[![Deploy Status](https://github.com/nitsuah/agent-board/actions/workflows/CI.yml/badge.svg)](https://github.com/nitsuah/agent-board/actions)
+[![Deploy Status](https://github.com/nitsuah/agent-board/actions/workflows/ci.yml/badge.svg)](https://github.com/nitsuah/agent-board/actions)
 
 > 🧭 **agent-board** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
 
