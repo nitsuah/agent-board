@@ -1,5 +1,7 @@
 # Production Deployment Guide
 
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+
 agent-board is Docker-native and local-first. This guide covers running it on a
 dedicated host (Linux server, a VPS, or a Windows machine with Docker Desktop).
 

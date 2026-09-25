@@ -1,5 +1,7 @@
 # Changelog
 
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · **Changelog** · [Metrics](./METRICS.md) <!-- nav -->
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -9,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial project setup
 - OpenLLM endpoint (`llm_openllm`, port 8082)
 - Ollama model loading performance audit (`docs/MODEL_LOADING_AUDIT.md`) — passive log analysis of all 8 load events, bottleneck identified (`load_tensors: mmap=false`), honest assessment vs. ≥50% acceptance criteria (~17-23% average reduction from model swap, not 50%), ranked recommendations (GPU > selective loading > warmup).
 - Opt-in `ollama-warmup` compose service (`warmup` profile) — one-shot container that pre-loads `PRIMARY_LLM_MODEL` during `docker compose up` so the cold model load cost (~15-23s) hits at stack-start rather than on the first user chat message. Enable with `docker compose --profile warmup up ollama-warmup`. — opt-in second OpenAI-compatible endpoint for custom/fine-tuned HuggingFace models, gated behind the `openllm` compose profile and `OPENLLM_ENABLED` flag, registered alongside Ollama and Docker Model Runner. See `docs/AI_STACK_STRATEGY.md`.
@@ -40,9 +41,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runs separately on the host, not in this stack) via `MPT_API_URL`, instead of
   mounting `/var/run/docker.sock` to spin MPT up on demand itself; `generate_video`
   reports an MCP tool error when MPT is unavailable.
+- **tmux multi-agent worktrees + plugin architecture** (#60) — parallel agents in
+  isolated tmux windows/worktrees (gated by `AGENT_BOARD_ENABLE_TMUX` and an
+  exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist); plugins register by
+  file placement under `dashboard/config/plugins/`.
+- **Coverage artifact** (#73) — CI uploads the lcov report as a workflow artifact;
+  coverage raised to ≥80% statements (see `docs/METRICS.md`).
 
 ### Changed
 
+- Dashboard dependency majors (Sept 2026 Dependabot): React/React DOM 19.2
+  (#65, #70), Vite 8.2 (#68), `@vitejs/plugin-react` 6.1 (#66), Express 5.2 (#69),
+  dotenv 18 (#67, #77), c8 12 (#71), `actions/upload-artifact` v7 (#74).
+- Planning docs reset for 2027 (`pmo-ff`): completed 2026 roadmap items condensed
+  into FEATURES, open items carried into 2027 Q1, breadcrumb navigation + README
+  docs index added for the Obsidian vault mirror.
 - Consistent `agent-board` naming across the dashboard UI (page title, onboarding
   banner, 3D LiminalDashboard hub/hero text), OTEL service identifiers, PowerShell
   scripts, and the `tools/website` and `tools/content-gen` npm package scopes

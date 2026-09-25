@@ -1,5 +1,7 @@
 # API Documentation
 
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+
 Complete REST API reference for the Agent Dashboard.
 
 ## Base URL
@@ -1522,6 +1524,6 @@ if it doesn't exist.
 ## See Also
 
 - [README.md](../README.md) — Quick start, profiles, Docker control
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — System design
+- [ARCHITECTURE.md](./archive/ARCHITECTURE.md) — System design (archived)
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — Production deployment guide
-- [MIGRATION.md](./MIGRATION.md) — Upgrading from v0.3
+- [MIGRATION.md](./archive/MIGRATION.md) — Upgrading from v0.3 (archived)

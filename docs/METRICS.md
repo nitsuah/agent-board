@@ -1,5 +1,7 @@
 # Project Metrics: agent-board
 
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · **Metrics** <!-- nav -->
+
 This document tracks the health, performance, and quality metrics of the `agent-board` project.
 
 ## Core Metrics
