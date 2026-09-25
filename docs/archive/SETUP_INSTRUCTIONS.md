@@ -2,7 +2,7 @@
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
 >
-> **Historical document** — initial setup is complete. See [README.md](../README.md) for current quick start.
+> **Historical document** — initial setup is complete. See [README.md](../../README.md) for current quick start.
 
 ## Current Quick Start
 
@@ -234,7 +234,7 @@ The old setup scripts (`setup-docker-stack.ps1`, `stack-manager.ps1`) still work
 ## 📞 Need Help?
 
 1. **Quick reference:** See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md)
-2. **API docs:** See [API.md](./API.md)
+2. **API docs:** See [API.md](../API.md)
 3. **Architecture:** See [ARCHITECTURE.md](./ARCHITECTURE.md)
 4. **View logs:** `docker-compose logs -f`
 5. **Check health:** `curl http://localhost:3000/api/health`

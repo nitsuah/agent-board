@@ -369,14 +369,14 @@ A: No - sessions are ephemeral. They're lost when containers stop.
 ## Next Steps
 
 1. **Read** [ARCHITECTURE.md](./ARCHITECTURE.md) for design details
-2. **Review** [API.md](./API.md) for endpoint changes
+2. **Review** [API.md](../API.md) for endpoint changes
 3. **Test** with different endpoints and model combinations
 4. **Provide Feedback** on the new organization
 
 ## Support
 
 For questions or issues:
-1. Check [README.md](../README.md) for quick start
-2. Review [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for design
+1. Check [README.md](../../README.md) for quick start
+2. Review [docs/ARCHITECTURE.md](./ARCHITECTURE.md) for design
 3. Check container logs: `docker-compose logs <service>`
 4. File an issue on GitHub
