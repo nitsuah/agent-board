@@ -1,5 +1,7 @@
 # agent-board — Local AI Ops Cockpit
 
+> 🧭 **agent-board** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
+
 agent-board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
 
 ## Why agent-board
@@ -474,6 +476,20 @@ services:
 - `no-new-privileges` enforced on sandbox container
 - Safe Chat sessions are server-restricted to the primary endpoint and strict safety mode
 - Output filtering redacts detected PII and replaces blocked harmful responses before they reach the UI
+
+<!-- docs-index:start -->
+## Docs Index
+
+Every tracked doc in this repo, so nothing is orphaned (also used by the Obsidian vault mirror).
+
+- [API Documentation](./docs/API.md) — `docs/API.md`
+- [Changelog](./docs/CHANGELOG.md) — `docs/CHANGELOG.md`
+- [Production Deployment Guide](./docs/DEPLOYMENT.md) — `docs/DEPLOYMENT.md`
+- [Features](./docs/FEATURES.md) — `docs/FEATURES.md`
+- [Project Metrics: agent-board](./docs/METRICS.md) — `docs/METRICS.md`
+- [ROADMAP](./docs/ROADMAP.md) — `docs/ROADMAP.md`
+- [TASKS](./docs/TASKS.md) — `docs/TASKS.md`
+<!-- docs-index:end -->
 
 ## License
 

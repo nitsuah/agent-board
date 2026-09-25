@@ -1,5 +1,7 @@
 # API Documentation
 
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+
 Complete REST API reference for the Agent Dashboard.
 
 ## Base URL

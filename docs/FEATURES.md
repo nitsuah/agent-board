@@ -1,5 +1,7 @@
 # Features
 
+> 🧭 [agent-board](../README.md) · **Features** · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+
 ## Core Functionality
 
 - **Agent Lifecycle Management** - Start, stop, and restart individual agents, tool servers, and services directly from the dashboard via live Docker Compose CLI control.
@@ -12,6 +14,8 @@
 - **Workspace IDE** - VSCode-style split layout with file tabs (multi-file editing), integrated terminal pane, compact git panel, and in-browser task dispatch; replaces the earlier single-pane file viewer.
 - **Topbar Command Bar** - Unified top-bar surface replaces the sidebar; session controls, model/endpoint picker, experience selector, and system actions consolidated into a persistent top-bar.
 - **Agent Lifecycle API Documentation** - All lifecycle, metrics, experiences, tools, workspace, and status endpoints documented in `docs/API.md` with request/response examples and a quick-reference table.
+- **Conversation Replay Mode** - Step-through, message-by-message replay of persisted agent sessions (`ReplayPanel`) for debugging decision paths, auditing tool calls, and recording demos without a live model.
+- **3D LiminalDashboard Home** - Three.js force-directed mind map of hubs, services, endpoints, and sessions with OrbitControls, live system state, a ServiceDetail node panel (start/stop/restart/model-pull), and BYOK endpoints shown in the hub and model selector.
 
 ## Integrations & AI Runtimes
 
@@ -21,6 +25,12 @@
 - **RESTful API** - Core API endpoints are implemented and validated by integration tests.
 - `[planned]` **Custom Agent Scripts** - Support for loading and executing user-defined JavaScript logic within the agent runtime.
 - **Event Bus Integration** - Internal event emitter system for handling cross-agent communication.
+- **BYOK External LLMs & Custom Endpoint Registry** - `CUSTOM_LLM_ENDPOINTS` adds any OpenAI-compatible endpoint (OpenRouter, vLLM, LM Studio, Claude/Gemini gateways); API keys are injected server-side and never sent to the frontend.
+- **Plugin Tools in the Agent Loop** - Enabled plugin tools are merged into the model's tool list for the developer/research/website experiences as `<plugin>__<tool>` function calls, so agents can invoke them on their own.
+- **Declarative MCP Registry** - `config/mcp-registry.json` declares MCP containers once; `GET /api/mcp-registry` lists them with live health and `POST /api/mcp-registry/:key/ensure|stop` JIT-starts or stops one on demand.
+- **bb-mcp Streaming UI** - `GET /api/mcp/:id/stream` SSE endpoint plus a `ToolStream` component (fade-in tokens, typing indicator) and a Stream button in ToolWorkbench.
+- **Multi-Persona Blackboard Selector** - Student/Instructor/Admin/Parent persona picker in the SystemPanel BLACKBOARD MCP section filters the loaded bb-mcp tool list.
+- **Topic-Based Event Channels** - Event bus supports named pub/sub channels (e.g. `file-saved`, `build-passed`); end-to-end cross-agent demo still pending (see ROADMAP 2027 Q1).
 
 ## UI/UX
 
@@ -45,6 +55,9 @@
 - **Device Profile System** - Auto-detects host hardware (GPU VRAM + total RAM) at startup and selects a model tier: `minimal` (CPU-only), `laptop` (RTX 3070 / 8 GB VRAM), or `desktop` (RTX 4080 / 24 GB VRAM); profiles defined in `config/device-profiles.json`; overridable via `DEVICE_PROFILE`; active profile and GPU status shown in the System panel.
 - **bb-mcp Opt-In Integration** - `BB_MCP_ENABLED` compose profile flag gates the bb-mcp service; dashboard API hides Blackboard connectors and proxy routes when disabled, keeping the default footprint minimal.
 - **OpenLLM Opt-In Endpoint** - `openllm` compose profile adds a second OpenAI-compatible endpoint (port 8082) for custom/fine-tuned HuggingFace models via BentoML, registered alongside Ollama and Docker Model Runner; gated by `OPENLLM_ENABLED`.
+- **Validated Production Deployment Path** - Documented in `docs/DEPLOYMENT.md`.
+- **Content-gen Without the Docker Socket** - `tool-content-gen` is a `tools`-profile sidecar that calls the host MoneyPrinterTurbo API via `MPT_API_URL` instead of mounting `/var/run/docker.sock`.
+- **CI Unit-Test Gate + Coverage Artifact** - `npm run test:unit` runs in `.github/workflows/ci.yml` before the image build; the lcov report is uploaded as a workflow artifact. Coverage ≥80% statements (see `docs/METRICS.md`).
 
 ## Security & Verification
 

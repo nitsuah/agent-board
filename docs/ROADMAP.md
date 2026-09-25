@@ -1,93 +1,38 @@
 # ROADMAP
 
-Last Updated: 2026-09-23
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · **Roadmap** · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
 
-## 2026 Q2 - Persistence and Agent Control
+Last Updated: 2026-09-24
 
-- [x] Implement persistence for agent history, logs, and state snapshots. Verify they work with tests and examples.
-- [x] Ship the agent command interface for start, stop, and restart actions. Verify they work with tests and examples (1 is fine can do before chat tests).
-- [x] Add heartbeat and resource monitoring so agents can report health and resource usage back to the dashboard or if models fail the system can offer the "restart" option.
-- [x] Finish or investigate for further review the real-time communication bridge that early docs implied.
-- [x] Discover features from [1code](https://github.com/21st-dev/1code) and evaluate relevant patterns/approaches for local stack adaptation.
-- [x] **Conversation replay mode** — step-through replay of persisted agent sessions (message-by-message) for debugging decision paths, auditing tool calls, and recording portfolio demos without a live model.
+> 2027 planning reset (2026-09-24, `pmo-ff`): every completed 2026 item was removed from this file and
+> condensed into [FEATURES](./FEATURES.md) / [CHANGELOG](./CHANGELOG.md). Open 2026 items were carried
+> into 2027 Q1 below; nothing is scheduled in a 2026 quarter anymore.
 
-## 2026 Q2 - Quality Reset
+## 2027 Q1 - Developer Experience & Quality (Planned)
 
-- [x] P1: Validate safety-layer behavior with tests and examples.
-- [x] P2: Finish API documentation for lifecycle and security flows.
-- [x] P2: Define a validated production deployment path.
-- [ ] `[deferred/P3]` Unblock NemoClaw sandbox container — Ollama is the active local runtime; revisit if NemoClaw becomes relevant.
-- [ ] `[deferred/P3]` Replace OpenLLM endpoint — CPU-incompatible with current workflow; Ollama + tools/ cover needs. `OPENLLM_ENABLED=false` stays.
+Critical path: service lifecycle UI → auth gate (+ interim exec-route token) → persistent BYOK.
 
-## 2026 Q3 - Extensibility Foundations
-
-- [x] Define custom agent plugin boundaries. Resolved by the shipped plugin
-  architecture below: manifests declare tools (HTTP method/endpoint/schema) and
-  events (channel + allowed emit types) as the boundary — a plugin can only do what
-  its manifest declares, registration is by file placement, and nothing requires a
-  core server edit.
-- [ ] **Named pub/sub event channels** — extend the event bus into a topic-based pub/sub model where agents subscribe to named channels (e.g., `file-saved`, `build-passed`) and react asynchronously; decouples agent coordination from direct point-to-point wiring and enables reactive multi-agent pipelines. The topic-based mechanism itself is implemented; kept open pending `docs/TASKS.md`'s "Validate cross-agent event bus behavior" (two agents exchanging events in a documented demo path) so this isn't marked done ahead of that validation.
-- `[moved to 2027 Q3]` Multi-tenancy (user login/SSO) and RBAC planning — see below.
-- `[moved to 2027 Q3]` Audit logging and compliance support — see below.
-- `[moved to 2027 Q3]` Analytics and operational observability — see below.
-
-### Stability, Resource Optimization & Device Profiling
-
-- [x] **Docker image optimization**: Gated nemoclaw (`sandbox` profile) and jaeger (`observability` profile); minimal default stack is agent-db + ollama + dashboard; all profiles documented in `.env.example` and README.
-- [x] **GPU acceleration (RTX 4080 / CUDA)**: Detect available GPU devices, pass CUDA flags to Ollama, and document driver/toolkit prerequisites.
-- [x] **Just-In-Time (JIT) model lifecycle (Phase 1)**: Implement a `/tools` orchestration wrapper to dynamically spin up/down containerized model sizes on task queue demand.
-- `[moved to 2027 Q3]` Host architecture profiling (Phase 1) and Windows host mitigation (Phase 2) — see below.
-- `[moved to 2027 Q3]` Decoupled runtimes & routing (Phase 3) and model configuration matrix (Phase 3) — see below.
-- `[tracked in 2027 Q1]` Service lifecycle dashboard (UI completion) — see that section; not duplicated here.
-
-### Custom Agent System & Safety Guardrails
-
-- [x] **tmux multi-agent worktrees**: Spawn parallel agent instances in isolated tmux windows, each with distinct worktrees, contexts, and output streams (PR #60). Execution is disabled by default (`AGENT_BOARD_ENABLE_TMUX`) and, since the route has no per-request authentication, command execution is additionally gated behind an empty-by-default exact-match `AGENT_BOARD_TMUX_ALLOWED_COMMANDS` allowlist — enabling the feature alone grants worktree creation only, not command execution.
-- [x] **Plugin architecture**: Deliver a core plugin API for task/integration-specific extensions without core codebase modification (PR #60) — manifests register by file placement under `dashboard/config/plugins/`, no core edits required.
-- [x] **BYOK external LLM integration**: Implement dashboard key management and provider interfaces for Claude, Gemini, and other APIs.
-- [x] **3D LiminalDashboard home screen**: Three.js force-directed agent-board mind map; bioluminescent hub/service/endpoint/session nodes; starfield; OrbitControls; physics simulation; live system state; experience strip + persona shortcuts. Hub v2 (2026-07-02): legend/hint repositioned, stats chips removed, mobile dropdown, Llama3.2 distance fix, ServiceDetail node panel (start/stop/restart/model-pull), BYOK endpoints appear in hub + model selector, settings panel slimmed to Stack/Memory/Uptime/LLM/AddExternal/Scan.
-- [x] **Agent skills system**: plugin tools are now merged into the model's tool list
-  for developer/research/website experiences (`<plugin>__<tool>` function-call
-  names), so an agent can invoke a plugin tool on its own — see `TASKS.md`.
-- [x] **Workspace file browser**: Surface a git-aware file tree with read/write directory access directly in the dashboard.
-- `[moved to 2027 Q3]` File & payload guardrails (Phase 2) and schema validation (Phase 2) — see below.
-- `[tracked in 2027 Q2]` Odysseus router integration and 3D Memory Palace / Neo4j context — see that section; not duplicated here.
-
-### MCP Container Ecosystem
-
-- [x] **bb-mcp integration (opt-in)**: `bb-mcp` compose profile gates the service (`docker compose --profile bb-mcp up -d bb-mcp`, per README); dashboard hides Blackboard connectors/routes when disabled.
-- [x] **Multi-MCP orchestration**: Declarative `config/mcp-registry.json` registry — declare new MCP containers once; `GET /api/mcp-registry` lists them with live health; `POST /api/mcp-registry/:key/ensure` JIT-starts a specific container on demand. Tested.
-- `[tracked in 2027 Q2]` MCP container manager UI — see that section; not duplicated here.
-
-## 2027 Q1 - Developer Experience & Quality
-
-- [x] **Test coverage to ≥80%**: 81.53% statements / 72.68% branches / 90.39% functions (Docker run 2026-09-04; 81.03% / 71.85% / 89.59% at the original 2026-08-27 measurement, PR #60) — raised from a measured 64.27% baseline by un-hiding suites wrongly excluded as "integration" and adding real coverage for MCP parsing, workspace path-traversal, agent-loop tool execution, and SSE streaming.
-- [x] **CI unit-test gate**: `npm run test:unit` (via `test:coverage`) runs in `.github/workflows/ci.yml` before the image build so a failing suite fails CI; the lcov report is uploaded as a workflow artifact (`actions/upload-artifact@v7`).
-- [x] **Content-gen Docker socket security fix**: MPT sidecar service declared in docker-compose.yml; Docker socket mount removed from content-gen; content-gen calls `MPT_API_URL` via HTTP (see TASKS.md ARCH item — complete).
 - [ ] **Service lifecycle dashboard (UI completion)**: mount `/var/run/docker.sock` for in-container `docker stats` or add a host-side stats sidecar; surface per-service resource charts in the dashboard.
-- [ ] **Host architecture profiling Phase 2**: Windows host lean-baseline profile accounting for WSL2/Docker Desktop overhead.
 - [ ] **Authentication gate (P2)**: add an optional JWT/session auth layer so the dashboard can be safely exposed on a LAN without open-access risk.
-- [ ] **Scoped API token for exec-capable routes (interim, before full auth gate)**: new idea (2026-08-28) — the worktree launch/exec route and `/api/workspace/exec` both stay unauthenticated by design until the full JWT/session gate lands; a single shared-secret header check on just the exec-capable routes (not full session auth) would close the gap for LAN exposure sooner without waiting on the larger auth project.
+- [ ] **Scoped API token for exec-capable routes (interim, before full auth gate)**: the worktree launch/exec route and `/api/workspace/exec` stay unauthenticated until the JWT/session gate lands; a shared-secret header check on just those routes closes the LAN-exposure gap sooner.
 - [ ] **Persistent BYOK endpoints**: wire `CUSTOM_LLM_ENDPOINTS` env → encrypted volume store so runtime-added endpoints survive restart without editing `.env`.
+- [ ] **Host architecture profiling Phase 2**: Windows host lean-baseline profile accounting for WSL2/Docker Desktop overhead.
+- [ ] **Named pub/sub event channels — validation** *(carried from 2026 Q3)*: the topic-based mechanism is implemented; close once two agents exchange events in a documented demo path (`TASKS.md` → "Validate cross-agent event bus behavior").
+- [ ] `[deferred/P3]` **Unblock NemoClaw sandbox container** *(carried from 2026 Q2)* — Ollama is the active local runtime; revisit only if NemoClaw becomes relevant.
+- [ ] `[deferred/P3]` **Replace OpenLLM endpoint** *(carried from 2026 Q2)* — CPU-incompatible with the current workflow; `OPENLLM_ENABLED=false` stays.
 
-## 2027 Q2 - Blackboard & MCP Frontend
+## 2027 Q2 - Blackboard Showcase & MCP Ecosystem (Planned)
 
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns out of scope for the MCP server live here by improving the chat experience and feedback loops (connecting to a real LRN instance).
+> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server live here.
 
-- [x] **bb-mcp streaming UI**: SSE endpoint `/api/mcp/:id/stream`; ToolStream React component with animated typing indicator + fade-in tokens; demo mode scripts; Stream button in ToolWorkbench; 4 passing tests.
-- [x] **Multi-persona Blackboard workflows**: Student/Instructor/Admin/Parent persona picker in SystemPanel BLACKBOARD MCP section; tool list filtered by persona; offline hint guiding BB_MCP_ENABLED=true.
-- [ ] **Blackboard agent demo mode**: Add an offline preset workflow (course discovery → assignment submission → grade check) utilizing bb-mcp.
-- [x] **bb-mcp tool registry UI (partial)**: BLACKBOARD MCP section in SystemPanel shows tool list with name/description; Load tools button fetches from /api/mcp/blackboard-learn/tools; per-persona filtering. Remaining: status badges per tool, per-tool schema display, last-run result panel (tracked in TASKS.md as `[Q3-CEO] bb-mcp tool registry panel`).
-- [ ] **Portfolio-grade showcase path**: Package the bb-mcp + agent-board integration into a documented, single-command run (`BB_MCP_ENABLED=true docker compose up`).
-
-## 2027 Q2 - Portfolio & Ecosystem
-
-- [ ] **Portfolio-grade Blackboard showcase**: single-command `BB_MCP_ENABLED=true docker compose up` with documented offline demo flow (course → assignment → grade).
+- [ ] **Blackboard agent demo mode**: offline preset workflow (course discovery → assignment submission → grade check) using bb-mcp.
+- [ ] **Portfolio-grade Blackboard showcase**: single-command `BB_MCP_ENABLED=true docker compose up` with the documented offline demo flow (merges the two duplicate "showcase path" items from the old Q2 sections).
+- [ ] **bb-mcp tool registry panel (finish)**: status badges per tool, per-tool schema display, last-run result panel (the tool list + persona filter already shipped).
 - [ ] **MCP container manager UI**: extend the declarative `config/mcp-registry.json` registry with a dashboard panel to spin tool containers up/down on demand.
 - [ ] **Odysseus router integration**: expose a standardized local endpoint for switching between OpenRouter tiers and local model pools.
-- [ ] **3D Memory Palace / Neo4j context**: map cross-session agent memories using Neo4j + Graphiti + 3D Force Graph (WebGL). Full design notes: `docs/archive/neo4js-memory-palace-notes.md`.
+- [ ] **3D Memory Palace / Neo4j context**: map cross-session agent memories using Neo4j + Graphiti + 3D Force Graph (WebGL). Design notes: `docs/archive/neo4js-memory-palace-notes.md`.
 
-## 2027 Q3 - Platform Hardening & Scale
+## 2027 Q3 - Platform Hardening & Scale (Exploratory)
 
 > New section (2026-09-02). These are 2026 Q3 "Extensibility Foundations" items that
 > never had a real target — each is a genuine architectural undertaking on its own
@@ -190,12 +135,8 @@ Last Updated: 2026-09-23
 ## Notes
 
 - The stack remains local-first and Docker-native.
-- 2027 Q1 critical path: (1) test coverage gate [done] → (2) service lifecycle UI completion → (3) auth gate → (4) persistent BYOK.
-- 2027 Q2 focuses on the Blackboard showcase and broadening the MCP/plugin ecosystem once the security and quality foundation is solid.
-- 2027 Q3 is deliberately last: multi-tenancy/RBAC and audit logging both depend on
-  the 2027 Q1 auth gate landing first; decoupled runtimes depend on the host
-  profiling work in the same section landing first. Nothing in Q3 should start early.
-- GPU enablement unblocks larger models and reduces memory pressure; prioritize before adding model portfolio breadth.
+- 2027 Q2 focuses on the Blackboard showcase and broadening the MCP/plugin ecosystem once the Q1 security and quality foundation is solid.
+- 2027 Q3 is deliberately last: multi-tenancy/RBAC and audit logging both depend on the 2027 Q1 auth gate; decoupled runtimes depend on host profiling. Nothing in Q3 should start early.
 - MCP container manager is the gateway to broader tool ecosystem integrations without bloating the base image.
 
 <!--
@@ -203,4 +144,5 @@ AGENT INSTRUCTIONS:
 1. Keep the roadmap quarter-first.
 2. Use short checkpoint bullets, not narrative paragraphs.
 3. Keep task-level detail in TASKS.md.
+4. When an item ships, remove it here and condense it into FEATURES.md / CHANGELOG.md.
 -->

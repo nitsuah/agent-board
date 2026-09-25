@@ -1,6 +1,8 @@
 # TASKS
 
-Last Updated: 2026-09-23
+> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · **Tasks** · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+
+Last Updated: 2026-09-24
 
 ## Todo
 
@@ -17,12 +19,12 @@ and `ROADMAP.md` 2027 Q1 for the condensed record._
   - Context: the repo needs an explicit plan for which large and small models should live on GPU without displacing the existing CPU workflows.
   - Acceptance Criteria: selected GPU models are documented, pulled successfully, surfaced in the dashboard, and kept within VRAM limits.
 
-- [ ] **[Q3-CEO] Blackboard agent demo mode** — add a demo-mode preset that walks through a full Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard connection.
+- [ ] **[2027-Q2] Blackboard agent demo mode** — add a demo-mode preset that walks through a full Blackboard workflow (course discovery → assignment submission → grade check) using bb-mcp without a live Blackboard connection.
   - Priority: P2
   - Context: portfolio showcase requires a runnable demo; demo mode lets this work without institutional credentials.
   - Acceptance Criteria: `BB_MCP_ENABLED=true BB_MCP_DEMO=true docker compose up` runs the full demo flow; documented in README.
 
-- [ ] **[Q3-CEO] bb-mcp tool registry panel** — display available bb-mcp tools alongside other MCP providers in the dashboard; show last invocation time and per-role availability status.
+- [ ] **[2027-Q2] bb-mcp tool registry panel** — display available bb-mcp tools alongside other MCP providers in the dashboard; show last invocation time and per-role availability status.
   - Priority: P2
   - Context: as the MCP container ecosystem grows, the dashboard needs a registry view so users know what tools are available and active.
   - Acceptance Criteria: a tools panel lists bb-mcp tools with status badges; clicking a tool shows its schema and last-run result.
@@ -39,7 +41,7 @@ and `ROADMAP.md` 2027 Q1 for the condensed record._
   - Context: `openllm` 0.6.30 dropped arbitrary HuggingFace repo id support; catalog-only GPU-sized serving is incompatible with the local CPU-friendly workflow. `OPENLLM_ENABLED=false` remains the default.
   - Acceptance Criteria: revisit if a lightweight CPU-compatible serving stack (llama.cpp server, text-generation-inference) becomes the right fit.
 
-- [ ] Validate cross-agent event bus behavior.
+- [ ] **[2027-Q1]** Validate cross-agent event bus behavior.
   - Priority: P3
   - Context: event-bus coordination is still listed as capability without a proven scenario.
   - Acceptance Criteria: two agents exchange events in a documented demo path.
