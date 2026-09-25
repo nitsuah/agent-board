@@ -481,7 +481,7 @@ services:
 
 ## Docs Index
 
-Every tracked doc in this repo, so nothing is orphaned (also used by the Obsidian vault mirror).
+Every doc at the repo root and under `docs/` (the files mirrored into the Obsidian vault), so none of them is orphaned.
 
 - [API Documentation](./docs/API.md) — `docs/API.md`
 - [Changelog](./docs/CHANGELOG.md) — `docs/CHANGELOG.md`
