@@ -2,7 +2,7 @@
 
 > 🧭 [agent-board](../../README.md) · [Features](../FEATURES.md) · [Roadmap](../ROADMAP.md) · [Tasks](../TASKS.md) · [Changelog](../CHANGELOG.md) · [Metrics](../METRICS.md) <!-- nav -->
 >
-> **Historical document** — reorganization is complete. See [README.md](../README.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for the current state.
+> **Historical document** — reorganization is complete. See [README.md](../../README.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for the current state.
 
 ## What Was Done
 

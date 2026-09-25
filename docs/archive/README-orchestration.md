@@ -179,7 +179,7 @@ Adjust Docker Desktop resources:
 
 ## 📚 Documentation
 
-- [Agent Dashboard README](./agent-dashboard/README.md)
+- Agent Dashboard README
 - [MCP Setup Guide](./MCP_SETUP.md)
 - [Ollama Models](https://ollama.ai/library)
 - [NemoClaw Docs](https://github.com/NVIDIA/NemoClaw)
