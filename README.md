@@ -478,6 +478,7 @@ services:
 - Output filtering redacts detected PII and replaces blocked harmful responses before they reach the UI
 
 <!-- docs-index:start -->
+
 ## Docs Index
 
 Every tracked doc in this repo, so nothing is orphaned (also used by the Obsidian vault mirror).
@@ -507,6 +508,7 @@ Every tracked doc in this repo, so nothing is orphaned (also used by the Obsidia
 - [Setup Instructions](./docs/archive/SETUP_INSTRUCTIONS.md) — `docs/archive/SETUP_INSTRUCTIONS.md`
 - [motor-pool — Product Improvement Roadmap](./docs/archive/agent-board-roadmap.md) — `docs/archive/agent-board-roadmap.md`
 - [3D Memory Palace — Design Notes (raw)](./docs/archive/neo4js-memory-palace-notes.md) — `docs/archive/neo4js-memory-palace-notes.md`
+
 <!-- docs-index:end -->
 
 ## License
