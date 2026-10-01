@@ -290,12 +290,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'metrics') {
+    if (activeTab === 'metrics' || showMetricsPanel) {
       fetchMetrics();
       const interval = setInterval(fetchMetrics, 10000);
       return () => clearInterval(interval);
     }
-  }, [activeTab, fetchMetrics]);
+  }, [activeTab, showMetricsPanel, fetchMetrics]);
 
   useEffect(() => {
     if (!showNewSessionMenu) return;

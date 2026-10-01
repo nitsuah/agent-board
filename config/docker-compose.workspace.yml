@@ -5,7 +5,7 @@
 #   docker compose \
 #     -f config/docker-compose.yml \
 #     -f config/docker-compose.workspace.yml \
-#     --project-directory . up -d
+#     up -d
 #
 # Prerequisites:
 #   1. Set WORKSPACE_PATH in .env to the absolute host path you want to mount:

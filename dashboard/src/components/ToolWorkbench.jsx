@@ -128,7 +128,7 @@ function ToolWorkbench({ toolKey, serviceKey, onRunService, serviceActionsInFlig
                   ? ' Start it below, or run on the host:'
                   : ' Start it on the host:'}
               </p>
-              <code>docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d {toolServer.composeService}</code>
+              <code>docker compose -f config/docker-compose.yml --profile tools up -d {toolServer.composeService}</code>
               {dockerControlEnabled && (
                 <button
                   className="btn-primary"

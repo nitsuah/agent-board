@@ -45,14 +45,14 @@ DEVICE_PROFILE=laptop                    # minimal | laptop | desktop
 Uses Docker Desktop's built-in model runner. No extra container required.
 
 ```bash
-docker compose -f config/docker-compose.yml --project-directory . up -d
+docker compose -f config/docker-compose.yml up -d
 ```
 
 ### Ollama (local container, higher RAM)
 
 ```bash
 ACTIVE_LLM_BACKEND=ollama \
-docker compose -f config/docker-compose.yml --project-directory . --profile llm-ollama up -d
+docker compose -f config/docker-compose.yml --profile llm-ollama up -d
 
 # Pull a model
 docker exec ollama ollama pull llama3.2:3b
@@ -64,12 +64,12 @@ docker exec ollama ollama pull llama3.2:3b
 
 ```bash
 # MCP tool servers (content-gen, website agent)
-docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d
+docker compose -f config/docker-compose.yml --profile tools up -d
 
 # Docker control UI (lets dashboard start/stop services)
 # Requires: AGENT_BOARD_ENABLE_DOCKER_CONTROL=true in .env
 docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
-  --project-directory . up -d
+  up -d
 ```
 
 ---
@@ -161,7 +161,7 @@ cat backup_YYYY-MM-DD.sql | docker exec -i agent-db psql -U agent agent_board
 
 ```bash
 git pull origin main
-docker compose -f config/docker-compose.yml --project-directory . up -d --build
+docker compose -f config/docker-compose.yml up -d --build
 ```
 
 The `--build` flag rebuilds the dashboard image. Database migrations run

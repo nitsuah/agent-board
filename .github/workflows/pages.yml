@@ -1,0 +1,43 @@
+# .github/workflows/pages.yml
+#
+# Publishes the motor-pool landing page (site/) to GitHub Pages.
+# Screenshots are copied from docs/screenshots/ at build time so the README and
+# the site always show the same captures.
+# One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+
+name: Pages
+
+on:
+  push:
+    branches: [ master ]
+    paths: [ 'site/**', 'docs/screenshots/**', '.github/workflows/pages.yml' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assemble site
+        run: |
+          mkdir -p _site/assets/screenshots
+          cp -r site/. _site/
+          cp docs/screenshots/*.png _site/assets/screenshots/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

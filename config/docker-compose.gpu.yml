@@ -6,7 +6,7 @@
 #   docker compose \
 #     -f config/docker-compose.yml \
 #     -f config/docker-compose.gpu.yml \
-#     --project-directory . up -d
+#     up -d
 #
 # Prerequisites (one-time host setup):
 #   1. Install NVIDIA drivers for your GPU (RTX 3070 / 4080 / etc.)

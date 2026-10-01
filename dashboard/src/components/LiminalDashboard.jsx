@@ -106,6 +106,15 @@ function getEndpointModels(key, ep, knownModels) {
   return [];
 }
 
+// The running service node that actually serves an endpoint: matched on resolved
+// URL first, then backend type. null when no service provides it.
+function findProviderServiceNode(nodes, ep) {
+  const svcNodes = nodes.filter(n => n.svcKey && n.type === 'service');
+  return (ep.resolvedUrl && svcNodes.find(n => n.resolvedUrl === ep.resolvedUrl))
+    || (ep.backendType && svcNodes.find(n => n.backendType === ep.backendType))
+    || null;
+}
+
 function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels }) {
   const nodes = [];
   const links = [];
@@ -132,6 +141,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
       orbitRadius: R_SVC, orbitAngle: angle, orbitSpeed: 0.002, targetY,
       orbitParent: 'hub',
       internal: true, svcKey: key,
+      resolvedUrl: svc.resolvedUrl || null, backendType: svc.backendType || null,
       meta: {
         desc: isRunning ? '● running' : '○ stopped',
         backend: svc.backendType || '',
@@ -226,9 +236,12 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
   ollamaContainerEps.forEach((key, i) => {
     const ep = (dockerStatus?.endpoints || {})[key] || {};
     const meta = allEndpointMeta?.[key] || {};
-    const ollamaEpNode = nodes.find(n => n.id.startsWith('ep_') && isOllamaKey(n.epKey || '', {}));
-    const parentId = ollamaEpNode?.id ?? 'hub';
-    const parentAngle = ollamaEpNode?.orbitAngle ?? 0;
+    // Hang the model off whatever serves it (the Ollama service node), not the hub.
+    const parentNode = findProviderServiceNode(nodes, ep)
+      ?? nodes.find(n => n.id.startsWith('ep_') && isOllamaKey(n.epKey || '', {}));
+    const parentId = parentNode?.id ?? 'hub';
+    const parentAngle = parentNode?.orbitAngle ?? 0;
+    const parentRadius = parentNode?.orbitRadius ?? R_ENDPOINT;
     const isLive = ep.live !== false;
     const modelName = ep.model || meta.label || key;
     const shortLabel = modelName.split(':')[0].split('/').pop();
@@ -236,7 +249,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     nodes.push({
       id: `model_${key}_0`, label: shortLabel,
       type: isLive ? 'model' : 'offline',
-      pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(parentAngle) * R_ENDPOINT, isLive ? Y_ACTIVE : Y_OFFLINE_MOD, Math.sin(mAngle) * R_CHILD + Math.sin(parentAngle) * R_ENDPOINT),
+      pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(parentAngle) * parentRadius, isLive ? Y_ACTIVE : Y_OFFLINE_MOD, Math.sin(mAngle) * R_CHILD + Math.sin(parentAngle) * parentRadius),
       vel: new THREE.Vector3(),
       orbitRadius: R_CHILD, orbitAngle: mAngle, orbitSpeed: 0.0012, targetY: isLive ? Y_ACTIVE : Y_OFFLINE_MOD,
       orbitParent: parentId,

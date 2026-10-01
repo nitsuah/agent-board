@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **GitHub Pages landing page** (`site/`, deployed by `.github/workflows/pages.yml`)
+  promoting motor-pool's features, with the 20s launch video, live screenshots,
+  architecture overview and quick start. Screenshots are copied from
+  `docs/screenshots/` at build time.
 - OpenLLM endpoint (`llm_openllm`, port 8082)
 - Ollama model loading performance audit (`docs/MODEL_LOADING_AUDIT.md`) — passive log analysis of all 8 load events, bottleneck identified (`load_tensors: mmap=false`), honest assessment vs. ≥50% acceptance criteria (~17-23% average reduction from model swap, not 50%), ranked recommendations (GPU > selective loading > warmup).
 - Opt-in `ollama-warmup` compose service (`warmup` profile) — one-shot container that pre-loads `PRIMARY_LLM_MODEL` during `docker compose up` so the cold model load cost (~15-23s) hits at stack-start rather than on the first user chat message. Enable with `docker compose --profile warmup up ollama-warmup`. — opt-in second OpenAI-compatible endpoint for custom/fine-tuned HuggingFace models, gated behind the `openllm` compose profile and `OPENLLM_ENABLED` flag, registered alongside Ollama and Docker Model Runner. See `docs/AI_STACK_STRATEGY.md`.
@@ -80,9 +84,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- README/DEPLOYMENT quick-start commands used `--project-directory .`, which makes
+  compose look for `.env` one directory above the repo; dropped it everywhere
+  (docs, `.env.example`, overlay headers, the ToolWorkbench hint) and added the
+  missing `.env` copy step. Screenshots re-captured from the rebranded UI.
 - Hub experience chips (Developer / Researcher / Safe Chat / Content Studio /
   Website Agent) all created a Developer session: `createSession` ignored the
   experience key the chip passed and always used the previously selected one.
+- 3D hub: Ollama-served model nodes (e.g. `llama3.2`) linked straight to the
+  hub instead of the Ollama service that serves them. Model nodes now attach to
+  the running service whose resolved URL (or backend type) matches the endpoint.
+- Metrics drawer showed `…` placeholders forever: metrics were only fetched for
+  the retired `metrics` tab, never when the drawer was opened.
 - `config/docker-compose.yml` mixed two incompatible relative-path conventions
   (build contexts resolved from the compose file's own directory; `env_file`/volume
   entries assumed `--project-directory .`), so the README's own Quick Start command

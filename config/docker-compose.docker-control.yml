@@ -10,11 +10,11 @@
 #
 # Usage (Linux/Mac):
 #   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
-#     --project-directory . up -d --build agent-dashboard
+#     up -d --build agent-dashboard
 #
 # Usage (Windows):
 #   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
-#     --project-directory . up -d --build agent-dashboard
+#     up -d --build agent-dashboard
 #
 # This builds the dashboard image with the Docker CLI installed
 # (INSTALL_DOCKER_CLI=true), mounts the host Docker socket, and
