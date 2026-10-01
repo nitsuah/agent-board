@@ -1,14 +1,14 @@
-# agent-board — Local AI Ops Cockpit
+# motor-pool — Local AI Ops Cockpit
 
 
 <!-- Deployment Status -->
-[![Deploy Status](https://github.com/nitsuah/agent-board/actions/workflows/ci.yml/badge.svg)](https://github.com/nitsuah/agent-board/actions)
+[![Deploy Status](https://github.com/nitsuah/motor-pool/actions/workflows/ci.yml/badge.svg)](https://github.com/nitsuah/motor-pool/actions)
 
-> 🧭 **agent-board** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
+> 🧭 **motor-pool** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
 
-agent-board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
+motor-pool is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
 
-## Why agent-board
+## Why motor-pool
 
 - **Ship safer prompts faster**: built-in input classification, prompt-injection checks, blocked-input handling, and output sanitization.
 - **Run multiple experiences**: switch between Developer Assistant, Research Mode, and Safe Chat with server-enforced routing and safety policies.
@@ -31,29 +31,29 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ### Dashboard Overview
 
-![agent-board dashboard overview](docs/screenshots/dashboard-overview.png)
+![motor-pool dashboard overview](docs/screenshots/dashboard-overview.png)
 
 ### Metrics View
 
-![agent-board metrics panel](docs/screenshots/metrics-panel.png)
+![motor-pool metrics panel](docs/screenshots/metrics-panel.png)
 
 ### System Management
 
-![agent-board system management panel](docs/screenshots/system-panel.png)
+![motor-pool system management panel](docs/screenshots/system-panel.png)
 
 ## Quick Start
 
 Minimal stack (dashboard + Ollama + DB — fits a 16 GB host):
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml --project-directory . up -d
 ```
 
 or for GPU:
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml up -d
 ```
 
@@ -491,7 +491,7 @@ Every committed Markdown doc in this repo (other than this README, `.github/` an
 - [Changelog](./docs/CHANGELOG.md) — `docs/CHANGELOG.md`
 - [Production Deployment Guide](./docs/DEPLOYMENT.md) — `docs/DEPLOYMENT.md`
 - [Features](./docs/FEATURES.md) — `docs/FEATURES.md`
-- [Project Metrics: agent-board](./docs/METRICS.md) — `docs/METRICS.md`
+- [Project Metrics: motor-pool](./docs/METRICS.md) — `docs/METRICS.md`
 - [ROADMAP](./docs/ROADMAP.md) — `docs/ROADMAP.md`
 - [TASKS](./docs/TASKS.md) — `docs/TASKS.md`
 

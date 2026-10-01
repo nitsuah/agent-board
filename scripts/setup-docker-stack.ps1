@@ -24,8 +24,8 @@ if (-not (docker compose version 2>$null)) {
 
 Write-Output "[INFO] Prerequisites verified"
 
-# Navigate to the agent-board directory
-$projectDir = Join-Path $env:USERPROFILE 'code\agent-board'
+# Navigate to the motor-pool directory
+$projectDir = Join-Path $env:USERPROFILE 'code\motor-pool'
 if (-not (Test-Path $projectDir)) {
     Write-Error "Project directory not found: $projectDir"
     exit 1

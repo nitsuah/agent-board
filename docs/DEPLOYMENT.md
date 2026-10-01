@@ -1,8 +1,8 @@
 # Production Deployment Guide
 
-> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+> 🧭 [motor-pool](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
 
-agent-board is Docker-native and local-first. This guide covers running it on a
+motor-pool is Docker-native and local-first. This guide covers running it on a
 dedicated host (Linux server, a VPS, or a Windows machine with Docker Desktop).
 
 ---
@@ -21,8 +21,8 @@ dedicated host (Linux server, a VPS, or a Windows machine with Docker Desktop).
 ## 1. Clone and configure
 
 ```bash
-git clone https://github.com/nitsuah/agent-board.git
-cd agent-board
+git clone https://github.com/nitsuah/motor-pool.git
+cd motor-pool
 cp .env.example config/.env
 ```
 

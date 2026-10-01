@@ -1,7 +1,7 @@
 {
-  "name": "workspace",
+  "name": "motor-pool",
   "version": "1.0.0",
-  "description": "agent-board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.",
+  "description": "motor-pool is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.",
   "main": "index.js",
   "directories": {
     "doc": "docs",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nitsuah/agent-board.git"
+    "url": "git+https://github.com/nitsuah/motor-pool.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/nitsuah/agent-board/issues"
+    "url": "https://github.com/nitsuah/motor-pool/issues"
   },
-  "homepage": "https://github.com/nitsuah/agent-board#readme"
+  "homepage": "https://github.com/nitsuah/motor-pool#readme"
 }

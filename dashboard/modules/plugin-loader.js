@@ -1,5 +1,5 @@
 /**
- * Plugin loader — declarative extension points for the agent-board dashboard.
+ * Plugin loader — declarative extension points for the motor-pool dashboard.
  *
  * Plugins are JSON manifests dropped into `dashboard/config/plugins/*.plugin.json`
  * (override the directory with AGENT_BOARD_PLUGINS_DIR). Each manifest declares

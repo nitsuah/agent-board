@@ -1,6 +1,6 @@
 # Changelog
 
-> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · **Changelog** · [Metrics](./METRICS.md) <!-- nav -->
+> 🧭 [motor-pool](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · **Changelog** · [Metrics](./METRICS.md) <!-- nav -->
 
 All notable changes to this project will be documented in this file.
 
@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Rebrand: agent-board → motor-pool.** Public-facing naming (README, docs,
+  dashboard title/onboarding/3D hub, OTEL service name `motor-pool-dashboard`,
+  npm package scopes `@motor-pool/*`, GitHub URLs `nitsuah/motor-pool`) is now
+  motor-pool. Deliberately unchanged for compatibility: `AGENT_BOARD_*` env vars,
+  the `agent_board` Postgres DB, `agent_board_*` localStorage keys, and the
+  `agentboard` tmux session.
 - Agent instructions (`.github/copilot-instructions.md`) now require closing tracked work in the same PR: update `docs/TASKS.md`, `docs/ROADMAP.md` and this changelog before the last push, and confirm `git diff origin/master...HEAD --stat` includes them before merge; added `.github/pull_request_template.md` with a "Closes TASKS item(s)" checklist.
 - Dashboard dependency majors (Sept 2026 Dependabot): React/React DOM 19.2
   (#65, #70), Vite 8.2 (#68), `@vitejs/plugin-react` 6.1 (#66), Express 5.2 (#69),
@@ -74,6 +80,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Hub experience chips (Developer / Researcher / Safe Chat / Content Studio /
+  Website Agent) all created a Developer session: `createSession` ignored the
+  experience key the chip passed and always used the previously selected one.
 - `config/docker-compose.yml` mixed two incompatible relative-path conventions
   (build contexts resolved from the compose file's own directory; `env_file`/volume
   entries assumed `--project-directory .`), so the README's own Quick Start command
@@ -89,5 +98,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Project initialization
 
-[Unreleased]: https://github.com/nitsuah/agent-board/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/nitsuah/agent-board/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nitsuah/motor-pool/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/nitsuah/motor-pool/releases/tag/v0.1.0
