@@ -36,6 +36,16 @@ export async function handleSessionStream(req, res, deps) {
   const send = (obj) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(obj)}\n\n`); };
   const end = () => { if (!res.writableEnded) res.end(); };
 
+  // Client disconnect is tracked from the start, so leaving during preflight or
+  // model prep isn't missed; the streaming phase installs what to tear down.
+  let clientGone = false;
+  let onClientGone = null;
+  res.on('close', () => {
+    if (res.writableFinished) return;
+    clientGone = true;
+    onClientGone?.();
+  });
+
   const turn = await preflightTurn(session, message, useSafeMode, deps);
   if (turn.kind !== 'proceed') {
     send({ type: 'token', content: turn.response });
@@ -104,10 +114,15 @@ export async function handleSessionStream(req, res, deps) {
       return end();
     }
 
+    // A disconnect before the model answers cancels the upstream request
+    // instead of waiting on it (a cold model load can take minutes).
+    const upstream = new AbortController();
+    onClientGone = () => upstream.abort();
+    if (clientGone) upstream.abort();
     const streamResponse = await axios.post(
       apiStyle === 'openai' ? `${llmUrl}/chat/completions` : `${llmUrl}/api/chat`,
       { model: session.model, messages: msgs, stream: true },
-      { headers: streamHeaders, responseType: 'stream', timeout: 120000 }
+      { headers: streamHeaders, responseType: 'stream', timeout: 120000, signal: upstream.signal }
     );
 
     let raw = '';
@@ -181,14 +196,20 @@ export async function handleSessionStream(req, res, deps) {
       end();
     });
 
-    // Client went away: stop the upstream stream and keep whatever arrived.
-    res.on('close', () => {
-      if (res.writableFinished) return;
+    // Client went away: stop the upstream stream and keep whatever arrived, or
+    // record the turn as ended so the session never stays "running".
+    onClientGone = () => {
       clearTimeout(stallTimer);
       streamResponse.data.destroy();
       if (raw) finishReply(raw, { partial: true });
-    });
+      else finishError('[Error] Client disconnected before the model replied');
+    };
+    if (clientGone) onClientGone();
   } catch (error) {
+    if (clientGone) {
+      finishError('[Error] Client disconnected before the model replied', error);
+      return end();
+    }
     logStructured('error', 'llm_stream_failed', { sessionId: session.id, endpoint: session.endpoint, model: session.model, error: error.message });
     const backendType = LLM_CONFIG[session.endpoint]?.backendType || '';
     let errMsg;

@@ -120,6 +120,18 @@ export const WEBSITE_AGENT_TOOLS = [
 
 const BASH_BLOCKLIST = ['rm -rf /', 'dd if=', ':(){ :|:& };:', '> /dev/sd', 'mkfs'];
 
+// Model-supplied shell commands must not inherit the dashboard's environment,
+// which carries every secret from .env (GITHUB_SECRET, API keys, DB URL…) —
+// `env` or `echo $X` would otherwise read them (CWE-200). Pass only what a
+// shell, git and node need.
+const AGENT_SHELL_ENV_KEYS = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'TERM', 'TZ',
+  'GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'];
+export function agentShellEnv(source = process.env) {
+  const env = {};
+  for (const key of AGENT_SHELL_ENV_KEYS) if (source[key] !== undefined) env[key] = source[key];
+  return env;
+}
+
 // Plugin tools are exposed to the model as `<plugin>__<tool>` (double underscore)
 // since OpenAI/Ollama function-call names reject the `.` used in the qualifiedName
 // shown over the /api/plugins HTTP API. [a-zA-Z0-9_-] alone would let a name legally
@@ -226,7 +238,7 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
           return JSON.stringify({ error: 'Command blocked by safety policy' });
         }
         try {
-          const { stdout, stderr } = await execAsync(String(command), { cwd: WORKSPACE_ROOT, timeout: 30000, shell: true });
+          const { stdout, stderr } = await execAsync(String(command), { cwd: WORKSPACE_ROOT, timeout: 30000, shell: true, env: agentShellEnv() });
           return JSON.stringify({ stdout: stdout.trim(), stderr: stderr.trim(), exitCode: 0 });
         } catch (err) {
           return JSON.stringify({ stdout: (err.stdout || '').trim(), stderr: (err.stderr || err.message).trim(), exitCode: err.code || 1 });
@@ -371,7 +383,19 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
     const args = obj?.parameters ?? obj?.arguments ?? {};
     if (typeof name !== 'string' || !allowedToolNames.has(name)) return null;
     if (typeof args !== 'object' || args === null || Array.isArray(args)) return null;
-    return { function: { name, arguments: args } };
+    return { id: `call_${randomUUID()}`, type: 'function', function: { name, arguments: args } };
+  }
+
+  // Assistant tool_calls as they must appear in the conversation history:
+  // OpenAI Chat Completions requires id, type and JSON-string arguments (and the
+  // tool result's tool_call_id must match that id); Ollama takes object arguments.
+  function toHistoryToolCall(tc, apiStyle) {
+    const name = tc.function?.name || tc.name;
+    const args = tc.function?.arguments ?? tc.arguments ?? {};
+    if (apiStyle === 'openai') {
+      return { id: tc.id, type: 'function', function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) } };
+    }
+    return { ...tc, function: { ...(tc.function || {}), name, arguments: args } };
   }
 
   async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) {
@@ -409,12 +433,20 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
         return { content: msg?.content || 'No response received', toolLog };
       }
 
-      localMsgs.push({ role: 'assistant', content: msg.content || '', tool_calls: toolCalls });
+      // Every call gets a stable id up front so the assistant entry and its tool
+      // result reference the same one (Ollama calls often arrive without ids).
+      toolCalls = toolCalls.map(tc => (tc.id ? tc : { ...tc, id: `call_${randomUUID()}` }));
+      localMsgs.push({
+        role: 'assistant',
+        // A text-encoded call's JSON is the call itself, not prose to echo back.
+        content: msg?.tool_calls?.length ? (msg.content || '') : '',
+        tool_calls: toolCalls.map(tc => toHistoryToolCall(tc, apiStyle)),
+      });
 
       for (const tc of toolCalls) {
         const name = tc.function?.name || tc.name;
         const rawArgs = tc.function?.arguments || tc.arguments || '{}';
-        const callId = tc.id || randomUUID();
+        const callId = tc.id;
         // A model can emit unparseable arguments; report it back as a tool
         // error (so the model can retry) instead of failing the whole turn.
         let args = rawArgs;

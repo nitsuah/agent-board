@@ -203,6 +203,38 @@ try {
   assert.strictEqual(ollamaToolMsg.tool_call_id, undefined, 'ollama style omits tool_call_id');
   console.log('  ✅ openai and ollama tool-result message shapes differ correctly');
 
+  // ── tool call written as plain JSON text, replayed to an OpenAI endpoint ───
+  script = [{ content: '{"name":"read_file","parameters":{"path":"hello.txt"}}' }, { content: 'text call done' }];
+  requests.length = 0;
+  out = await run(helpers, DEVELOPER_TOOLS, 'openai');
+  assert.strictEqual(out.content, 'text call done');
+  assert.strictEqual(out.toolLog[0].name, 'read_file', 'text-encoded call was executed');
+  const histCall = requests[1].messages.find(m => m.role === 'assistant' && m.tool_calls)?.tool_calls?.[0];
+  assert.ok(histCall?.id, 'history tool call has an id');
+  assert.strictEqual(histCall.type, 'function', 'history tool call has type=function');
+  assert.strictEqual(typeof histCall.function.arguments, 'string', 'openai history arguments are a JSON string');
+  assert.deepStrictEqual(JSON.parse(histCall.function.arguments), { path: 'hello.txt' });
+  const textToolMsg = requests[1].messages.find(m => m.role === 'tool');
+  assert.strictEqual(textToolMsg.tool_call_id, histCall.id, 'tool_call_id matches the assistant call id');
+  console.log('  ✅ a text-encoded tool call is replayed in valid OpenAI shape with matching ids');
+
+  // Ollama calls without ids still get one id shared by call and result log.
+  script = [{ content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'hello.txt' } } }] }, { content: 'ok' }];
+  requests.length = 0;
+  out = await run(helpers, DEVELOPER_TOOLS, 'ollama');
+  const ollamaHist = requests[1].messages.find(m => m.role === 'assistant' && m.tool_calls).tool_calls[0];
+  assert.ok(ollamaHist.id && ollamaHist.id === out.toolLog[0].callId, 'id assigned once and reused');
+  assert.strictEqual(typeof ollamaHist.function.arguments, 'object', 'ollama history keeps object arguments');
+  console.log('  ✅ id-less calls get one id reused for history and the tool log');
+
+  // ── bash runs without the dashboard's secrets in its environment ──────────
+  process.env.MP_TEST_SECRET = 'leak-me';
+  script = [toolCall('bash', { command: 'echo "secret=[$MP_TEST_SECRET] path=[${PATH:+set}]"' }), { content: 'env checked' }];
+  out = await run(helpers);
+  delete process.env.MP_TEST_SECRET;
+  assert.match(out.toolLog[0].result.stdout, /secret=\[\] path=\[set\]/, 'secrets are not inherited; PATH is');
+  console.log('  ✅ bash tool gets a scrubbed environment (no dashboard secrets)');
+
   // ── object-form arguments ──────────────────────────────────────────────────
   // Some models return `arguments` already parsed rather than as a JSON string.
   script = [

@@ -291,12 +291,16 @@ With the overlay applied:
 
 ### Workspace File I/O
 
-By default agents work in a **sandbox checkout**, not your files: the dashboard
-seeds a dedicated volume (`agent_workspace`) from the read-only repo on first
-start — a `git clone` onto branch `agent/sandbox`, or a filtered copy when the
-repo is itself a git worktree — leaving out `.env` files and `node_modules`.
-Agents can edit, run and commit there freely; the host repo is never written.
-Reset it with `docker volume rm <project>_agent_workspace`.
+By default agents work in a **sandbox checkout**, not your files. A one-shot
+`workspace-seed` service seeds a dedicated volume (`agent_workspace`) from a
+read-only mount of the repo on first start: a `git clone` onto branch
+`agent/sandbox` plus your current uncommitted working tree (or a filtered copy
+when the repo is itself a git worktree), never `.env*` secrets or
+`node_modules`. The dashboard container that runs agent tools does not mount
+the repo at all, and agent shell commands get a scrubbed environment (no `.env`
+secrets), so agents can edit, run and commit in the sandbox without reaching
+host files. The dashboard refuses to start if seeding did not complete.
+Reset the sandbox with `docker volume rm <project>_agent_workspace`.
 
 To let agents edit a real project instead, set `WORKSPACE_PATH` in `.env` and
 apply the `docker-compose.workspace.yml` overlay (it sets `WORKSPACE_SANDBOX=false`).

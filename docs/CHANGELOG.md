@@ -12,11 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Agent workspace sandbox** (`modules/workspace-sandbox.js`) — by default agents
-  work in their own checkout: a dedicated `agent_workspace` volume seeded on first
-  start from the read-only repo (`git clone` onto branch `agent/sandbox`, or a
+  work in their own checkout: a dedicated `agent_workspace` volume seeded by a
+  one-shot `workspace-seed` service from a read-only repo mount (`git clone` onto
+  branch `agent/sandbox` plus the source's uncommitted working tree, or a
   filtered copy + `git init` when the repo is itself a git worktree), never
-  copying `.env` files or `node_modules`. Tool calls can no longer edit the host
-  repo; editing a real project stays an explicit opt-in via
+  copying `.env*` secrets (templates like `.env.example` are kept) or
+  `node_modules`. Seeding is staged and marked complete only at the end; the
+  dashboard refuses to start on an unseeded sandbox, and a non-empty directory
+  that isn't a sandbox is refused rather than wiped. Tool calls can no longer
+  edit the host repo; editing a real project stays an explicit opt-in via
   `config/docker-compose.workspace.yml` (`WORKSPACE_SANDBOX=false`).
 - **Chat test matrix** — `tests/chat-matrix.js` (unit, stub LLM, 268 cases):
   every experience × `/message` and `/stream` × expected and unexpected inputs and
@@ -127,7 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agent loop: unparseable tool-call arguments threw and failed the whole turn —
   they are now returned to the model as a tool error; a tool call the model
   writes as plain JSON text (common with small Ollama models) is executed when it
-  names an offered tool, instead of being shown to the user as the reply.
+  names an offered tool, instead of being shown to the user as the reply. Every
+  call gets one id up front, and history is replayed in the endpoint's shape
+  (OpenAI: `id`, `type: function`, JSON-string arguments, matching
+  `tool_call_id`), so OpenAI-compatible backends accept the follow-up request.
 - Site `og:image` is now an absolute URL so link previews render.
 - Metrics drawer showed `…` placeholders forever: metrics were only fetched for
   the retired `metrics` tab, never when the drawer was opened.
@@ -149,6 +156,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Agents' default workspace was the host repo itself (`../:/workspace:rw`); a
   3B model truncated `README.md` from a "reply with one word" prompt. Agents now
   default to an isolated sandbox checkout (see Added).
+- The agent container no longer mounts the repo (`/workspace-root`) in the base
+  stack — only the trusted-dev docker-control overlay does — so model-run shell
+  commands can't read the source tree or its `.env` (CWE-200).
+- The `bash` agent tool ran with the dashboard's full environment, so `env` or
+  `echo $GITHUB_SECRET` exposed every `.env` secret; it now gets only `PATH`,
+  `HOME`, locale and git identity variables.
+- `/stream` cancels the upstream model request when the client disconnects
+  before the first token, and records the turn as ended instead of leaving the
+  session `running`.
 
 ## [0.1.0] - 2026-05-24
 
