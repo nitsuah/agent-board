@@ -60,6 +60,7 @@ import {
 import { parseMcpRpcResponse } from './modules/mcp-helpers.js';
 import { eventBus, attachEventWebSocketServer } from './modules/event-bus.js';
 import { createAgentHelpers } from './modules/agent-tools.js';
+import { ensureWorkspaceSandbox } from './modules/workspace-sandbox.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -657,6 +658,19 @@ export {
 };
 
 if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
+  // Agents work in their own checkout, not the host repo (see modules/workspace-sandbox.js).
+  if (WORKSPACE_ROOT && isTruthyEnv(process.env.WORKSPACE_SANDBOX)) {
+    try {
+      await ensureWorkspaceSandbox({
+        root: WORKSPACE_ROOT,
+        source: process.env.WORKSPACE_SANDBOX_SOURCE || '/workspace-root',
+        logStructured,
+      });
+    } catch (err) {
+      logStructured('error', 'workspace_sandbox_failed', { root: WORKSPACE_ROOT, error: err.message });
+    }
+  }
+
   const server = app.listen(PORT, () => {
     logStructured('info', 'server_started', {
       port: PORT,

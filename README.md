@@ -291,7 +291,16 @@ With the overlay applied:
 
 ### Workspace File I/O
 
-Requires `WORKSPACE_PATH` in `.env` and the `docker-compose.workspace.yml` overlay. Paths are sandboxed to prevent traversal.
+By default agents work in a **sandbox checkout**, not your files: the dashboard
+seeds a dedicated volume (`agent_workspace`) from the read-only repo on first
+start — a `git clone` onto branch `agent/sandbox`, or a filtered copy when the
+repo is itself a git worktree — leaving out `.env` files and `node_modules`.
+Agents can edit, run and commit there freely; the host repo is never written.
+Reset it with `docker volume rm <project>_agent_workspace`.
+
+To let agents edit a real project instead, set `WORKSPACE_PATH` in `.env` and
+apply the `docker-compose.workspace.yml` overlay (it sets `WORKSPACE_SANDBOX=false`).
+Paths are always confined to the workspace root to prevent traversal.
 
 - `GET /api/workspace/status` — Workspace mount status and git repo info
 - `GET /api/workspace/ls` — List a workspace directory

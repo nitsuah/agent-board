@@ -55,8 +55,10 @@ async function streamFrames(sessionId, body) {
   return { status: res.status, frames };
 }
 
-async function newSession() {
-  const res = await post('/api/sessions', { name: 'stream test', experience: 'safechat' });
+// developer (no WORKSPACE_ROOT → no tools) streams tokens live; safechat is
+// strict, so its output filters are active and the reply is buffered.
+async function newSession(experience = 'developer') {
+  const res = await post('/api/sessions', { name: 'stream test', experience });
   const data = await res.json();
   return data.session?.id ?? data.id;
 }
@@ -78,6 +80,15 @@ try {
   const { frames } = await streamFrames(sid, { message: 'say hello' });
   const tokens = frames.filter(f => f.type === 'token').map(f => f.content);
   assert.deepStrictEqual(tokens, ['Hello', ' world'], 'tokens stream through in order, junk lines skipped');
+
+  // Strict (Safe Chat): tokens are held back and the sanitized reply is sent once.
+  const strictSid = await newSession('safechat');
+  const strictFrames = (await streamFrames(strictSid, { message: 'say hello' })).frames;
+  assert.deepStrictEqual(
+    strictFrames.filter(f => f.type === 'token').map(f => f.content), ['Hello world'],
+    'strict sessions receive one buffered, sanitized token'
+  );
+  console.log('  ✅ strict sessions buffer the reply so unfiltered text never streams');
   const done = frames.find(f => f.type === 'done');
   assert.ok(done, 'a done frame is emitted');
   assert.ok(done.messageCount >= 2, 'done reports the message count');

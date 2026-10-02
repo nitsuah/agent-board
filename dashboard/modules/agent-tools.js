@@ -358,6 +358,22 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
     }
   }
 
+  // Small local models (e.g. llama3.2:3b via Ollama) sometimes write a tool
+  // call as plain JSON text instead of a structured tool_calls entry. Treat
+  // the reply as a call only when the whole reply is one JSON object naming a
+  // tool that was actually offered; anything else stays ordinary text.
+  function parseTextToolCall(content, allowedToolNames) {
+    const text = String(content || '').trim();
+    if (!text.startsWith('{') || !text.endsWith('}')) return null;
+    let obj;
+    try { obj = JSON.parse(text); } catch { return null; }
+    const name = obj?.name;
+    const args = obj?.parameters ?? obj?.arguments ?? {};
+    if (typeof name !== 'string' || !allowedToolNames.has(name)) return null;
+    if (typeof args !== 'object' || args === null || Array.isArray(args)) return null;
+    return { function: { name, arguments: args } };
+  }
+
   async function runAgentLoop(msgs, apiStyle, llmUrl, llmHeaders, tools, session) {
     const MAX_ITERATIONS = 5;
     const toolLog = [];
@@ -383,7 +399,11 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
         : axios.post(`${llmUrl}/api/chat`, reqBody, { headers: llmHeaders, timeout: 120000 }));
 
       const msg = response.data.message || response.data.choices?.[0]?.message;
-      const toolCalls = msg?.tool_calls || [];
+      let toolCalls = msg?.tool_calls || [];
+      if (toolCalls.length === 0) {
+        const textCall = parseTextToolCall(msg?.content, allowedToolNames);
+        if (textCall) toolCalls = [textCall];
+      }
 
       if (toolCalls.length === 0) {
         return { content: msg?.content || 'No response received', toolLog };
@@ -394,12 +414,20 @@ export function createAgentHelpers({ WORKSPACE_ROOT, execAsync, TOOL_SERVERS, TO
       for (const tc of toolCalls) {
         const name = tc.function?.name || tc.name;
         const rawArgs = tc.function?.arguments || tc.arguments || '{}';
-        const args = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
         const callId = tc.id || randomUUID();
+        // A model can emit unparseable arguments; report it back as a tool
+        // error (so the model can retry) instead of failing the whole turn.
+        let args = rawArgs;
+        let argsError = null;
+        if (typeof rawArgs === 'string') {
+          try { args = JSON.parse(rawArgs); } catch { args = {}; argsError = `Tool "${name}" arguments were not valid JSON`; }
+        }
 
-        const rawResult = allowedToolNames.has(name)
-          ? await callAgentTool(name, args, session)
-          : JSON.stringify({ error: `Tool "${name}" is not in the active tool list for this experience` });
+        const rawResult = argsError
+          ? JSON.stringify({ error: argsError })
+          : allowedToolNames.has(name)
+            ? await callAgentTool(name, args, session)
+            : JSON.stringify({ error: `Tool "${name}" is not in the active tool list for this experience` });
         const result = capToolResult(rawResult);
 
         let parsed;

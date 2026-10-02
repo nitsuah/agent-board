@@ -73,6 +73,8 @@ export const EXPERIENCE_CONFIGS = {
       'You are a developer assistant with workspace tool access. ' +
       'You have four tools: bash (run shell commands), read_file, write_file, and list_files — all sandboxed to the mounted workspace. ' +
       'Use them to inspect code, run tests, edit files, and execute git commands. ' +
+      'Only call a tool when the request needs you to read, change, or run something in the workspace; ' +
+      'answer questions and conversation directly, without tools. Never write files the user did not ask for. ' +
       'Always describe what you are about to do before calling a tool. ' +
       'After running a command, share the output and explain what it means. ' +
       'Prefer working code over lengthy explanations.'
@@ -85,7 +87,8 @@ export const EXPERIENCE_CONFIGS = {
     availableEndpoints: ['primary', 'docker_runner', 'glm_flash', 'openllm'],
     systemPromptSuffix:
       'You are a research assistant. You have two tools: web_search (DuckDuckGo) and write_artifact (saves notes to workspace/artifacts/). ' +
-      'Use web_search to find current information, then write_artifact to preserve findings for the user. ' +
+      'Use web_search when the question needs current information. ' +
+      'Only call write_artifact when the user asks you to save, write up, or keep notes; otherwise answer in chat. ' +
       'Prioritise depth, cite your reasoning, and flag areas of uncertainty.'
   },
   safechat: {
@@ -215,14 +218,21 @@ export function normalizeForMatching(text) {
     .replace(/\s+/g, ' ');
 }
 
-export function classifyInput(text) {
+// Blocking follows the session's safety mode: strict blocks its full list
+// (role-play / fictional framings included); standard and research block their
+// own list plus the standard list as a floor of core injection phrases, so
+// "act as a code reviewer" in Developer mode isn't refused as a jailbreak.
+// Sensitive-topic labelling always uses the broadest (strict) list — it labels,
+// it doesn't block.
+export function classifyInput(text, safetyMode = 'strict') {
   const lower = normalizeForMatching(text);
-  const safety = SAFETY_CONFIGS.strict; // use broadest pattern set for classification
+  const mode = SAFETY_CONFIGS[safetyMode] || SAFETY_CONFIGS.strict;
+  const blockedPatterns = new Set([...mode.blockedPatterns, ...SAFETY_CONFIGS.standard.blockedPatterns]);
 
-  if (safety.blockedPatterns.some(p => lower.includes(p))) {
+  if ([...blockedPatterns].some(p => lower.includes(p))) {
     return { category: 'blocked', reason: 'prompt_injection_or_jailbreak' };
   }
-  if (safety.sensitivePatterns.some(p => lower.includes(p))) {
+  if (SAFETY_CONFIGS.strict.sensitivePatterns.some(p => lower.includes(p))) {
     return { category: 'sensitive', reason: 'potentially_harmful_content' };
   }
 
@@ -299,6 +309,14 @@ export function filterResponse(text, safetyMode = 'standard') {
   }
 
   return { flags, flagged: flags.length > 0 };
+}
+
+// True when sanitizeResponse can change a reply in this mode (PII redaction or
+// harmful-content blocking). The stream route buffers tokens in that case so
+// unfiltered text never reaches the client.
+export function outputFiltersActive(safetyMode = 'standard') {
+  const safety = SAFETY_CONFIGS[safetyMode] || SAFETY_CONFIGS.standard;
+  return Boolean(safety.piiDetection || (safety.outputHarmKeywords || []).length);
 }
 
 export function redactSensitiveText(text) {

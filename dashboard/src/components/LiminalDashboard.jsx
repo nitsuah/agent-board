@@ -69,9 +69,9 @@ function goldenPos(i, total, radius) {
 
 // Orbital ring radii
 const R_SVC      = 3.5;   // services orbit hub
-const R_ENDPOINT = 7.0;   // endpoints orbit hub (Ollama ↔ 9router)
-const R_CHILD    = 4.0;   // models orbit their parent endpoint
-const R_SESSION  = 12.0;  // sessions orbit their parent model
+const R_ENDPOINT = 5.5;   // external endpoints (9router, BYOK) — same provider tier as services
+const R_MODEL    = 8.5;   // models sit outward from the provider that serves them
+const R_SESSION  = 12.0;  // sessions sit outward from the model they talk to (outermost ring)
 
 // Y positions: active nodes cluster near y=0, inactive drain below (black-hole gravity).
 const Y_ACTIVE       =  0;
@@ -106,14 +106,29 @@ function getEndpointModels(key, ep, knownModels) {
   return [];
 }
 
-// The running service node that actually serves an endpoint: matched on resolved
-// URL first, then backend type. null when no service provides it.
+// The service node that actually serves an endpoint: matched on resolved URL
+// first, then backend type. Running or not — a stopped Ollama still owns its
+// models. null when no service provides it.
 function findProviderServiceNode(nodes, ep) {
-  const svcNodes = nodes.filter(n => n.svcKey && n.type === 'service');
+  const svcNodes = nodes.filter(n => n.svcKey);
   return (ep.resolvedUrl && svcNodes.find(n => n.resolvedUrl === ep.resolvedUrl))
     || (ep.backendType && svcNodes.find(n => n.backendType === ep.backendType))
     || null;
 }
+
+// Hierarchy layout: a child sits on its own ring, on the same bearing as its
+// parent (plus a small fan-out offset), so hub → provider → model → session
+// reads as a straight chain radiating outward and rotates with its parent.
+function radialPlacement(parentNode, offset, radius, y) {
+  const angle = (parentNode?.orbitAngle ?? 0) + offset;
+  return {
+    pos: new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius),
+    vel: new THREE.Vector3(),
+    orbitRadius: radius, orbitAngle: angle, orbitSpeed: 0, targetY: y,
+    radialParent: parentNode?.id ?? null, radialOffset: offset,
+  };
+}
+const fanOffset = (i, n, step) => (i - (n - 1) / 2) * step;
 
 function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels }) {
   const nodes = [];
@@ -209,22 +224,19 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     });
     links.push({ from: parentId, to: `ep_${key}` });
 
-    // ── Model nodes — children orbit their parent endpoint ──────────────────
+    // ── Model nodes — outward from the endpoint that serves them ────────────
     const modelList = getEndpointModels(key, ep, knownModels);
-    const spread = Math.min(0.55, 1.4 / Math.max(modelList.length, 1));
+    const epNode = nodes[nodes.length - 1];
+    const spread = Math.min(0.35, 1.2 / Math.max(modelList.length, 1));
 
     modelList.forEach(({ name, isDefault }, mi) => {
-      const mAngle = (mi / Math.max(modelList.length, 1)) * Math.PI * 2;
       const mTargetY = isDefault ? Y_ACTIVE : Y_OFFLINE_MOD;
       const shortLabel = name.split(':')[0].split('/').pop();
       const modelId = `model_${key}_${mi}`;
       nodes.push({
         id: modelId, label: shortLabel,
         type: isDefault ? 'model' : 'offline',
-        pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(angle) * R_ENDPOINT, mTargetY, Math.sin(mAngle) * R_CHILD + Math.sin(angle) * R_ENDPOINT),
-        vel: new THREE.Vector3(),
-        orbitRadius: R_CHILD, orbitAngle: mAngle, orbitSpeed: 0.0012, targetY: mTargetY,
-        orbitParent: `ep_${key}`,
+        ...radialPlacement(epNode, fanOffset(mi, modelList.length, spread), R_MODEL, mTargetY),
         modelName: name, isDefaultModel: isDefault,
         meta: { desc: isDefault ? '● active model' : '○ available', model: name },
       });
@@ -240,49 +252,41 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
     const parentNode = findProviderServiceNode(nodes, ep)
       ?? nodes.find(n => n.id.startsWith('ep_') && isOllamaKey(n.epKey || '', {}));
     const parentId = parentNode?.id ?? 'hub';
-    const parentAngle = parentNode?.orbitAngle ?? 0;
-    const parentRadius = parentNode?.orbitRadius ?? R_ENDPOINT;
     const isLive = ep.live !== false;
     const modelName = ep.model || meta.label || key;
     const shortLabel = modelName.split(':')[0].split('/').pop();
-    const mAngle = (i / Math.max(ollamaContainerEps.length, 1)) * Math.PI * 2;
+    const siblings = ollamaContainerEps.length;
     nodes.push({
       id: `model_${key}_0`, label: shortLabel,
       type: isLive ? 'model' : 'offline',
-      pos: new THREE.Vector3(Math.cos(mAngle) * R_CHILD + Math.cos(parentAngle) * parentRadius, isLive ? Y_ACTIVE : Y_OFFLINE_MOD, Math.sin(mAngle) * R_CHILD + Math.sin(parentAngle) * parentRadius),
-      vel: new THREE.Vector3(),
-      orbitRadius: R_CHILD, orbitAngle: mAngle, orbitSpeed: 0.0012, targetY: isLive ? Y_ACTIVE : Y_OFFLINE_MOD,
-      orbitParent: parentId,
+      ...radialPlacement(
+        parentNode ?? { id: 'hub', orbitAngle: (i / Math.max(siblings, 1)) * Math.PI * 2 },
+        parentNode ? fanOffset(i, siblings, 0.3) : 0,
+        R_MODEL, isLive ? Y_ACTIVE : Y_OFFLINE_MOD,
+      ),
       modelName, isDefaultModel: true,
       meta: { desc: isLive ? '● active model' : '○ available', model: modelName },
     });
     links.push({ from: parentId, to: `model_${key}_0` });
   });
 
-  // ── Sessions (Ring 3 — outermost, r=17) ───────────────────────────────────
-  // Sessions link to their endpoint's default model node when available,
-  // so for 9router sessions they orbit around MAX (or whichever combo was used).
+  // ── Sessions (outermost ring) — outward from the model they talk to ──────
   const recent = (sessions || []).slice(0, 10);
+  const parentOf = (sess) => {
+    const defaultModelNode = nodes.find(n => n.id.startsWith(`model_${sess.endpoint}_`) && n.isDefaultModel);
+    return defaultModelNode ?? nodes.find(n => n.id === `ep_${sess.endpoint}`) ?? nodes[0];
+  };
+  const sessionParents = recent.map(parentOf);
   recent.forEach((s, i) => {
-    const epId = `ep_${s.endpoint}`;
-    const epNode = nodes.find(n => n.id === epId);
-    // Prefer linking to the default model node of this session's endpoint
-    const defaultModelNode = nodes.find(n =>
-      n.id.startsWith(`model_${s.endpoint}_`) && n.isDefaultModel
-    );
-    const parentId = defaultModelNode?.id ?? (epNode ? epId : 'hub');
-    const parentNode = nodes.find(n => n.id === parentId);
-    const sAngle = (i / Math.max(recent.length, 1)) * Math.PI * 2;
-    const parentPos = parentNode?.pos ?? new THREE.Vector3(0, 0, 0);
+    const parentNode = sessionParents[i];
+    const siblingCount = sessionParents.filter(p => p === parentNode).length;
+    const k = sessionParents.slice(0, i).filter(p => p === parentNode).length;
     const expColor = EXPERIENCE_NODE_COLOR[s.experience] ?? EXPERIENCE_NODE_COLOR.default;
-    const sessionY = (i % 3 - 1) * 1.8;
+    const sessionY = (i % 3 - 1) * 1.2;
     nodes.push({
       id: `sess_${s.id}`, label: s.name || `Session ${i + 1}`,
       type: 'session', sessionId: s.id,
-      pos: new THREE.Vector3(Math.cos(sAngle) * 3.0 + parentPos.x, sessionY, Math.sin(sAngle) * 3.0 + parentPos.z),
-      vel: new THREE.Vector3(),
-      orbitRadius: 3.0, orbitAngle: sAngle, orbitSpeed: 0.0015, targetY: sessionY,
-      orbitParent: parentId,
+      ...radialPlacement(parentNode, fanOffset(k, siblingCount, 0.22), R_SESSION, sessionY),
       customHex: expColor.hex, customGlow: expColor.glow, customEmissive: expColor.emissive,
       meta: {
         desc: `${s.messageCount || 0} messages`,
@@ -290,7 +294,7 @@ function buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, s
         date: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '',
       },
     });
-    links.push({ from: parentId, to: `sess_${s.id}` });
+    links.push({ from: parentNode.id, to: `sess_${s.id}` });
   });
 
   return { nodes, links };
@@ -311,13 +315,19 @@ function physicsStep(nodes, links, linkMap, dt = 0.016) {
   for (const n of nodes) {
     if (n.fixed) continue;
 
-    // Advance orbital angle (very slow)
-    n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0);
-
-    // Find parent position — orbit around parent, not origin
-    const parent = n.orbitParent ? linkMap.get(n.orbitParent) : null;
-    const px = parent ? parent.pos.x : 0;
-    const pz = parent ? parent.pos.z : 0;
+    let px = 0, pz = 0;
+    if (n.radialParent !== undefined) {
+      // Hierarchy nodes ride their parent's bearing on their own ring around the hub.
+      const rp = n.radialParent ? linkMap.get(n.radialParent) : null;
+      if (rp && !rp.fixed) n.orbitAngle = (rp.orbitAngle ?? 0) + (n.radialOffset ?? 0);
+    } else {
+      // Advance orbital angle (very slow)
+      n.orbitAngle = (n.orbitAngle ?? 0) + (n.orbitSpeed ?? 0);
+      // Find parent position — orbit around parent, not origin
+      const parent = n.orbitParent ? linkMap.get(n.orbitParent) : null;
+      px = parent ? parent.pos.x : 0;
+      pz = parent ? parent.pos.z : 0;
+    }
 
     // Target XZ position = parent position + orbital offset
     const tx = px + Math.cos(n.orbitAngle) * (n.orbitRadius ?? 0);
@@ -378,21 +388,18 @@ export default function LiminalDashboard({
     errors: sessionErrors ?? new Set(),
   };
 
-  // Compute topology key: node IDs + link structure — changes only when nodes/links added/removed
-  const topologyKey = useMemo(() => {
-    const svcKeys = Object.keys(systemServices?.services || {}).sort().join(',');
-    const epKeys = (selectableEndpointKeys || []).slice().sort().join(',');
-    const epTypes = selectableEndpointKeys
-      ? selectableEndpointKeys.map(k => allEndpointMeta?.[k]?.backendType || '').join(',')
-      : '';
-    const sessIds = (sessions || []).slice(0, 10).map(s => s.id).join(',');
-    const sessEps = (sessions || []).slice(0, 10).map(s => s.endpoint || '').join(',');
-    return `${svcKeys}|${epKeys}:${epTypes}|${sessIds}:${sessEps}`;
-  }, [systemServices, selectableEndpointKeys, allEndpointMeta, sessions]);
-
   const graphData = useMemo(
     () => buildGraph({ systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels }),
     [systemServices, dockerStatus, sessions, allEndpointMeta, selectableEndpointKeys, knownModels],
+  );
+
+  // Topology key = the parent→child link set. Every non-hub node has exactly one
+  // incoming link, so this changes whenever a node is added/removed OR re-parented
+  // (e.g. a model moving from the hub to the Ollama service once it is detected),
+  // and the scene is rebuilt. Status-only changes keep the key and just restyle.
+  const topologyKey = useMemo(
+    () => graphData.links.map(l => `${l.from}>${l.to}`).sort().join('|'),
+    [graphData],
   );
 
   graphDataRef.current = graphData;
