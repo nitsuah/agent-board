@@ -60,6 +60,7 @@ import {
 import { parseMcpRpcResponse } from './modules/mcp-helpers.js';
 import { eventBus, attachEventWebSocketServer } from './modules/event-bus.js';
 import { createAgentHelpers } from './modules/agent-tools.js';
+import { ensureWorkspaceSandbox, isSandboxSeeded } from './modules/workspace-sandbox.js';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -657,6 +658,24 @@ export {
 };
 
 if (process.env.AGENT_DASHBOARD_DISABLE_LISTEN !== '1') {
+  // Agents work in their own checkout, not the host repo (see modules/workspace-sandbox.js).
+  // Under compose the `workspace-seed` service seeds it; WORKSPACE_SANDBOX_SOURCE lets
+  // a non-compose run seed in-process. Either way, never serve agents from an
+  // empty or half-seeded workspace: refuse to start instead.
+  if (WORKSPACE_ROOT && isTruthyEnv(process.env.WORKSPACE_SANDBOX)) {
+    try {
+      if (process.env.WORKSPACE_SANDBOX_SOURCE) {
+        await ensureWorkspaceSandbox({ root: WORKSPACE_ROOT, source: process.env.WORKSPACE_SANDBOX_SOURCE, logStructured });
+      }
+      if (!(await isSandboxSeeded(WORKSPACE_ROOT))) {
+        throw new Error(`${WORKSPACE_ROOT} has not been seeded (run the workspace-seed service, or set WORKSPACE_SANDBOX_SOURCE)`);
+      }
+    } catch (err) {
+      logStructured('error', 'workspace_sandbox_failed', { root: WORKSPACE_ROOT, error: err.message });
+      process.exit(1);
+    }
+  }
+
   const server = app.listen(PORT, () => {
     logStructured('info', 'server_started', {
       port: PORT,

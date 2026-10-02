@@ -1,5 +1,5 @@
 {
-  "_comment": "MCP container registry — declare tool containers here to surface them in agent-board without manually editing docker-compose.yml. Each entry drives a compose profile that can be started on demand.",
+  "_comment": "MCP container registry — declare tool containers here to surface them in motor-pool without manually editing docker-compose.yml. Each entry drives a compose profile that can be started on demand.",
   "providers": [
     {
       "key": "content_gen",

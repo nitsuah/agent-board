@@ -290,12 +290,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'metrics') {
+    if (activeTab === 'metrics' || showMetricsPanel) {
       fetchMetrics();
       const interval = setInterval(fetchMetrics, 10000);
       return () => clearInterval(interval);
     }
-  }, [activeTab, fetchMetrics]);
+  }, [activeTab, showMetricsPanel, fetchMetrics]);
 
   useEffect(() => {
     if (!showNewSessionMenu) return;
@@ -348,9 +348,12 @@ function App() {
     });
   };
 
-  const createSession = async () => {
+  // Hub experience chips pass the chosen key; other callers pass nothing (or a click event).
+  const createSession = async (experienceKey) => {
+    const experience = typeof experienceKey === 'string' ? experienceKey : selectedExperience;
+    if (experience !== selectedExperience) setSelectedExperience(experience);
     try {
-      const availableEndpoints = getAvailableEndpoints(selectedExperience);
+      const availableEndpoints = getAvailableEndpoints(experience);
       const onlineEndpoints = availableEndpoints.filter((key) => {
         const ep = dockerStatus?.endpoints?.[key];
         if (dockerStatus?.endpoints) return ep ? ep.live === true : false;
@@ -362,7 +365,7 @@ function App() {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, endpoint, userId: userId.current, userRole: getUserRole(), experience: selectedExperience }),
+        body: JSON.stringify({ model, endpoint, userId: userId.current, userRole: getUserRole(), experience }),
       });
       const data = await res.json();
       if (data.success) {

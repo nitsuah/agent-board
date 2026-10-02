@@ -1,6 +1,6 @@
 # Features
 
-> 🧭 [agent-board](../README.md) · **Features** · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+> 🧭 [motor-pool](../README.md) · **Features** · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
 
 ## Core Functionality
 
@@ -10,12 +10,12 @@
 - **Multi-Agent Coordination** - Manage and broadcast commands to multiple agents simultaneously.
 - **Persistent Agent History** - Persistence is implemented and validated by integration tests.
 - **Dynamic Task Assignment** - Manually or programmatically route specific tasks to available agents.
-- **Workspace File Engine** - Host-mounted codebase access (`WORKSPACE_ROOT`) providing sandboxed file I/O browsing, editing, and staging/committing/pushing via Git controls.
+- **Workspace File Engine** - File I/O browsing, editing, and staging/committing/pushing via Git controls. Agents default to an isolated **sandbox checkout** (`agent_workspace` volume on branch `agent/sandbox`, seeded from the read-only repo without `.env`/`node_modules`) so tool calls never write the host repo; a real host project is an explicit opt-in via `docker-compose.workspace.yml`.
 - **Workspace IDE** - VSCode-style split layout with file tabs (multi-file editing), integrated terminal pane, compact git panel, and in-browser task dispatch; replaces the earlier single-pane file viewer.
 - **Topbar Command Bar** - Unified top-bar surface replaces the sidebar; session controls, model/endpoint picker, experience selector, and system actions consolidated into a persistent top-bar.
 - **Agent Lifecycle API Documentation** - All lifecycle, metrics, experiences, tools, workspace, and status endpoints documented in `docs/API.md` with request/response examples and a quick-reference table.
 - **Conversation Replay Mode** - Step-through, message-by-message replay of persisted agent sessions (`ReplayPanel`) for debugging decision paths, auditing tool calls, and recording demos without a live model.
-- **3D LiminalDashboard Home** - Three.js force-directed mind map of hubs, services, endpoints, and sessions with OrbitControls, live system state, a ServiceDetail node panel (start/stop/restart/model-pull), and BYOK endpoints shown in the hub and model selector.
+- **3D LiminalDashboard Home** - Three.js mind map laid out as the real hierarchy — hub → provider (service/endpoint) → model → session, each tier on its own ring — with OrbitControls, live system state, a ServiceDetail node panel (start/stop/restart/model-pull), and BYOK endpoints shown in the hub and model selector.
 
 ## Integrations & AI Runtimes
 

@@ -1,6 +1,6 @@
 # ROADMAP
 
-> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · **Roadmap** · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
+> 🧭 [motor-pool](../README.md) · [Features](./FEATURES.md) · **Roadmap** · [Tasks](./TASKS.md) · [Changelog](./CHANGELOG.md) · [Metrics](./METRICS.md) <!-- nav -->
 
 Last Updated: 2026-09-24
 
@@ -24,7 +24,7 @@ Critical path: service lifecycle UI → auth gate (+ interim exec-route token) �
 
 ## 2027 Q2 - Blackboard Showcase & MCP Ecosystem (Planned)
 
-> agent-board is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server live here.
+> motor-pool is the UI/dashboard layer that connects to bb-mcp. Frontend and showcase concerns that are out of scope for the MCP server live here.
 
 - [ ] **Blackboard agent demo mode**: offline preset workflow (course discovery → assignment submission → grade check) using bb-mcp.
 - [ ] **Portfolio-grade Blackboard showcase**: single-command `BB_MCP_ENABLED=true docker compose up` with the documented offline demo flow (merges the two duplicate "showcase path" items from the old Q2 sections).
@@ -43,7 +43,7 @@ Critical path: service lifecycle UI → auth gate (+ interim exec-route token) �
 
 - [ ] **Multi-tenancy & RBAC (planning)**
   - *What*: user accounts (login/SSO) and role-based access control — today
-    agent-board is single-user/single-host with no auth at all (see the 2027 Q1
+    motor-pool is single-user/single-host with no auth at all (see the 2027 Q1
     "Authentication gate" item, which is a prerequisite, not the same thing: auth
     proves who you are, RBAC decides what you're allowed to do once you are).
   - *Why*: every current deployment story is "one trusted operator on localhost or a

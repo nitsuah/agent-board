@@ -1,14 +1,14 @@
-# agent-board — Local AI Ops Cockpit
+# motor-pool — Local AI Ops Cockpit
 
 
 <!-- Deployment Status -->
-[![Deploy Status](https://github.com/nitsuah/agent-board/actions/workflows/ci.yml/badge.svg)](https://github.com/nitsuah/agent-board/actions)
+[![Deploy Status](https://github.com/nitsuah/motor-pool/actions/workflows/ci.yml/badge.svg)](https://github.com/nitsuah/motor-pool/actions)
 
-> 🧭 **agent-board** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
+> 🧭 **motor-pool** · [Features](./docs/FEATURES.md) · [Roadmap](./docs/ROADMAP.md) · [Tasks](./docs/TASKS.md) · [Changelog](./docs/CHANGELOG.md) · [Metrics](./docs/METRICS.md) <!-- nav -->
 
-agent-board is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
+motor-pool is a local-first control room for multi-model AI workflows. It gives you a chat surface, safety rails, and live observability in one place, so you can run and evaluate model behavior without sending data to external APIs.
 
-## Why agent-board
+## Why motor-pool
 
 - **Ship safer prompts faster**: built-in input classification, prompt-injection checks, blocked-input handling, and output sanitization.
 - **Run multiple experiences**: switch between Developer Assistant, Research Mode, and Safe Chat with server-enforced routing and safety policies.
@@ -31,29 +31,37 @@ Captured from the local Docker stack at `http://localhost:3000`.
 
 ### Dashboard Overview
 
-![agent-board dashboard overview](docs/screenshots/dashboard-overview.png)
+![motor-pool dashboard overview](docs/screenshots/dashboard-overview.png)
+
+### Chat Session
+
+![motor-pool chat session streaming a local llama3.2 reply](docs/screenshots/chat-session.png)
 
 ### Metrics View
 
-![agent-board metrics panel](docs/screenshots/metrics-panel.png)
+![motor-pool metrics panel](docs/screenshots/metrics-panel.png)
 
 ### System Management
 
-![agent-board system management panel](docs/screenshots/system-panel.png)
+![motor-pool system management panel](docs/screenshots/system-panel.png)
 
 ## Quick Start
 
 Minimal stack (dashboard + Ollama + DB — fits a 16 GB host):
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
-docker compose -f config/docker-compose.yml --project-directory . up -d
+cd C:\Users\$env:USERNAME\code\motor-pool
+Copy-Item .env.example .env; Copy-Item .env config/.env   # first run only
+docker compose -f config/docker-compose.yml up -d
 ```
+
+Run compose from the repo root **without** `--project-directory`: paths in
+`config/docker-compose.yml` resolve relative to `config/`.
 
 or for GPU:
 
 ```powershell
-cd C:\Users\$env:USERNAME\code\agent-board
+cd C:\Users\$env:USERNAME\code\motor-pool
 docker compose -f config/docker-compose.yml -f config/docker-compose.gpu.yml up -d
 ```
 
@@ -64,16 +72,16 @@ Add opt-in profiles as needed:
 ```powershell
 # Distributed tracing (Jaeger UI at :16686)
 $env:OTEL_ENABLED='true'
-docker compose -f config/docker-compose.yml --project-directory . --profile observability up -d jaeger
+docker compose -f config/docker-compose.yml --profile observability up -d jaeger
 
 # Blackboard MCP
-docker compose -f config/docker-compose.yml --project-directory . --profile bb-mcp up -d bb-mcp
+docker compose -f config/docker-compose.yml --profile bb-mcp up -d bb-mcp
 
 # MCP tool servers (Content Studio / Website Agent)
-docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d tool-content-gen tool-website
+docker compose -f config/docker-compose.yml --profile tools up -d tool-content-gen tool-website
 
 # NemoClaw safety sandbox
-docker compose -f config/docker-compose.yml --project-directory . --profile sandbox up -d nemoclaw
+docker compose -f config/docker-compose.yml --profile sandbox up -d nemoclaw
 ```
 
 Default endpoints (minimal stack):
@@ -201,7 +209,7 @@ paired with a tool workbench panel that lists the server's MCP tools and execute
 Both are gated behind the `tools` compose profile:
 
 ```powershell
-docker compose -f config/docker-compose.yml --project-directory . --profile tools up -d --build tool-content-gen tool-website
+docker compose -f config/docker-compose.yml --profile tools up -d --build tool-content-gen tool-website
 ```
 
 If a tool server is offline, the workbench shows the exact start command (and a Start
@@ -219,7 +227,7 @@ host. To let the dashboard actually drive the stack, apply the
 
 ```powershell
 docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml `
-  --project-directory . up -d --build agent-dashboard
+  up -d --build agent-dashboard
 ```
 
 This builds the dashboard with the Docker CLI installed, mounts the host Docker socket
@@ -283,7 +291,20 @@ With the overlay applied:
 
 ### Workspace File I/O
 
-Requires `WORKSPACE_PATH` in `.env` and the `docker-compose.workspace.yml` overlay. Paths are sandboxed to prevent traversal.
+By default agents work in a **sandbox checkout**, not your files. A one-shot
+`workspace-seed` service seeds a dedicated volume (`agent_workspace`) from a
+read-only mount of the repo on first start: a `git clone` onto branch
+`agent/sandbox` plus your current uncommitted working tree (or a filtered copy
+when the repo is itself a git worktree), never `.env*` secrets or
+`node_modules`. The dashboard container that runs agent tools does not mount
+the repo at all, and agent shell commands get a scrubbed environment (no `.env`
+secrets), so agents can edit, run and commit in the sandbox without reaching
+host files. The dashboard refuses to start if seeding did not complete.
+Reset the sandbox with `docker volume rm <project>_agent_workspace`.
+
+To let agents edit a real project instead, set `WORKSPACE_PATH` in `.env` and
+apply the `docker-compose.workspace.yml` overlay (it sets `WORKSPACE_SANDBOX=false`).
+Paths are always confined to the workspace root to prevent traversal.
 
 - `GET /api/workspace/status` — Workspace mount status and git repo info
 - `GET /api/workspace/ls` — List a workspace directory
@@ -491,7 +512,7 @@ Every committed Markdown doc in this repo (other than this README, `.github/` an
 - [Changelog](./docs/CHANGELOG.md) — `docs/CHANGELOG.md`
 - [Production Deployment Guide](./docs/DEPLOYMENT.md) — `docs/DEPLOYMENT.md`
 - [Features](./docs/FEATURES.md) — `docs/FEATURES.md`
-- [Project Metrics: agent-board](./docs/METRICS.md) — `docs/METRICS.md`
+- [Project Metrics: motor-pool](./docs/METRICS.md) — `docs/METRICS.md`
 - [ROADMAP](./docs/ROADMAP.md) — `docs/ROADMAP.md`
 - [TASKS](./docs/TASKS.md) — `docs/TASKS.md`
 

@@ -10,11 +10,11 @@
 #
 # Usage (Linux/Mac):
 #   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
-#     --project-directory . up -d --build agent-dashboard
+#     up -d --build agent-dashboard
 #
 # Usage (Windows):
 #   docker compose -f config/docker-compose.yml -f config/docker-compose.docker-control.yml \
-#     --project-directory . up -d --build agent-dashboard
+#     up -d --build agent-dashboard
 #
 # This builds the dashboard image with the Docker CLI installed
 # (INSTALL_DOCKER_CLI=true), mounts the host Docker socket, and
@@ -32,6 +32,11 @@ services:
       - DOCKER_PROJECT_DIR=/workspace-root/config
       - DOCKER_ENV_FILE=/workspace-root/config/.env
     volumes:
+      # The compose file + .env that service actions run against. Only this
+      # trusted-dev overlay mounts the repo into the dashboard: it already hands
+      # the container the Docker socket (host-level control), so the base
+      # stack's "agents can't read the source/.env" guarantee does not apply here.
+      - ../:/workspace-root:ro
       # Linux/Mac: Unix socket
       - /var/run/docker.sock:/var/run/docker.sock
       # Windows (Docker Desktop): named pipe

@@ -1,6 +1,6 @@
 # Changelog
 
-> 🧭 [agent-board](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · **Changelog** · [Metrics](./METRICS.md) <!-- nav -->
+> 🧭 [motor-pool](../README.md) · [Features](./FEATURES.md) · [Roadmap](./ROADMAP.md) · [Tasks](./TASKS.md) · **Changelog** · [Metrics](./METRICS.md) <!-- nav -->
 
 All notable changes to this project will be documented in this file.
 
@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent workspace sandbox** (`modules/workspace-sandbox.js`) — by default agents
+  work in their own checkout: a dedicated `agent_workspace` volume seeded by a
+  one-shot `workspace-seed` service from a read-only repo mount (`git clone` onto
+  branch `agent/sandbox` plus the source's uncommitted working tree, or a
+  filtered copy + `git init` when the repo is itself a git worktree), never
+  copying `.env*` secrets (templates like `.env.example` are kept) or
+  `node_modules`. Seeding is staged and marked complete only at the end; the
+  dashboard refuses to start on an unseeded sandbox, and a non-empty directory
+  that isn't a sandbox is refused rather than wiped. Tool calls can no longer
+  edit the host repo; editing a real project stays an explicit opt-in via
+  `config/docker-compose.workspace.yml` (`WORKSPACE_SANDBOX=false`).
+- **Chat test matrix** — `tests/chat-matrix.js` (unit, stub LLM, 268 cases):
+  every experience × `/message` and `/stream` × expected and unexpected inputs and
+  model behaviour (injection variants, role framing, PII in/out, harmful output,
+  output cap, empty/500/mid-stream/split-chunk upstreams, unoffered tools,
+  unparseable tool args, tool calls written as text, tool server down).
+  `tests/e2e-chat-matrix.js` (`npm run test:e2e-chat`) runs the same shape
+  against a live stack; it replaces the never-runnable `tests/test-chat.js`
+  (UTF-16, CommonJS in an ESM package).
+- **GitHub Pages landing page** (`site/`, deployed by `.github/workflows/pages.yml`)
+  promoting motor-pool's features, with the 20s launch video, live screenshots,
+  architecture overview and quick start. Screenshots are copied from
+  `docs/screenshots/` at build time.
 - OpenLLM endpoint (`llm_openllm`, port 8082)
 - Ollama model loading performance audit (`docs/MODEL_LOADING_AUDIT.md`) — passive log analysis of all 8 load events, bottleneck identified (`load_tensors: mmap=false`), honest assessment vs. ≥50% acceptance criteria (~17-23% average reduction from model swap, not 50%), ranked recommendations (GPU > selective loading > warmup).
 - Opt-in `ollama-warmup` compose service (`warmup` profile) — one-shot container that pre-loads `PRIMARY_LLM_MODEL` during `docker compose up` so the cold model load cost (~15-23s) hits at stack-start rather than on the first user chat message. Enable with `docker compose --profile warmup up ollama-warmup`. — opt-in second OpenAI-compatible endpoint for custom/fine-tuned HuggingFace models, gated behind the `openllm` compose profile and `OPENLLM_ENABLED` flag, registered alongside Ollama and Docker Model Runner. See `docs/AI_STACK_STRATEGY.md`.
@@ -50,6 +73,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Rebrand: agent-board → motor-pool.** Public-facing naming (README, docs,
+  dashboard title/onboarding/3D hub, OTEL service name `motor-pool-dashboard`,
+  npm package scopes `@motor-pool/*`, GitHub URLs `nitsuah/motor-pool`) is now
+  motor-pool. Deliberately unchanged for compatibility: `AGENT_BOARD_*` env vars,
+  the `agent_board` Postgres DB, `agent_board_*` localStorage keys, and the
+  `agentboard` tmux session.
+- **3D hub shows the real hierarchy**: hub → provider (service/endpoint) →
+  model → session, each tier on its own ring, children on their parent's
+  bearing. The scene's topology key is now the parent→child link set, so a
+  re-parent (e.g. a model moving under Ollama once it is detected) rebuilds it.
+- Input classification follows the session's safety mode: strict blocks its
+  full list (role-play / fictional framings included); standard and research
+  block their own list plus the standard core-injection floor — previously every
+  experience used the strict list, so e.g. "act as a code reviewer" was refused
+  in Developer mode.
+- `ollama-init` now also loads `PRIMARY_LLM_MODEL` into memory after pulling, so
+  the cold load (measured >2 min on WSL2 disk I/O) happens during
+  `docker compose up` instead of timing out the first chat message.
+- Developer and Research system prompts: call tools only when the request needs
+  workspace/web access; `write_artifact` only when asked to save notes.
 - Agent instructions (`.github/copilot-instructions.md`) now require closing tracked work in the same PR: update `docs/TASKS.md`, `docs/ROADMAP.md` and this changelog before the last push, and confirm `git diff origin/master...HEAD --stat` includes them before merge; added `.github/pull_request_template.md` with a "Closes TASKS item(s)" checklist.
 - Dashboard dependency majors (Sept 2026 Dependabot): React/React DOM 19.2
   (#65, #70), Vite 8.2 (#68), `@vitejs/plugin-react` 6.1 (#66), Express 5.2 (#69),
@@ -57,11 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Planning docs reset for 2027 (`pmo-ff`): completed 2026 roadmap items condensed
   into FEATURES, open items carried into 2027 Q1, breadcrumb navigation + README
   docs index added for the Obsidian vault mirror.
-- Consistent `agent-board` naming across the dashboard UI (page title, onboarding
-  banner, 3D LiminalDashboard hub/hero text), OTEL service identifiers, PowerShell
-  scripts, and the `tools/website` and `tools/content-gen` npm package scopes
-  (`@motor-pool/*` → `@agent-board/*`). A prior docs-only rename (PR #61) hadn't
-  reached the running application.
 
 ### Deprecated
 
@@ -74,6 +112,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- README/DEPLOYMENT quick-start commands used `--project-directory .`, which makes
+  compose look for `.env` one directory above the repo; dropped it everywhere
+  (docs, `.env.example`, overlay headers, the ToolWorkbench hint) and added the
+  missing `.env` copy step. Screenshots re-captured from the rebranded UI.
+- Hub experience chips (Developer / Researcher / Safe Chat / Content Studio /
+  Website Agent) all created a Developer session: `createSession` ignored the
+  experience key the chip passed and always used the previously selected one.
+- 3D hub: Ollama-served model nodes (e.g. `llama3.2`) linked straight to the
+  hub instead of the Ollama service that serves them, and sessions orbited close
+  to the hub. Models now attach to the service whose resolved URL (or backend
+  type) matches the endpoint — running or not — and sessions sit outermost.
+- `/stream`: tokens split across TCP chunks were dropped (now line-buffered); an
+  empty upstream showed a blank bubble (now the placeholder is sent); errors
+  while preparing the LLM call left the stream hanging; client disconnects were
+  detected on `req` `close` (fires once the body is read on current Node) rather
+  than `res` `close`.
+- Agent loop: unparseable tool-call arguments threw and failed the whole turn —
+  they are now returned to the model as a tool error; a tool call the model
+  writes as plain JSON text (common with small Ollama models) is executed when it
+  names an offered tool, instead of being shown to the user as the reply. Every
+  call gets one id up front, and history is replayed in the endpoint's shape
+  (OpenAI: `id`, `type: function`, JSON-string arguments, matching
+  `tool_call_id`), so OpenAI-compatible backends accept the follow-up request.
+- Site `og:image` is now an absolute URL so link previews render.
+- Metrics drawer showed `…` placeholders forever: metrics were only fetched for
+  the retired `metrics` tab, never when the drawer was opened.
 - `config/docker-compose.yml` mixed two incompatible relative-path conventions
   (build contexts resolved from the compose file's own directory; `env_file`/volume
   entries assumed `--project-directory .`), so the README's own Quick Start command
@@ -83,11 +147,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **`POST /api/sessions/:id/stream` bypassed the safety layer.** The chat UI
+  streams by default, but the stream route never ran prompt handlers, input
+  classification/blocking, PII redaction or output sanitization — injections
+  reached the model and strict-mode output was unfiltered. Both chat routes now
+  share one pipeline (`modules/session-turn.js`); in modes with active output
+  filters (strict) the stream buffers and sends only the sanitized reply.
+- Agents' default workspace was the host repo itself (`../:/workspace:rw`); a
+  3B model truncated `README.md` from a "reply with one word" prompt. Agents now
+  default to an isolated sandbox checkout (see Added).
+- The agent container no longer mounts the repo (`/workspace-root`) in the base
+  stack — only the trusted-dev docker-control overlay does — so model-run shell
+  commands can't read the source tree or its `.env` (CWE-200).
+- The `bash` agent tool ran with the dashboard's full environment, so `env` or
+  `echo $GITHUB_SECRET` exposed every `.env` secret; it now gets only `PATH`,
+  `HOME`, locale and git identity variables.
+- `/stream` cancels the upstream model request when the client disconnects
+  before the first token, and records the turn as ended instead of leaving the
+  session `running`.
+
 ## [0.1.0] - 2026-05-24
 
 ### Added
 
 - Project initialization
 
-[Unreleased]: https://github.com/nitsuah/agent-board/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/nitsuah/agent-board/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nitsuah/motor-pool/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/nitsuah/motor-pool/releases/tag/v0.1.0

@@ -67,6 +67,11 @@ services:
         done
         echo "pulling $$PRIMARY_LLM_MODEL"
         ollama pull "$$PRIMARY_LLM_MODEL"
+        # Load it into memory now: a cold load can take minutes on WSL2/Docker
+        # Desktop disk I/O, which would otherwise exceed the dashboard's 120s
+        # timeout on the first chat message after `up`.
+        echo "warming $$PRIMARY_LLM_MODEL"
+        ollama run "$$PRIMARY_LLM_MODEL" "" >/dev/null 2>&1 || true
     restart: "no"
     networks:
       - agent-network
@@ -327,10 +332,16 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_ENDPOINT=${OTEL_ENDPOINT:-http://jaeger:4318}
       - WORKSPACE_ROOT=/workspace
+      # Agents get their own checkout (volume agent_workspace, seeded by the
+      # workspace-seed service on branch agent/sandbox), so tool calls never
+      # edit the host repo — and the repo itself is not mounted here at all, so
+      # model-run shell commands can't read it (or its .env). To point agents at
+      # a real project instead, use config/docker-compose.workspace.yml
+      # (sets WORKSPACE_SANDBOX=false).
+      - WORKSPACE_SANDBOX=true
       - ENDPOINT_STORE_SECRET=${ENDPOINT_STORE_SECRET:-motor-pool-default-secret-change-me}
     volumes:
-      - ../:/workspace-root:ro
-      - ../:/workspace:rw
+      - agent_workspace:/workspace
       - agent_endpoint_data:/data
     # Docker socket access is intentionally not mounted by default.
     # Add it only in a trusted dev override/profile when Docker control is explicitly needed.
@@ -346,8 +357,28 @@ services:
     depends_on:
       agent-db:
         condition: service_healthy
+      workspace-seed:
+        condition: service_completed_successfully
     networks:
       - agent-network
+
+  # One-shot: seeds the agent sandbox volume from a read-only mount of the repo
+  # (git clone + current working tree, never .env files), then exits. It is the
+  # only service that sees the source tree; an existing sandbox is left as-is.
+  # Reset the sandbox with: docker volume rm <project>_agent_workspace
+  workspace-seed:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    command: ["node", "scripts/seed-workspace.mjs"]
+    environment:
+      - WORKSPACE_ROOT=/workspace
+      - WORKSPACE_SANDBOX_SOURCE=/source
+    volumes:
+      - ../:/source:ro
+      - agent_workspace:/workspace
+    network_mode: none
+    restart: "no"
 
   # ===== OBSERVABILITY =====
 
@@ -495,6 +526,7 @@ volumes:
   nemoclaw_data:
   website_output:  # Persistent storage for generated client sites and pitch materials
   agent_endpoint_data:  # Encrypted custom endpoint store (survives restarts)
+  agent_workspace:  # Agent sandbox checkout — reset with: docker volume rm <project>_agent_workspace
 
 networks:
   agent-network:

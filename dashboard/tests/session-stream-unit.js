@@ -22,6 +22,7 @@ llmApp.post('/api/chat', (req, res) => {
     return setTimeout(() => res.destroy(), 30);
   }
   if (mode === 'empty') { res.writeHead(200); return res.end(); }
+  if (mode === 'hang') { res.writeHead(200, { 'Content-Type': 'application/x-ndjson' }); return setTimeout(() => res.end(), 3000); }
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
   res.write(JSON.stringify({ message: { content: 'Hello' } }) + '\n');
   res.write('not json at all\n');                 // must be skipped, not fatal
@@ -55,8 +56,10 @@ async function streamFrames(sessionId, body) {
   return { status: res.status, frames };
 }
 
-async function newSession() {
-  const res = await post('/api/sessions', { name: 'stream test', experience: 'safechat' });
+// developer (no WORKSPACE_ROOT → no tools) streams tokens live; safechat is
+// strict, so its output filters are active and the reply is buffered.
+async function newSession(experience = 'developer') {
+  const res = await post('/api/sessions', { name: 'stream test', experience });
   const data = await res.json();
   return data.session?.id ?? data.id;
 }
@@ -78,6 +81,15 @@ try {
   const { frames } = await streamFrames(sid, { message: 'say hello' });
   const tokens = frames.filter(f => f.type === 'token').map(f => f.content);
   assert.deepStrictEqual(tokens, ['Hello', ' world'], 'tokens stream through in order, junk lines skipped');
+
+  // Strict (Safe Chat): tokens are held back and the sanitized reply is sent once.
+  const strictSid = await newSession('safechat');
+  const strictFrames = (await streamFrames(strictSid, { message: 'say hello' })).frames;
+  assert.deepStrictEqual(
+    strictFrames.filter(f => f.type === 'token').map(f => f.content), ['Hello world'],
+    'strict sessions receive one buffered, sanitized token'
+  );
+  console.log('  ✅ strict sessions buffer the reply so unfiltered text never streams');
   const done = frames.find(f => f.type === 'done');
   assert.ok(done, 'a done frame is emitted');
   assert.ok(done.messageCount >= 2, 'done reports the message count');
@@ -140,6 +152,26 @@ try {
     'either the partial content or an error is kept'
   );
   console.log('  ✅ a mid-stream failure keeps partial content and still terminates the stream');
+
+  // ── client leaves before the first token: the turn still ends ─────────────
+  mode = 'hang';
+  const sid5 = await newSession();
+  // A raw request whose socket is destroyed, as a closed browser tab does
+  // (in-process fetch abort keeps the connection alive, so it can't model this).
+  const { request } = await import('node:http');
+  const rawReq = request(`${BASE}/api/sessions/${sid5}/stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+  rawReq.on('error', () => {});
+  rawReq.end(JSON.stringify({ message: 'abandon me' }));
+  await new Promise(r => setTimeout(r, 300));
+  rawReq.destroy();
+  let errMsg = null;
+  for (let i = 0; i < 20 && !errMsg; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    const d = await (await fetch(`${BASE}/api/sessions/${sid5}`)).json();
+    errMsg = (d.session?.messages ?? []).find(m => m.role === 'assistant' && /disconnected/.test(m.content));
+  }
+  assert.ok(errMsg, 'an early disconnect records a terminal error turn instead of leaving the session running');
+  console.log('  ✅ a client disconnect before the first token still ends the turn');
 
   console.log('Session stream tests passed.');
 } finally {

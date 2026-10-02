@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 
 # Agent Stack Manager
-# Manages the agent-board docker compose stack
+# Manages the motor-pool docker compose stack
 
 param(
     [ValidateSet('start', 'stop', 'restart', 'status', 'logs')]
